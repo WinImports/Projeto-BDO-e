@@ -1,0 +1,22 @@
+{
+  "name": "bdo-e-app",
+  "version": "2.0.0",
+  "description": "BDO-e & Inspeção Técnica — Boletim Diário de Operações Eletrônico (desktop, offline-first)",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "playwright test",
+    "pocos": "node scripts/gerar-pocos.js",
+    "postinstall": "node node_modules/electron/install.js",
+    "vendor": "node -e \"require('fs').copyFileSync('node_modules/@supabase/supabase-js/dist/umd/supabase.js','src/vendor/supabase.js')\"",
+    "pwa": "node scripts/gerar-pwa.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.118.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "electron": "^44.7.2"
+  }
+}

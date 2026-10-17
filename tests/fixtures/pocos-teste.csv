@@ -1,0 +1,8 @@
+Poço;Campo;Latitude;Longitude
+TST-001;Campo Teste;-12,352400;-38,379100
+TST-002;Campo Teste;-12,360000;-38,390000
+TST-010;Campo Teste;-12,370500;-38,401200
+tst-089;Campo Teste;-12,380000;-38,410000
+"XYZ 7";Outro Campo;12°21'08.6"S;38°22'45.0"W
+TST-003;Campo Teste;sem coordenada;-38,4
+TST-001;Campo Teste;-12,999999;-38,999999

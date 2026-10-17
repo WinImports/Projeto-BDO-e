@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob: mediastream:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-src https://www.openstreetmap.org; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'">
+  <title>BDO-e & Inspeção Técnica</title>
+  <meta name="description" content="Boletim Diário Operacional Eletrônico, Visita Técnica e Relatório de Execução — offline.">
+  <meta name="theme-color" content="#0b5cad">
+  <!-- PWA (celular / GitHub Pages). Todos os caminhos são relativos (./) -->
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#view">Ir para o conteúdo</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand__mark" aria-hidden="true">BDO</div>
+      <div>
+        <h1 class="brand__name">BDO-e</h1>
+        <p class="brand__sub">&amp; Inspeção Técnica</p>
+      </div>
+    </div>
+
+    <div class="topbar__right">
+      <span id="conn" class="conn" role="status"></span>
+      <button type="button" id="theme-toggle" class="icon-btn icon-btn--lg"></button>
+    </div>
+  </header>
+
+  <nav id="tabs" class="tabs" role="tablist" aria-label="Módulos"></nav>
+
+  <main id="view" class="view" tabindex="-1"></main>
+
+  <!-- Bibliotecas locais (sem CDN — funcionam offline): Supabase JS e parser da base de poços -->
+  <script src="./src/vendor/supabase.js"></script>
+  <script src="./src/shared/pocos-parser.js"></script>
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>

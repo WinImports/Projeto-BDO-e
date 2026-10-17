@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Base FICTÍCIA para testes (poços "KML-…" não existem) -->
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Poços de teste</name>
+    <Folder>
+      <Placemark>
+        <name>KML-101</name>
+        <Point><coordinates>-38.401000,-12.341000,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name><![CDATA[KML-102 &amp; Cia]]></name>
+        <Point><coordinates>-38.402000,-12.342000</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <ExtendedData><Data name="POCO"><value>KML-103</value></Data></ExtendedData>
+        <Point><coordinates> -38.403000,-12.343000,0 </coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <!-- espaços em volta da vírgula, como no KML real exportado da UO-BA -->
+        <name>KML-104</name>
+        <Point> <coordinates>-38.404000 , -12.344000</coordinates> </Point>
+      </Placemark>
+      <Placemark>
+        <name>LOCACAO KML-200</name>
+        <Polygon><outerBoundaryIs><LinearRing><coordinates>
+          -38.500,-12.500,0 -38.502,-12.500,0 -38.502,-12.502,0 -38.500,-12.502,0 -38.500,-12.500,0
+        </coordinates></LinearRing></outerBoundaryIs></Polygon>
+      </Placemark>
+      <Placemark>
+        <name>KML-SEM-COORD</name>
+      </Placemark>
+    </Folder>
+  </Document>
+</kml>

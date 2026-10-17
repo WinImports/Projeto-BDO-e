@@ -1,0 +1,96 @@
+// Service Worker do BDO-e (PWA): funciona offline e se atualiza sozinho.
+//
+// - Na instalação, guarda todos os arquivos do app (lista abaixo) no cache desta versão.
+// - Páginas: rede primeiro (pega a versão nova), cache quando estiver offline.
+// - Demais arquivos: cache primeiro e atualiza em segundo plano.
+// - VERSION muda sempre que qualquer arquivo do app muda (npm run pwa) → o navegador
+//   detecta o sw.js novo, instala, apaga o cache antigo e a versão nova é usada na próxima abertura.
+// - Supabase e mapas (outros domínios) vão direto para a rede.
+
+// <precache> — gerado por `npm run pwa`; não editar à mão
+const VERSION = '781f6b3e1923';
+const PRECACHE = [
+  './',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
+  './index.html',
+  './manifest.json',
+  './src/app.js',
+  './src/config.js',
+  './src/core/consolidar.js',
+  './src/core/db.js',
+  './src/core/drafts.js',
+  './src/core/ids.js',
+  './src/core/outbox.js',
+  './src/core/platform.js',
+  './src/core/pocos.js',
+  './src/core/prefs.js',
+  './src/core/settings.js',
+  './src/core/supabase.js',
+  './src/core/sync.js',
+  './src/modules/bdo.js',
+  './src/modules/common.js',
+  './src/modules/handover.js',
+  './src/modules/index.js',
+  './src/modules/visita-tecnica.js',
+  './src/shared/pocos-parser.js',
+  './src/styles.css',
+  './src/ui/camera.js',
+  './src/ui/confirm.js',
+  './src/ui/consolidacao-view.js',
+  './src/ui/dom.js',
+  './src/ui/form.js',
+  './src/ui/icons.js',
+  './src/ui/outbox-view.js',
+  './src/ui/preview.js',
+  './src/ui/report-pdf.js',
+  './src/ui/settings-view.js',
+  './src/ui/toast.js',
+  './src/vendor/supabase.js'
+];
+// </precache>
+
+const CACHE = `bdoe-${VERSION}`;
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('bdoe-') && k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          const copy = res.clone();
+          if (res.ok) caches.open(CACHE).then((c) => c.put('./index.html', copy));
+          return res;
+        })
+        .catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
+  event.respondWith(
+    caches.open(CACHE).then(async (cache) => {
+      const hit = await cache.match(req, { ignoreSearch: true });
+      const network = fetch(req)
+        .then((res) => { if (res.ok) cache.put(req, res.clone()); return res; })
+        .catch(() => hit || Response.error());
+      return hit || network;
+    })
+  );
+});

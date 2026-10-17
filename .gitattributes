@@ -1,0 +1,4 @@
+# Fins de linha sempre LF no repositório (a VERSION do sw.js não depende do sistema)
+* text=auto eol=lf
+*.png binary
+*.pdf binary

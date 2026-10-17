@@ -1,0 +1,13 @@
+node_modules/
+out/
+dist/
+*.log
+.DS_Store
+test-results/
+playwright-report/
+
+# Base de poços REAL (dados operacionais) — não publicar. No celular, importe em Configurações.
+src/data/pocos-ba.json
+/pocos_*.csv
+/*.kml
+/*.kmz
