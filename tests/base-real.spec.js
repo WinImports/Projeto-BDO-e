@@ -26,7 +26,7 @@ test.describe('base real UO-BA', () => {
     const [nome, lat, lng] = real.pocos[0];
 
     await openTab(page, 'settings');
-    await expect(page.locator('[data-pocos-count]')).toHaveText(`${total} poços carregados`);
+    await expect(page.locator('[data-pocos-count]')).toHaveText(`Base Ativa: ${total} poços carregados`);
     await expect(page.locator('[data-pocos-status]')).toContainText('Base padrão do app');
 
     await openTab(page, 'bdo');

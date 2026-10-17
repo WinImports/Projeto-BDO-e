@@ -202,9 +202,9 @@ async function showTab(tab) {
         <span id="ready-status" class="ready-status"></span>
       </div>
       <div class="action-bar__buttons">
-        <button type="button" class="btn btn--ghost" id="btn-save" title="Salvar rascunho (Ctrl+S)">${icon('save', 17)}<span>Salvar rascunho</span></button>
-        <button type="button" class="btn btn--ghost" id="btn-preview">${icon('fileText', 17)}<span>Prévia do PDF / Conferência</span></button>
-        <button type="button" class="btn btn--primary" id="btn-finalize">${icon('send', 17)}<span>Finalizar e enviar</span></button>
+        <button type="button" class="btn btn--ghost" id="btn-save" title="Salvar rascunho (Ctrl+S)">${icon('save', 17)}<span class="lbl">Salvar rascunho</span><span class="lbl-short">Salvar</span></button>
+        <button type="button" class="btn btn--ghost" id="btn-preview">${icon('fileText', 17)}<span class="lbl">Prévia do PDF / Conferência</span><span class="lbl-short">Prévia</span></button>
+        <button type="button" class="btn btn--primary" id="btn-finalize">${icon('send', 17)}<span class="lbl">Finalizar e enviar</span><span class="lbl-short">Finalizar</span></button>
       </div>
     </div>`;
 

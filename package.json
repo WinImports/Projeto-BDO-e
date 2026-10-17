@@ -10,7 +10,9 @@
     "pocos": "node scripts/gerar-pocos.js",
     "postinstall": "node node_modules/electron/install.js",
     "vendor": "node -e \"require('fs').copyFileSync('node_modules/@supabase/supabase-js/dist/umd/supabase.js','src/vendor/supabase.js')\"",
-    "pwa": "node scripts/gerar-pwa.js"
+    "pwa": "node scripts/gerar-pwa.js && npm test",
+    "pwa:sw": "node scripts/gerar-pwa.js",
+    "prepare": "git config core.hooksPath .githooks || echo \"(sem git: hooks não configurados)\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0"

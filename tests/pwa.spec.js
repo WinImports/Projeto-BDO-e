@@ -85,9 +85,9 @@ test('app como página web (GitHub Pages): abre, funciona offline, importa base 
     // Sem base publicada: o campo avisa e a importação funciona no navegador (mesmo parser do desktop)
     await page.locator('#tabs [data-tab=settings]').click();
     await page.locator('#view[data-ready=settings]').waitFor();
-    await expect(page.locator('[data-pocos-status]')).toContainText('Nenhuma base carregada');
+    await expect(page.locator('[data-pocos-count]')).toHaveText('Nenhuma base carregada');
     await page.locator('[data-pocos-input]').setInputFiles(CSV);
-    await expect(page.locator('[data-pocos-count]')).toHaveText('5 poços carregados');
+    await expect(page.locator('[data-pocos-count]')).toHaveText('Base Ativa: 5 poços carregados');
 
     await page.locator('#tabs [data-tab=bdo]').click();
     await page.locator('#view[data-ready=bdo]').waitFor();

@@ -5,7 +5,8 @@ App desktop (Electron) para relatórios de campo de inspeção de poços, manute
 ## Executar e testar
 
 - `npm start` → `electron .` (carrega `./index.html` via `file://`; **não há servidor web, bundler, React ou TypeScript**).
-- **PWA / GitHub Pages**: a MESMA `./index.html` roda no navegador/celular (caminhos sempre relativos `./`). `src/core/platform.js` escolhe Electron (`window.desktop`) ou web (base de poços em localStorage/fetch, PDF via janela de impressão com CSS por CSSOM). **Antes de publicar rode `npm run pwa`** (atualiza VERSION e a lista offline do `sw.js`; o teste `pwa.spec.js` falha se esquecer).
+- **PWA / GitHub Pages**: a MESMA `./index.html` roda no navegador/celular (caminhos sempre relativos `./`). `src/core/platform.js` escolhe Electron (`window.desktop`) ou web (base de poços em localStorage/fetch, PDF via janela de impressão com CSS por CSSOM). **Antes de publicar rode `npm run pwa`**: atualiza VERSION e a lista offline do `sw.js` e roda o `npm test` (`npm run pwa:sw` só atualiza). O hook `.githooks/pre-push` (ativado por `npm install` via `prepare` → `core.hooksPath`) **bloqueia o push** se o `sw.js` estiver desatualizado.
+- **Celular**: alvos de toque ≥ 44 px e inputs de 16 px (evita zoom do iOS) em `@media (pointer: coarse), (max-width: 640px)`; datas/horas sempre `date`/`time`/`datetime-local`. Elementos `position:absolute` dentro de áreas roláveis precisam de ancestral `position: relative` (senão vazam e criam rolagem lateral — ver `.table-wrap`). Teste: `tests/mobile.spec.js` (janela 390 px).
 - `npm test` → Playwright abrindo o Electron real (`tests/`). Dados de teste ficam isolados via `BDOE_USER_DATA`.
 - `npm install` roda `postinstall` que baixa o binário do Electron (o npm desta máquina bloqueia scripts de pacotes).
 - Se `npm start` falhar com `reading 'whenReady'`: a variável `ELECTRON_RUN_AS_NODE` está definida (o VS Code injeta). Remova-a antes.

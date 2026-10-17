@@ -366,7 +366,9 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .
 .field--highlight textarea { min-height: 110px; border-color: color-mix(in srgb, var(--accent) 70%, var(--border-strong)); }
 
 /* ===================== Tabelas editáveis ===================== */
-.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+/* position: relative → elementos absolutos internos (ex.: rótulo .sr-only "Ações") ficam presos à rolagem da
+   tabela; sem isso eles escapam e criam rolagem lateral na página inteira no celular */
+.table-wrap { position: relative; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
 .grid-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
 .grid-table th {
   text-align: left; font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted);
@@ -453,6 +455,7 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .
 }
 .action-bar__info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .action-bar__buttons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.lbl-short { display: none; }
 .save-status { display: inline-flex; align-items: center; gap: 6px; font-size: .82rem; color: var(--text-muted); }
 .save-status--saved { color: var(--ok); }
 .save-status--error { color: var(--danger); font-weight: 600; }
@@ -569,7 +572,13 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .
   .span-2, .span-3, .span-4, .span-5 { grid-column: 1 / -1; }
   .form-grid { padding: 16px; gap: 14px; }
   .form-section__head { padding: 14px 16px; }
-  .action-bar__buttons .btn span { display: none; }
+  .action-bar__buttons .btn .lbl { display: none; }
+  .action-bar__buttons .btn .lbl-short { display: inline; }
+  .action-bar__buttons .btn { padding: 0 8px; gap: 6px; }
+  /* cabeçalho da seção: selo de status vai para baixo do título */
+  .form-section__head { display: grid; grid-template-columns: 34px 1fr; column-gap: 12px; row-gap: 6px; align-items: start; }
+  .form-section__icon { width: 34px; height: 34px; }
+  .section-badge { grid-column: 2; justify-self: start; }
   .tab__text { display: none; }
 }
 
@@ -665,3 +674,33 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .
 .consol__title { margin: 0 0 6px; font-size: .74rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
 .consol .grid-table { border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .preview__consol { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+
+/* ===================== Toque (celular / tablet) ===================== */
+/* Alvos de toque com pelo menos 44 px (recomendação Apple/Google) e espaço entre eles */
+@media (pointer: coarse), (max-width: 640px) {
+  .btn { min-height: 44px; }
+  .btn--sm { height: 44px; padding: 0 16px; font-size: .9rem; }
+  .icon-btn { width: 44px; height: 44px; }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select { height: 46px; font-size: 16px; } /* 16px evita o zoom automático do iOS */
+  textarea { font-size: 16px; }
+  .grid-table td { padding: 6px; }
+  .grid-table td input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .grid-table td select { height: 44px; min-width: 96px; }
+  .grid-table .col--action { width: 56px; }
+  .grid-table .cell-check { width: 26px; height: 26px; }
+  [data-action="add-row"] { width: 100%; margin-top: 10px; }
+  [data-action="remove-row"] { border-color: var(--border); color: var(--danger); }
+  .table-wrap { -webkit-overflow-scrolling: touch; }
+  .segmented__opt span { min-height: 44px; display: grid; place-items: center; }
+  .check { padding: 12px 14px; }
+  .check input { width: 20px; height: 20px; }
+  .photo-add__btn { height: 44px; }
+  .combo__opt { min-height: 48px; }
+}
+
+/* textos diferentes para mouse e toque */
+.only-touch { display: none; }
+@media (pointer: coarse) {
+  .only-touch { display: inline; }
+  .only-mouse { display: none; }
+}

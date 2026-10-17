@@ -129,15 +129,15 @@ export class SettingsView {
           </div>
         </header>
         <div class="pocos-body">
-          <div class="pocos-status" data-pocos-status><span class="spinner" aria-hidden="true"></span> Verificando base…</div>
           <label class="dropzone" data-dropzone>
             <input type="file" accept=".csv,.kml" class="sr-only" data-pocos-input>
             <span class="dropzone__icon">${icon('upload', 26)}</span>
-            <strong class="dropzone__title" data-dropzone-title>Arraste o arquivo .csv ou .kml aqui</strong>
-            <span class="dropzone__sub">ou <u>clique para selecionar</u></span>
+            <strong class="dropzone__title" data-dropzone-title><span class="only-mouse">Arraste o arquivo .csv ou .kml aqui</span><span class="only-touch">Toque para escolher o arquivo .csv ou .kml</span></strong>
+            <span class="dropzone__sub only-mouse">ou <u>clique para selecionar</u></span>
             <small class="dropzone__help">CSV: colunas com o nome do poço, latitude e longitude (separador ; ou , — vírgula decimal e graus/min/seg aceitos). KML: marcadores exportados do Google Earth/Maps.</small>
           </label>
-          <div data-pocos-report></div>
+          <div class="pocos-status" data-pocos-status role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span> Verificando base…</div>
+          <div data-pocos-report aria-live="polite"></div>
         </div>
       </section>`;
   }
@@ -149,7 +149,7 @@ export class SettingsView {
     if (!st.total) {
       box.className = 'pocos-status pocos-status--empty';
       box.innerHTML = `<span class="pocos-status__icon">${icon('info', 22)}</span>
-        <div><strong class="pocos-status__count">Nenhuma base carregada</strong>
+        <div><strong class="pocos-status__count" data-pocos-count>Nenhuma base carregada</strong>
         <span class="muted small">O campo Poço / Locação aceita digitação livre e o GPS continua funcionando.</span></div>`;
       return;
     }
@@ -158,7 +158,7 @@ export class SettingsView {
     box.className = 'pocos-status pocos-status--ok';
     box.innerHTML = `<span class="pocos-status__icon">${icon('checkCircle', 22)}</span>
       <div>
-        <strong class="pocos-status__count" data-pocos-count>${st.total.toLocaleString('pt-BR')} poços carregados</strong>
+        <strong class="pocos-status__count" data-pocos-count>Base Ativa: ${st.total.toLocaleString('pt-BR')} poços carregados</strong>
         <span class="muted small">${imported ? 'Importada' : 'Base padrão do app'}${st.fonte ? ` · ${esc(st.fonte)}` : ''}${when ? ` · ${when}` : ''}</span>
       </div>
       ${imported
@@ -200,7 +200,7 @@ export class SettingsView {
       res = { ok: false, error: err.message };
     } finally {
       zone.classList.remove('is-busy');
-      title.textContent = 'Arraste o arquivo .csv ou .kml aqui';
+      title.innerHTML = '<span class="only-mouse">Arraste o arquivo .csv ou .kml aqui</span><span class="only-touch">Toque para escolher o arquivo .csv ou .kml</span>';
       const input = $('[data-pocos-input]', this.root);
       if (input) input.value = '';
     }
@@ -219,10 +219,11 @@ export class SettingsView {
     }
     const n = res.total.toLocaleString('pt-BR');
     report.innerHTML = `<div class="notice notice--ok notice--icon">${icon('checkCircle', 18)}<div>
-        <strong>${n} poços importados de ${esc(res.fonte)}</strong> (${res.formato}, ${res.lidos.toLocaleString('pt-BR')} registros lidos).
+        <strong class="pocos-success">${n} poços importados com sucesso para a memória local!</strong>
+        <br><span class="small">Arquivo ${esc(res.fonte)} · ${res.formato} · ${res.lidos.toLocaleString('pt-BR')} registros lidos. O autocompletar dos relatórios já usa esta base.</span>
         ${res.foraDaRegiao ? `<br>Atenção: ${res.foraDaRegiao} poço(s) com coordenadas fora da região BA/SE — confira o arquivo.` : ''}
         ${problemsHtml(res.problems, res.problemsCount)}</div></div>`;
-    toast(`${n} poços carregados. O autocompletar dos relatórios já usa a nova base.`, 'success', 5000);
+    toast(`${n} poços importados com sucesso para a memória local!`, 'success', 5000);
     this.refreshPocos();
   }
 

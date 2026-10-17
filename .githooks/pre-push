@@ -1,0 +1,8 @@
+#!/bin/sh
+# Bloqueia o push se o sw.js não estiver com a versão/lista de arquivos atual:
+# sem isso o celular não percebe que há versão nova do app.
+if ! node scripts/gerar-pwa.js --check; then
+  echo ""
+  echo "Push cancelado: rode 'npm run pwa' (atualiza o sw.js e roda os testes), faça commit e tente de novo."
+  exit 1
+fi

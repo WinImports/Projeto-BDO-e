@@ -51,13 +51,13 @@ test.describe('Configurações → Base de Poços e Locações', () => {
   test('importa CSV pelo botão, mostra a contagem e o autocompletar preenche as coordenadas', async () => {
     const { page } = ctx;
     await openTab(page, 'settings');
-    await expect(page.locator('[data-pocos-status]')).toContainText('Nenhuma base carregada');
+    await expect(page.locator('[data-pocos-count]')).toHaveText('Nenhuma base carregada');
 
     await page.locator('[data-pocos-input]').setInputFiles(CSV);
-    await expect(page.locator('[data-pocos-count]')).toHaveText('5 poços carregados');
-    await expect(page.locator('[data-pocos-report]')).toContainText('5 poços importados de pocos-teste.csv');
+    await expect(page.locator('[data-pocos-count]')).toHaveText('Base Ativa: 5 poços carregados');
+    await expect(page.locator('[data-pocos-report]')).toContainText('5 poços importados com sucesso para a memória local!');
     await expect(page.locator('[data-pocos-report] summary')).toContainText('2 registros ignorados');
-    await expect(toast(page)).toContainText('5 poços carregados');
+    await expect(toast(page)).toContainText('5 poços importados com sucesso');
 
     await openTab(page, 'bdo');
     await expect(page.locator('[data-pocos-hint]')).toContainText('Base importada: 5 poços');
@@ -72,7 +72,7 @@ test.describe('Configurações → Base de Poços e Locações', () => {
     const { page } = ctx;
     await openTab(page, 'settings');
     await dropFile(page, KML);
-    await expect(page.locator('[data-pocos-count]')).toHaveText('5 poços carregados');
+    await expect(page.locator('[data-pocos-count]')).toHaveText('Base Ativa: 5 poços carregados');
     await expect(page.locator('[data-pocos-report]')).toContainText('(KML');
 
     await openTab(page, 'handover');
@@ -88,21 +88,21 @@ test.describe('Configurações → Base de Poços e Locações', () => {
     const { page, userData } = ctx;
     await openTab(page, 'settings');
     await page.locator('[data-pocos-input]').setInputFiles(CSV);
-    await expect(page.locator('[data-pocos-count]')).toHaveText('5 poços carregados');
+    await expect(page.locator('[data-pocos-count]')).toHaveText('Base Ativa: 5 poços carregados');
 
     const bad = path.join(userData, 'sem-coordenadas.csv');
     fs.writeFileSync(bad, 'Poço;Campo\nTST-999;X\n');
     await page.locator('[data-pocos-input]').setInputFiles(bad);
     await expect(page.locator('[data-pocos-report] .notice--error')).toContainText('latitude, longitude');
     await expect(page.locator('[data-pocos-report]')).toContainText('A base anterior foi mantida');
-    await expect(page.locator('[data-pocos-count]')).toHaveText('5 poços carregados');
+    await expect(page.locator('[data-pocos-count]')).toHaveText('Base Ativa: 5 poços carregados');
 
     // latitude e longitude trocadas: tudo cai fora da BA/SE → recusa
     const swapped = path.join(userData, 'trocado.csv');
     fs.writeFileSync(swapped, ['poco;latitude;longitude', 'TST-500;-38.43;-12.79', 'TST-501;-38.44;-12.80'].join('\n'));
     await page.locator('[data-pocos-input]').setInputFiles(swapped);
     await expect(page.locator('[data-pocos-report] .notice--error')).toContainText('fora da região BA/SE');
-    await expect(page.locator('[data-pocos-count]')).toHaveText('5 poços carregados');
+    await expect(page.locator('[data-pocos-count]')).toHaveText('Base Ativa: 5 poços carregados');
 
     const xlsx = path.join(userData, 'planilha.xlsx');
     fs.writeFileSync(xlsx, 'x');
@@ -116,13 +116,13 @@ test('base importada continua após reabrir; Limpar Base volta à digitação li
   let ctx = await launchApp({ env });
   await openTab(ctx.page, 'settings');
   await ctx.page.locator('[data-pocos-input]').setInputFiles(CSV);
-  await expect(ctx.page.locator('[data-pocos-count]')).toHaveText('5 poços carregados');
+  await expect(ctx.page.locator('[data-pocos-count]')).toHaveText('Base Ativa: 5 poços carregados');
   await ctx.close({ keepData: true });
 
   ctx = await launchApp({ userData: ctx.userData, env });
   const { page } = ctx;
   await openTab(page, 'settings');
-  await expect(page.locator('[data-pocos-count]')).toHaveText('5 poços carregados');
+  await expect(page.locator('[data-pocos-count]')).toHaveText('Base Ativa: 5 poços carregados');
   await expect(page.locator('[data-pocos-status]')).toContainText('pocos-teste.csv');
 
   await page.locator('[data-action=clear-pocos]').click();
