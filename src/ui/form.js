@@ -11,6 +11,9 @@ import { loadPocos, searchPocos, findPoco } from '../core/pocos.js';
 import { consolidateFromHistory, hasConsolidation } from '../core/consolidar.js';
 import { consolidationHtml } from './consolidacao-view.js';
 import { routeLinks, showRoutePrompt } from './route-prompt.js';
+import { assignPhotoFields, photoFields, photosOf, photoMeta } from '../core/fotos.js';
+import { STORES, get } from '../core/db.js';
+import { getModule } from '../modules/index.js';
 
 const INPUT_TYPES = { text: 'text', number: 'number', date: 'date', time: 'time', datetime: 'datetime-local' };
 
@@ -62,7 +65,7 @@ export function hasContent(f, data, photos = []) {
   switch (f.type) {
     case 'table': return filledRows(data[f.id], f.columns).length > 0;
     case 'geo': return Boolean(parseCoords(data[f.id]));
-    case 'photos': return photos.length > 0;
+    case 'photos': return photos.some((p) => p.field === f.id);
     case 'consolidation': return hasConsolidation(data[f.id]);
     default: return !isBlank(data[f.id]);
   }
@@ -71,7 +74,7 @@ export function hasContent(f, data, photos = []) {
 /** Seções sem nenhum campo obrigatório e sem nenhum dado (não entram no PDF). */
 export function emptyOptionalSections(module, data, photos = []) {
   return module.sections
-    .filter((s) => !s.fields.some((f) => f.required) && !s.fields.some((f) => hasContent(f, data, photos)))
+    .filter((s) => !s.legacy && !s.fields.some((f) => f.required) && !s.fields.some((f) => hasContent(f, data, photos)))
     .map((s) => s.short || s.title);
 }
 
@@ -118,8 +121,8 @@ export function sectionStatus(module, data, photos = []) {
     const missing = required.filter((f) => fieldMissing(f, data)).length;
     const filled = s.fields.some((f) => hasContent(f, data, photos));
     const state = required.length ? (missing ? 'pending' : 'done') : (filled ? 'done' : 'optional');
-    return { index, title: s.title, short: s.short || s.title, icon: s.icon, required: required.length, missing, state };
-  });
+    return { index, title: s.title, short: s.short || s.title, icon: s.icon, required: required.length, missing, state, legacy: s.legacy };
+  }).filter((st) => !st.legacy); // seções do formato anterior não aparecem no formulário
 }
 
 export function requiredProgress(module, data) {
@@ -191,6 +194,7 @@ export class FormView {
     this.draft = draft;
     this.onChange = onChange;
     this.photoUrls = new Map();
+    assignPhotoFields(module, draft.photos); // fotos antigas (sem bloco) vão para "Outras fotos"
     this.fields = new Map(allFields(module).filter((f) => f.id).map((f) => [f.id, f]));
     this.sig = null;
 
@@ -201,7 +205,7 @@ export class FormView {
     this.el = document.createElement('form');
     this.el.className = 'report-form';
     this.el.noValidate = true;
-    this.el.innerHTML = module.sections.map((s, i) => this.sectionHtml(s, i)).join('');
+    this.el.innerHTML = module.sections.map((s, i) => (s.legacy ? '' : this.sectionHtml(s, i))).join('');
     this.el.addEventListener('input', (e) => this.handleInput(e));
     this.el.addEventListener('change', (e) => this.handleInput(e));
     this.el.addEventListener('click', (e) => this.handleClick(e));
@@ -550,32 +554,61 @@ export class FormView {
   }
 
   photosHtml(f) {
-    const cats = f.categories || [null];
+    if (!f.compare) return `<div class="photo-cats">${this.photoSlotsHtml(f, undefined)}</div>`;
+    // Relatório de Execução: "Antes" (fotos da Visita Técnica do poço) x "Depois" (fotos da execução)
+    const d = this.draft.data;
+    const antes = photosOf(f, this.draft.photos, 'antes');
+    const vazio = d._visita_ref
+      ? 'A Visita Técnica deste poço não tem fotos deste componente.'
+      : 'Informe o Poço / Locação e o período da quinzena: as fotos da última Visita Técnica do poço aparecem aqui.';
+    return `
+      <div class="photo-compare">
+        <div class="photo-compare__col photo-compare__col--antes" data-fase="antes">
+          <div class="photo-compare__title">${icon('clock', 15)} Antes — Visita Técnica${d._visita_data ? ` de ${esc(d._visita_data)}` : ''}</div>
+          ${antes.length ? `<div class="photo-grid">${antes.map((p) => this.photoFigureHtml(p)).join('')}</div>` : `<p class="muted small">${vazio}</p>`}
+        </div>
+        <div class="photo-compare__col photo-compare__col--depois" data-fase="depois">
+          <div class="photo-compare__title">${icon('checkCircle', 15)} Depois — Execução</div>
+          <div class="photo-cats">${this.photoSlotsHtml(f, 'depois')}</div>
+        </div>
+      </div>`;
+  }
+
+  // Uma "vaga" por legenda sugerida (ex.: Placa do poço), cada uma com Arquivo / Câmera
+  photoSlotsHtml(f, fase) {
+    const cats = f.categories?.length ? f.categories : [null];
     const catOf = (p) => (cats.includes(p.category ?? null) ? (p.category ?? null) : cats[cats.length - 1]);
-    return `<div class="photo-cats">${cats.map((cat) => {
-      const list = this.draft.photos.filter((p) => catOf(p) === cat);
+    const list = photosOf(f, this.draft.photos, fase);
+    const attrs = (cat) => `data-photos-field="${esc(f.id)}" data-category="${esc(cat ?? '')}" data-fase="${fase || ''}"`;
+    return cats.map((cat) => {
+      const items = list.filter((p) => catOf(p) === cat);
       return `
         <div class="photo-cat">
-          ${cat ? `<div class="photo-cat__title">${esc(cat)} <span class="muted">(${list.length})</span></div>` : ''}
+          ${cat ? `<div class="photo-cat__title">${esc(cat)} <span class="muted">(${items.length})</span></div>` : ''}
           <div class="photo-grid">
-            ${list.map((p) => `
-              <figure class="photo">
-                <img src="${this.photoUrl(p)}" alt="${esc(p.name)}">
-                <figcaption title="${esc(p.name)}">${esc(p.name)}</figcaption>
-                <button type="button" class="icon-btn photo__remove" data-action="remove-photo" data-photo="${esc(p.id)}" title="Remover foto" aria-label="Remover ${esc(p.name)}">${icon('x', 14)}</button>
-              </figure>`).join('')}
+            ${items.map((p) => this.photoFigureHtml(p)).join('')}
             <div class="photo-add">
               <label class="photo-add__btn">
-                <input type="file" accept="image/*" multiple class="sr-only" data-kind="photos" data-photos-field="${esc(f.id)}" data-category="${esc(cat ?? '')}">
+                <input type="file" accept="image/*" multiple class="sr-only" data-kind="photos" ${attrs(cat)}>
                 ${icon('image', 16)} Arquivo
               </label>
-              <button type="button" class="photo-add__btn" data-action="camera" data-photos-field="${esc(f.id)}" data-category="${esc(cat ?? '')}">
+              <button type="button" class="photo-add__btn" data-action="camera" ${attrs(cat)}>
                 ${icon('camera', 16)} Câmera
               </button>
             </div>
           </div>
         </div>`;
-    }).join('')}</div>`;
+    }).join('');
+  }
+
+  photoFigureHtml(p) {
+    return `
+      <figure class="photo">
+        <img src="${this.photoUrl(p)}" alt="${esc(p.legenda || p.category || p.name)}">
+        <input type="text" class="photo__caption" data-kind="photo-caption" data-photo="${esc(p.id)}" value="${esc(p.legenda || '')}"
+          placeholder="${esc(p.category || 'Legenda da foto')}" aria-label="Legenda da foto ${esc(p.name)}" title="Legenda (vai para o PDF como Figura N)">
+        <button type="button" class="icon-btn photo__remove" data-action="remove-photo" data-photo="${esc(p.id)}" title="Remover foto" aria-label="Remover ${esc(p.name)}">${icon('x', 14)}</button>
+      </figure>`;
   }
 
   photoUrl(p) {
@@ -589,8 +622,8 @@ export class FormView {
     this.paintSignatures(wrap);
   }
 
-  addPhoto(fieldId, category, { name, type, blob }) {
-    this.draft.photos.push({ id: crypto.randomUUID(), name, type, blob, category: category || null });
+  addPhoto(fieldId, category, { name, type, blob }, fase) {
+    this.draft.photos.push({ id: crypto.randomUUID(), ...photoMeta({ name, type, blob, category, field: fieldId, fase }) });
     this.refreshField(fieldId);
     this.changed(fieldId);
   }
@@ -658,12 +691,18 @@ export class FormView {
     const t = e.target;
     const data = this.draft.data;
 
+    if (t.dataset.kind === 'photo-caption') {
+      const photo = this.draft.photos.find((p) => p.id === t.dataset.photo);
+      if (photo && photo.legenda !== t.value) { photo.legenda = t.value; this.changed(photo.field); }
+      return;
+    }
+
     if (t.dataset.kind === 'photos') {
       if (e.type !== 'change') return;
       const files = [...t.files].filter((f) => f.type.startsWith('image/'));
-      const { photosField, category } = t.dataset;
+      const { photosField, category, fase } = t.dataset;
       for (const file of files) {
-        this.draft.photos.push({ id: crypto.randomUUID(), name: file.name, type: file.type, blob: file, category: category || null });
+        this.draft.photos.push({ id: crypto.randomUUID(), ...photoMeta({ name: file.name, type: file.type, blob: file, category, field: photosField, fase }) });
       }
       this.refreshField(photosField);
       return this.changed(photosField);
@@ -722,15 +761,17 @@ export class FormView {
       const url = this.photoUrls.get(pid);
       if (url) URL.revokeObjectURL(url);
       this.photoUrls.delete(pid);
+      const removed = this.draft.photos.find((p) => p.id === pid);
       this.draft.photos = this.draft.photos.filter((p) => p.id !== pid);
-      const field = [...this.fields.values()].find((f) => f.type === 'photos');
-      this.refreshField(field.id);
-      this.changed(field.id);
+      if (removed) {
+        this.refreshField(removed.field);
+        this.changed(removed.field);
+      }
     } else if (action === 'camera') {
-      const { photosField, category } = btn.dataset;
+      const { photosField, category, fase } = btn.dataset;
       try {
         const shot = await openCamera(category || 'Foto');
-        if (shot) this.addPhoto(photosField, category, shot);
+        if (shot) this.addPhoto(photosField, category, shot, fase);
       } catch (err) {
         toast(err.message, 'error', 6000);
       }
@@ -942,12 +983,44 @@ export class FormView {
     if (!this.el.isConnected) return; // usuário saiu da tela enquanto calculava
     d[f.id] = result;
     this.refreshField(f.id);
+    await this.importBefore(result.visita);
     this.changed(f.id);
     if (manual) {
       toast(hasConsolidation(result)
         ? `Consolidação atualizada: ${result.bdos} BDO(s)${result.visita ? ' e a última Visita Técnica' : ''}.`
         : 'Nenhum relatório finalizado para este poço no período.', hasConsolidation(result) ? 'success' : 'info');
     }
+  }
+
+  /**
+   * Execução: copia as fotos da Visita Técnica (consolidada) para a coluna "Antes" de cada componente.
+   * Refaz só quando a Visita de referência muda (ou as fotos "Antes" foram todas apagadas).
+   */
+  async importBefore(visita) {
+    const fields = photoFields(this.module).filter((f) => f.compare);
+    if (!fields.length) return;
+    const d = this.draft.data;
+    const ref = visita?.uniqueId || null;
+    const temAntes = this.draft.photos.some((p) => p.fase === 'antes');
+    if (ref === (d._visita_ref || null) && (temAntes || !ref || d._visita_fotos === 0)) return;
+    let novas = [];
+    if (ref) {
+      const rec = await get(STORES.history, ref);
+      const fotos = assignPhotoFields(getModule('visita_tecnica'), (rec?.photos || []).map((p) => ({ ...p })));
+      const ids = new Set(fields.map((f) => f.id));
+      novas = fotos.map((p) => ({ id: crypto.randomUUID(), ...photoMeta({ ...p, field: ids.has(p.field) ? p.field : 'fotos', fase: 'antes', origem: ref }) }));
+    }
+    if (!this.el.isConnected) return;
+    for (const p of this.draft.photos.filter((x) => x.fase === 'antes')) {
+      const url = this.photoUrls.get(p.id);
+      if (url) URL.revokeObjectURL(url);
+      this.photoUrls.delete(p.id);
+    }
+    this.draft.photos = [...this.draft.photos.filter((p) => p.fase !== 'antes'), ...novas];
+    d._visita_ref = ref;
+    d._visita_data = visita?.data || '';
+    d._visita_fotos = novas.length;
+    fields.forEach((f) => this.refreshField(f.id));
   }
 
   changed(fieldId) {

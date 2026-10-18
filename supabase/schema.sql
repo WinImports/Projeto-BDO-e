@@ -11,7 +11,7 @@ create table if not exists public.reports (
   module            text        not null check (module in ('visita_tecnica', 'bdo', 'handover')),
   content_hash      text        not null,
   payload           jsonb       not null,
-  photos            jsonb       not null default '[]', -- [{ path, category, name }]
+  photos            jsonb       not null default '[]', -- [{ path, category, name, field, fase, legenda }]
   client_created_at timestamptz not null,
   received_at       timestamptz not null default now(),
   constraint reports_unique_id_key unique (unique_id)

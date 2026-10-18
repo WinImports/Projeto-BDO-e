@@ -1,6 +1,8 @@
 // Wrapper mínimo do IndexedDB. Cada gravação só é considerada concluída quando a
 // transação dispara "complete" — ou seja, quando o dado já está persistido em disco.
 
+import { photoMeta } from './fotos.js';
+
 const DB_NAME = 'bdo-e';
 const DB_VERSION = 2;
 // history: cópia local (com fotos) de todo relatório finalizado, mesmo depois de enviado ao
@@ -12,7 +14,7 @@ let dbPromise = null;
 /** Registro do histórico a partir de um item da caixa de saída (fotos guardadas para refazer o PDF). */
 export const toHistory = (rec) => ({
   uniqueId: rec.uniqueId, module: rec.module, data: rec.data, createdAt: rec.createdAt,
-  photos: (rec.photos || []).map(({ name, type, blob, category }) => ({ name, type, blob, category: category || null })),
+  photos: (rec.photos || []).map(photoMeta),
   photosCount: (rec.photos || []).length
 });
 

@@ -2,7 +2,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { launchApp, fill, openTab } = require('./helpers');
+const { launchApp, fill, openTab, preencherVisita } = require('./helpers');
 
 const toast = (page) => page.locator('#toasts .toast').last();
 
@@ -120,15 +120,8 @@ test.describe('prévia, PDF, finalizar e editar', () => {
   test('finalizar envia para a Caixa de Saída; Editar devolve ao formulário com tudo preenchido', async () => {
     const { page } = ctx;
     await openTab(page, 'visita_tecnica');
-    await fill(page, 'poco', 'FBM-89');
-    await fill(page, 'turno', 'Diurno');
-    await fill(page, 'frente', 'Equipe 02');
-    await fill(page, 'tecnicos', 'João');
-    await fill(page, 'cliente', 'PETROBRAS');
-    await fill(page, 'status_locacao', 'OK');
-    await fill(page, 'estado_antepoco', 'Limpo');
-    await page.locator('[data-table=valvulas][data-row="4"][data-col=status]').selectOption('Vazamento / Sem Estanqueidade');
-    await page.locator('[data-table=fixadores][data-row="0"][data-col=status]').selectOption('Oxidado');
+    await preencherVisita(page);
+    await page.locator('[data-table=antepoco_checklist][data-row="0"][data-col=situacao]').selectOption('Sim');
     await expect(page.locator('#ready-status')).toContainText('Pronto para finalizar');
 
     await page.locator('#btn-finalize').click();
@@ -142,9 +135,10 @@ test.describe('prévia, PDF, finalizar e editar', () => {
     await page.locator('#view[data-ready=visita_tecnica]').waitFor();
     await expect(page.locator('#tabs .tab.is-active')).toHaveAttribute('data-tab', 'visita_tecnica');
     await expect(page.locator('[data-field=poco]')).toHaveValue('FBM-89');
-    // tabela com linhas fixas reconstruída: VM no lugar certo, demais válvulas vazias
-    await expect(page.locator('[data-wrap=valvulas] .cell--locked')).toHaveCount(7);
-    await expect(page.locator('[data-table=valvulas][data-row="4"][data-col=status]')).toHaveValue('Vazamento / Sem Estanqueidade');
+    // tabela com linhas fixas reconstruída (checklist do antipoço) e campos por componente
+    await expect(page.locator('[data-wrap=antepoco_checklist] .cell--locked')).toHaveCount(4);
+    await expect(page.locator('[data-table=antepoco_checklist][data-row="0"][data-col=situacao]')).toHaveValue('Sim');
+    await expect(page.locator('[data-field=vc_estanqueidade]')).toHaveValue('Sem estanqueidade (vazamento)');
     await expect(page.locator('#outbox-badge')).toBeHidden();
 
     await fill(page, 'frente', 'Equipe 03');

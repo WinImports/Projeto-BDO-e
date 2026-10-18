@@ -39,4 +39,13 @@ async function openTab(page, tab) {
   await page.locator(`#view[data-ready="${tab}"]`).waitFor();
 }
 
-module.exports = { launchApp, newUserData, fill, openTab };
+/** Preenche uma Visita Técnica pronta para finalizar (obrigatórios + alguns componentes). */
+async function preencherVisita(page, poco = 'FBM-89') {
+  for (const [f, v] of [
+    ['poco', poco], ['turno', 'Diurno'], ['frente', 'Equipe 02'], ['tecnicos', 'João'], ['cliente', 'PETROBRAS'],
+    ['objetivo', 'Avaliar as válvulas da cabeça de poço'], ['status_locacao', 'OK'], ['estado_antepoco', 'Limpo'],
+    ['vc_estanqueidade', 'Sem estanqueidade (vazamento)'], ['flange_inf_corrosao', 'Moderada'], ['gestor_nome', 'Gestor Teste']
+  ]) await fill(page, f, v);
+}
+
+module.exports = { launchApp, newUserData, fill, openTab, preencherVisita };

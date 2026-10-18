@@ -4,6 +4,7 @@
 
 import { STORES, get, put, remove } from './db.js';
 import { newUniqueId } from './ids.js';
+import { photoMeta } from './fotos.js';
 
 // Versões anteriores guardavam um rascunho por base ("BA:bdo", "SE:bdo")
 const LEGACY_PREFIXES = ['BA', 'SE'];
@@ -54,6 +55,6 @@ export async function restoreDraft(rec, data) {
     uniqueId: rec.uniqueId,
     module: rec.module,
     data,
-    photos: rec.photos.map((p) => ({ id: crypto.randomUUID(), name: p.name, type: p.type, blob: p.blob, category: p.category || null }))
+    photos: rec.photos.map((p) => ({ id: crypto.randomUUID(), ...photoMeta(p) }))
   });
 }

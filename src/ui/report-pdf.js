@@ -40,7 +40,7 @@ const PDF_CSS = `
   .muted { color: #5b6676; } .small { font-size: 8.5pt; }
   .preview__section { padding-top: 10px; break-inside: auto; }
   .preview__section h4 { font-size: 9pt; text-transform: uppercase; letter-spacing: .05em; color: #0b5cad; margin: 0 0 5px; break-after: avoid; }
-  .preview__grid { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; border: 1px solid #c3ccd7; border-radius: 4px; overflow: hidden; }
+  .preview__grid { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; border: 1px solid #c3ccd7; border-radius: 4px; overflow: hidden; break-inside: avoid; }
   .preview__item { padding: 5px 8px; border-bottom: 1px solid #dde3ea; border-right: 1px solid #dde3ea; margin: -1px -1px 0 0; break-inside: avoid; }
   .preview__item--full { grid-column: 1 / -1; }
   .preview__item--highlight { background: #fff4dc; border-left: 4px solid #f2a900; }
@@ -55,6 +55,15 @@ const PDF_CSS = `
   .photo { margin: 0; border: 1px solid #c3ccd7; border-radius: 4px; overflow: hidden; break-inside: avoid; }
   .photo img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
   .photo figcaption { padding: 3px 6px; font-size: 7.5pt; color: #5b6676; }
+  .photo figcaption strong { color: #0f172a; }
+  .preview__photos { margin-top: 6px; }
+  .preview__photos-title { margin: 0 0 4px; font-size: 8pt; text-transform: uppercase; letter-spacing: .04em; color: #334155; break-after: avoid; }
+  .photo-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .photo-compare__col { border: 1px solid #c3ccd7; border-radius: 4px; padding: 5px; break-inside: avoid; }
+  .photo-compare__col--antes { border-top: 3px solid #94a3b8; }
+  .photo-compare__col--depois { border-top: 3px solid #15803d; }
+  .photo-compare__title { font-size: 8pt; font-weight: 700; margin-bottom: 4px; }
+  .photo-compare .photo-grid { grid-template-columns: repeat(2, 1fr); gap: 5px; }
   footer { margin-top: 14px; padding-top: 6px; border-top: 1px solid #dde3ea; font-size: 7.5pt; color: #5b6676; }
 `;
 

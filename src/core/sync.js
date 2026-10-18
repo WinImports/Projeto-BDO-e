@@ -62,7 +62,7 @@ async function uploadPhotos(client, rec) {
     changed = true;
   }
   if (changed) await outbox.updateRecord(rec);
-  return rec.photos.map((p) => ({ path: p.path, category: p.category || null, name: p.name }));
+  return rec.photos.map((p) => ({ path: p.path, category: p.category || null, name: p.name, field: p.field || null, fase: p.fase || null, legenda: p.legenda || '' }));
 }
 
 const toRow = (rec, photos) => ({

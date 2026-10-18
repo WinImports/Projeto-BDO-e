@@ -8,6 +8,7 @@ import { savePdf } from './report-pdf.js';
 import { toast } from './toast.js';
 import { companyInfo } from '../core/settings.js';
 import { consolidationHtml } from './consolidacao-view.js';
+import { assignPhotoFields, photosOf } from '../core/fotos.js';
 
 function fieldHtml(f, data) {
   if (f.type === 'photos') return '';
@@ -39,7 +40,7 @@ function fieldHtml(f, data) {
   const v = displayValue(f, data[f.id]);
   const full = f.full || f.type === 'textarea' || f.type === 'checklist';
   const itemCls = ['preview__item', full && 'preview__item--full', f.highlight && 'preview__item--highlight'].filter(Boolean).join(' ');
-  return `<div class="${itemCls}"><dt>${esc(f.label)}</dt><dd class="${v ? '' : 'muted'}">${v ? esc(v) : '—'}</dd></div>`;
+  return `<div class="${itemCls}"><dt>${esc(f.pdfLabel || f.label)}</dt><dd class="${v ? '' : 'muted'}">${v ? esc(v) : '—'}</dd></div>`;
 }
 
 /**
@@ -59,28 +60,47 @@ export function geoHeaderHtml(module, data) {
 }
 
 /**
- * Corpo do relatório (seções + fotos). photoSrcs: URLs das fotos na mesma ordem de `photos`.
+ * Corpo do relatório. photoSrcs: URLs das fotos na mesma ordem de `photos`.
  * Só entram campos e seções com conteúdo — nada de tabelas vazias ou "—" no PDF.
+ * As fotos ficam no bloco do próprio componente (logo abaixo dos dados dele), numeradas como
+ * "Figura N" na ordem do relatório. Blocos compare: colunas "Antes (Visita)" x "Depois (Execução)".
  * As coordenadas GPS ficam no cabeçalho (geoHeaderHtml), não se repetem no corpo.
  */
 export function reportBodyHtml(module, data, photos, photoSrcs) {
-  const sections = module.sections.map((s) => {
-    const items = s.fields.filter((f) => f.type !== 'geo' && f.type !== 'consolidation' && hasContent(f, data)).map((f) => fieldHtml(f, data)).join('');
+  assignPhotoFields(module, photos);
+  const srcOf = new Map(photos.map((p, i) => [p, photoSrcs[i]]));
+  let fig = 0;
+  const figure = (p) => {
+    fig += 1;
+    const cap = p.legenda || p.category || p.name;
+    return `<figure class="photo"><img src="${srcOf.get(p)}" alt="${esc(cap)}">
+      <figcaption><strong>Figura ${fig}</strong> — ${esc(cap)}</figcaption></figure>`;
+  };
+  const grid = (list) => `<div class="photo-grid photo-grid--read">${list.map(figure).join('')}</div>`;
+  const photoBlock = (f) => {
+    if (f.compare) {
+      const antes = photosOf(f, photos, 'antes');
+      const depois = photosOf(f, photos, 'depois');
+      if (!antes.length && !depois.length) return '';
+      const col = (cls, title, list) => `<div class="photo-compare__col photo-compare__col--${cls}"><div class="photo-compare__title">${esc(title)}</div>${list.length ? grid(list) : '<p class="muted small">Sem fotos.</p>'}</div>`;
+      const antesHtml = col('antes', `Antes — Visita Técnica${data._visita_data ? ` de ${data._visita_data}` : ''}`, antes);
+      const depoisHtml = col('depois', 'Depois — Execução', depois);
+      return `<div class="preview__photos" data-photos="${esc(f.id)}"><h5 class="preview__photos-title">${esc(f.label)}</h5><div class="photo-compare">${antesHtml}${depoisHtml}</div></div>`;
+    }
+    const list = photosOf(f, photos);
+    return list.length ? `<div class="preview__photos" data-photos="${esc(f.id)}"><h5 class="preview__photos-title">${esc(f.label)}</h5>${grid(list)}</div>` : '';
+  };
+
+  return module.sections.map((s) => {
+    const items = s.fields.filter((f) => !['geo', 'consolidation', 'photos'].includes(f.type) && hasContent(f, data))
+      .map((f) => fieldHtml(f, data)).join('');
     // O resumo consolidado fica FORA da grade de campos: blocos de grade não quebram bem entre páginas no PDF
     const consol = s.fields.filter((f) => f.type === 'consolidation' && hasContent(f, data))
       .map((f) => `<div class="preview__consol">${consolidationHtml(data[f.id])}</div>`).join('');
-    if (!items.trim() && !consol) return '';
-    return `<section class="preview__section"><h4>${esc(s.title)}</h4>${items.trim() ? `<dl class="preview__grid">${items}</dl>` : ''}${consol}</section>`;
+    const fotos = s.fields.filter((f) => f.type === 'photos').map(photoBlock).join('');
+    if (!items.trim() && !consol && !fotos) return '';
+    return `<section class="preview__section"><h4>${esc(s.title)}</h4>${items.trim() ? `<dl class="preview__grid">${items}</dl>` : ''}${consol}${fotos}</section>`;
   }).join('');
-  const gallery = photos.length ? `
-    <section class="preview__section preview__section--photos">
-      <h4>Registro fotográfico (${photos.length})</h4>
-      <div class="photo-grid photo-grid--read">
-        ${photos.map((p, i) => `<figure class="photo"><img src="${photoSrcs[i]}" alt="${esc(p.name)}">
-          <figcaption title="${esc(p.name)}">${p.category ? `<strong>${esc(p.category)}</strong><br>` : ''}${esc(p.name)}</figcaption></figure>`).join('')}
-      </div>
-    </section>` : '';
-  return sections + gallery;
 }
 
 const EYEBROW = {
@@ -100,6 +120,7 @@ const EYEBROW = {
 export function openPreview({ module, uniqueId, data, photos = [], mode = 'confirm', meta = '', pending = [], onNewReport, onReuse, notice = '' }) {
   // Relatório finalizado usa a empresa "congelada" no envio; rascunho usa as Configurações atuais
   const company = data._empresa || companyInfo();
+  assignPhotoFields(module, photos); // cada foto no bloco do seu componente (antigas → "Outras fotos")
   return new Promise((resolve) => {
     const urls = photos.map((p) => URL.createObjectURL(p.blob));
     const dialog = document.createElement('dialog');

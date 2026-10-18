@@ -3,6 +3,7 @@
 
 import { STORES, getAll } from './db.js';
 import { normalizeWell } from './pocos.js';
+import { ANTEPOCO, VALVULAS_CABECA, FLANGES } from '../modules/common.js';
 
 export const listHistory = () => getAll(STORES.history);
 
@@ -13,6 +14,30 @@ const toMin = (s) => {
 };
 export const fmtMin = (min) => `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`;
 const br = (iso) => (/^\d{4}-\d{2}-\d{2}$/.test(iso || '') ? iso.split('-').reverse().join('/') : '');
+
+const juntar = (...partes) => partes.filter(Boolean).join(' · ');
+
+/**
+ * Status de equipamentos da Visita Técnica: campos por componente (formato atual)
+ * e/ou as tabelas "valvulas" / "fixadores" do formato anterior.
+ */
+function resumoVisita(d) {
+  const valvulas = (d.valvulas || []).map((v) => ({ item: v.item, status: v.status || '', obs: v.obs || '' }));
+  if (d.estado_antepoco || d.obs_antepoco) {
+    valvulas.push({ item: ANTEPOCO.nome, status: d.estado_antepoco || '', obs: d.obs_antepoco || '' });
+  }
+  for (const v of VALVULAS_CABECA) {
+    const status = juntar(d[`${v.p}_estanqueidade`], d[`${v.p}_abertura`], d[`${v.p}_intervencao`] === 'Sim' && 'Necessita intervenção');
+    if (status || d[`${v.p}_obs`]) valvulas.push({ item: v.short, status, obs: juntar(d[`${v.p}_config`], d[`${v.p}_obs`]) });
+  }
+  const fixadores = (d.fixadores || []).map((v) => ({ item: v.item, status: v.status || '', obs: v.obs || '' }));
+  for (const fl of FLANGES) {
+    const status = juntar(d[`${fl.p}_corrosao`] && `Corrosão: ${d[`${fl.p}_corrosao`].toLowerCase()}`, d[`${fl.p}_intervencao`] === 'Sim' && 'Necessita intervenção');
+    const medidas = juntar(d[`${fl.p}_parafusos`] && `${d[`${fl.p}_parafusos`]} parafusos`, d[`${fl.p}_tamanho`], d[`${fl.p}_prisioneiros`] === 'Sim' && 'com prisioneiros');
+    if (status || medidas || d[`${fl.p}_obs`]) fixadores.push({ item: fl.short, status, obs: juntar(medidas, d[`${fl.p}_obs`]) });
+  }
+  return { valvulas, fixadores };
+}
 
 /** Datas no formato AAAA-MM-DD; o fim é inclusivo. */
 const inPeriod = (date, ini, fim) => Boolean(date) && date >= ini && date <= fim;
@@ -68,9 +93,9 @@ export function consolidate(history, { poco, inicio, fim }) {
     paradas,
     sms,
     visita: visita ? {
+      uniqueId: visita.uniqueId,
       data: br(visita.data.data),
-      valvulas: (visita.data.valvulas || []).map((v) => ({ item: v.item, status: v.status || '', obs: v.obs || '' })),
-      fixadores: (visita.data.fixadores || []).map((v) => ({ item: v.item, status: v.status || '', obs: v.obs || '' })),
+      ...resumoVisita(visita.data),
       pressoes: (visita.data.pressoes || []).map((p) => ({ item: p.item, valor: p.valor || '', unidade: p.unidade || '' }))
     } : null
   };

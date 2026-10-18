@@ -14,11 +14,11 @@ npm start       # abre o app (electron .) — sem servidor web
 ## Funcionalidades
 
 - **Barra de ações fixa** em todos os formulários: *Salvar Rascunho* (no computador, sem rede), *Prévia do PDF / Conferência* (a qualquer momento, avisando campos pendentes) e *Finalizar e Enviar para Caixa de Saída*. O rascunho também é salvo automaticamente a cada alteração.
-- **PDF**: botão *Salvar PDF* na prévia gera um A4 com cabeçalho, ID único, coordenadas e fotos (`ui/report-pdf.js` + `pdf:save` no `main.js`). Rascunhos saem marcados como "RASCUNHO". O PDF é compacto: campos, colunas e blocos sem dados não são impressos, e a prévia avisa quais blocos opcionais ficaram vazios.
+- **PDF**: botão *Gerar PDF / Imprimir* na prévia (também para relatórios do Histórico) gera um A4 com cabeçalho, ID único, coordenadas e fotos (`ui/report-pdf.js` + `pdf:save` no `main.js`). Rascunhos saem marcados como "RASCUNHO". O PDF é compacto: campos, colunas e blocos sem dados não são impressos, e a prévia avisa quais blocos opcionais ficaram vazios.
 - **Geolocalização**: botão *Capturar Coordenadas GPS da Locação* (serviço de localização do Windows / receptor GPS) ou coordenadas do poço escolhido na base — sem digitação manual —, mini mapa OpenStreetMap (online) e rota até a locação (o poço como destino) no Google Maps, Waze e OpenStreetMap. Ao escolher o poço ou registrar um deslocamento/mobilização no BDO, o app oferece abrir a navegação. Requer a Localização ativada em *Configurações do Windows › Privacidade › Localização*.
 - **Configurações do Sistema** (aba ⚙): empresa prestadora (nome, CNPJ validado, logo), cliente/contrato padrão e técnico padrão (nome, matrícula, cargo). Salvas no `localStorage` na hora e enviadas ao Supabase (`save_device_settings`) pela rotina de sincronização. Relatórios novos já nascem preenchidos (propriedade `settingsKey` nos campos dos módulos); empresa e logo são congelados no relatório ao finalizar.
 - **Links de mapa clicáveis** na tela e no PDF (coordenada → Google Maps; e Waze / OpenStreetMap).
-- **Câmera** e **assinatura** na tela; fotos organizadas por categoria (Visita e Pós-Execução — o BDO não tem fotos).
+- **Câmera** e **assinatura** na tela; um bloco de fotos por componente (placa, manômetros, antipoço, VC, VA-1, VA-2, VB-1, VB-2, flanges e outras) com legenda e "Figura N" no PDF; na Execução, comparativo Antes (Visita Técnica) x Depois — o BDO não tem fotos.
 - **BDO**: cabeçalho com cliente, contrato, poço, cidade/UF, técnico e matrícula, operador, gestor, atividade principal, KM inicial/final (KM percorrido calculado) e GPS; apropriação com data/hora de início e fim e duração calculada (inclusive virando o dia).
 
 ## PWA (celular) / GitHub Pages

@@ -350,6 +350,8 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .
   border: 1px dashed var(--border-strong); border-radius: var(--radius-sm);
   background: var(--surface-2); font-weight: 700; font-variant-numeric: tabular-nums;
 }
+/* texto gerado longo (ex.: parágrafo de abertura do relatório) */
+.span-12 > .computed-value { height: auto; min-height: 40px; padding: 10px 12px; font-weight: 400; line-height: 1.55; }
 
 .checklist { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
 .check {
@@ -774,4 +776,27 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .
   .modal__nav .btn { flex: 1 1 auto; justify-content: center; }
   .outbox-item__actions .btn { flex: 1 1 auto; justify-content: center; }
   .outbox-item__side { flex-wrap: wrap; gap: 10px; }
+}
+
+/* ---------- Fotos por componente (Visita / Execução) ---------- */
+.photo__caption {
+  display: block; width: 100%; border: 0; border-top: 1px solid var(--border); border-radius: 0;
+  padding: 5px 8px; font: inherit; font-size: .76rem; background: var(--surface); color: var(--text);
+}
+.photo__caption::placeholder { color: var(--text-muted); }
+.photo__caption:focus { outline: 2px solid var(--primary); outline-offset: -2px; }
+.photo-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.photo-compare__col { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); min-width: 0; }
+.photo-compare__col--antes { border-top: 3px solid var(--text-muted); }
+.photo-compare__col--depois { border-top: 3px solid var(--ok); }
+.photo-compare__title { display: flex; align-items: center; gap: 6px; font-size: .84rem; font-weight: 700; margin-bottom: 10px; }
+.photo-compare .photo-cats { grid-template-columns: 1fr; }
+.preview__photos { margin-top: 10px; }
+.preview__photos-title { margin: 0 0 6px; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+.preview__photos .photo figcaption { white-space: normal; }
+@media (max-width: 760px) {
+  .photo-compare { grid-template-columns: 1fr; }
+}
+@media (pointer: coarse), (max-width: 640px) {
+  .photo__caption { font-size: 16px; min-height: 44px; }
 }

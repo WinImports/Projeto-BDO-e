@@ -5,7 +5,7 @@ const { execFileSync } = require('child_process');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { launchApp, fill } = require('./helpers');
+const { launchApp, preencherVisita } = require('./helpers');
 
 const ROOT = path.join(__dirname, '..');
 const BASE = '/Projeto-BDO-e/';
@@ -152,11 +152,7 @@ test('PWA: relatório finalizado fica no Histórico do navegador, reabre na pré
     const tab = async (id) => { await page.locator(`#tabs [data-tab=${id}]`).click(); await page.locator(`#view[data-ready=${id}]`).waitFor(); };
 
     await tab('visita_tecnica');
-    for (const [f, v] of [['poco', 'FBM-89'], ['turno', 'Diurno'], ['frente', 'Equipe 02'], ['tecnicos', 'João'], ['cliente', 'PETROBRAS'], ['status_locacao', 'OK'], ['estado_antepoco', 'Limpo']]) {
-      await fill(page, f, v);
-    }
-    await page.locator('[data-table=valvulas][data-row="4"][data-col=status]').selectOption('Vazamento / Sem Estanqueidade');
-    await page.locator('[data-table=fixadores][data-row="0"][data-col=status]').selectOption('Oxidado');
+    await preencherVisita(page);
     await page.locator('.route-prompt [data-route-close]').first().click().catch(() => {});
     await page.locator('#btn-finalize').click();
     await page.locator('dialog.modal[open] [data-confirm]').click();

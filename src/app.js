@@ -7,6 +7,7 @@ import { enqueue, pendingCount, onOutboxChange, takeBack } from './core/outbox.j
 import { syncNow, startSyncScheduler, onSyncState } from './core/sync.js';
 import { getPref, setPref } from './core/prefs.js';
 import { newUniqueId } from './core/ids.js';
+import { photoMeta } from './core/fotos.js';
 import { FormView, validate, cleanData, requiredProgress, rehydrate } from './ui/form.js';
 import { confirmDialog } from './ui/confirm.js';
 import { closeRoutePrompt } from './ui/route-prompt.js';
@@ -340,7 +341,7 @@ async function finalize(module) {
       uniqueId: draft.uniqueId,
       module: module.id,
       data,
-      photos: draft.photos.map(({ name, type, blob, category }) => ({ name, type, blob, category: category || null }))
+      photos: draft.photos.map(photoMeta)
     });
     // 2) só então descarta o rascunho
     state.draft = null;

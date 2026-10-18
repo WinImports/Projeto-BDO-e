@@ -3,7 +3,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { launchApp, fill, openTab } = require('./helpers');
+const { launchApp, fill, openTab, preencherVisita } = require('./helpers');
 
 const toast = (page) => page.locator('#toasts .toast').last();
 // PNG 1x1 (foto de teste)
@@ -16,15 +16,7 @@ const hojeISO = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d
 /** Preenche e finaliza uma Visita Técnica com 1 foto. Devolve o ID curto exibido no cabeçalho. */
 async function finalizarVisita(page, poco = 'FBM-89') {
   await openTab(page, 'visita_tecnica');
-  await fill(page, 'poco', poco);
-  await fill(page, 'turno', 'Diurno');
-  await fill(page, 'frente', 'Equipe 02');
-  await fill(page, 'tecnicos', 'João');
-  await fill(page, 'cliente', 'PETROBRAS');
-  await fill(page, 'status_locacao', 'OK');
-  await fill(page, 'estado_antepoco', 'Limpo');
-  await page.locator('[data-table=valvulas][data-row="4"][data-col=status]').selectOption('Vazamento / Sem Estanqueidade');
-  await page.locator('[data-table=fixadores][data-row="0"][data-col=status]').selectOption('Oxidado');
+  await preencherVisita(page, poco);
   await page.locator('input[data-kind=photos]').first().setInputFiles({ name: 'cabeca.png', mimeType: 'image/png', buffer: PNG });
   await expect(page.locator('.photo-grid img')).toHaveCount(1);
   await expect(page.locator('#ready-status')).toContainText('Pronto para finalizar');

@@ -42,7 +42,7 @@ export function consolidationHtml(c) {
       <div class="consol__block">
         <h5 class="consol__title">Status de equipamentos — última Visita Técnica (${esc(v.data || 'sem data')})</h5>
       </div>
-      ${table('Válvulas e estanqueidade', [['item', 'Componente'], ['status', 'Status'], ['obs', 'Observação']], valvulas)}
-      ${table('Prisioneiros, parafusos e porcas', [['item', 'Local'], ['status', 'Estado'], ['obs', 'Observação']], fixadores)}
+      ${table('Válvulas, antipoço e estanqueidade', [['item', 'Componente'], ['status', 'Status'], ['obs', 'Observação']], valvulas)}
+      ${table('Flanges, prisioneiros e parafusos', [['item', 'Local'], ['status', 'Estado'], ['obs', 'Observação']], fixadores)}
       ${table('Pressões', [['item', 'Ponto de leitura'], ['leitura', 'Pressão']], pressoes)}` : ''}`;
 }
