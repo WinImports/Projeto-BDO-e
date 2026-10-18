@@ -704,3 +704,37 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .
   .only-touch { display: inline; }
   .only-mouse { display: none; }
 }
+
+/* ===================== Coordenadas (somente leitura) e rota ===================== */
+.geo__readout { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.geo__value-box { display: flex; flex-direction: column; gap: 6px; flex: 1 1 150px; max-width: 220px; }
+.geo__label { font-size: .82rem; font-weight: 600; color: var(--text-2); }
+.geo__value {
+  display: flex; align-items: center; height: 40px; padding: 0 12px; font-family: var(--mono); font-size: .92rem;
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text);
+}
+.geo__value:empty::before { content: "—"; color: var(--text-muted); font-family: var(--font); }
+.geo__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.geo__route { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; padding: 12px 14px; border: 1px solid var(--primary-line); border-radius: var(--radius-sm); background: var(--primary-soft); }
+.geo__route-title { margin: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--text); }
+.geo__route-title .icon { color: var(--primary); }
+.geo__route-warn { margin: 0; color: var(--warn); font-weight: 600; }
+.geo__route .geo__map { max-width: 100%; }
+
+/* Convite discreto para navegar até a locação */
+.route-prompt {
+  position: fixed; z-index: 900; right: 20px; top: calc(var(--topbar-h) + var(--tabs-h) + 12px); width: min(420px, calc(100vw - 32px));
+  display: flex; flex-direction: column; gap: 10px; padding: 14px 14px 12px;
+  background: var(--surface); border: 1px solid var(--primary-line); border-left: 4px solid var(--primary);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
+  animation: route-in .2s ease-out;
+}
+@keyframes route-in { from { opacity: 0; transform: translateY(-8px); } }
+.route-prompt__head { display: flex; gap: 10px; align-items: flex-start; }
+.route-prompt__icon { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--primary-soft); color: var(--primary); }
+.route-prompt__text { flex: 1; display: flex; flex-direction: column; gap: 2px; font-size: .88rem; }
+.route-prompt__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 640px) {
+  .route-prompt { left: 16px; right: 16px; width: auto; }
+  .route-prompt__actions .btn { flex: 1; }
+}

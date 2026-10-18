@@ -55,7 +55,7 @@ export default {
         columns: [
           { id: 'data_inicio', label: 'Data início', type: 'date', aux: true, width: 'date' },
           { id: 'hora_inicio', label: 'Hora início', type: 'time', width: 'time' },
-          { id: 'atividade', label: 'Atividade executada', width: 'wide', placeholder: 'Ex.: Troca da válvula VM' },
+          { id: 'atividade', label: 'Atividade executada', width: 'wide', placeholder: 'Ex.: Troca da válvula VM', routeTrigger: true },
           { id: 'data_fim', label: 'Data fim', type: 'date', aux: true, width: 'date' },
           { id: 'hora_fim', label: 'Hora fim', type: 'time', width: 'time' },
           { id: 'duracao', label: 'Duração', width: 'narrow', computed: (r) => duracaoEntreDatas(r.data_inicio, r.hora_inicio, r.data_fim, r.hora_fim) }

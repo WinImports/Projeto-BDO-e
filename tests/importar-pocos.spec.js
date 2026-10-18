@@ -64,8 +64,8 @@ test.describe('Configurações → Base de Poços e Locações', () => {
     await page.locator('[data-field=poco]').fill('tst-01');
     await page.locator('.combo__opt').first().click();
     await expect(page.locator('[data-field=poco]')).toHaveValue('TST-010');
-    await expect(page.locator('[data-part=lat]')).toHaveValue('-12.370500');
-    await expect(page.locator('[data-part=lng]')).toHaveValue('-38.401200');
+    await expect(page.locator('[data-part=lat]')).toHaveText('-12.370500');
+    await expect(page.locator('[data-part=lng]')).toHaveText('-38.401200');
   });
 
   test('importa KML arrastando o arquivo; locação em polígono usa o ponto central', async () => {
@@ -80,8 +80,8 @@ test.describe('Configurações → Base de Poços e Locações', () => {
     await page.locator('[data-field=poco]').press('ArrowDown');
     await page.locator('[data-field=poco]').press('Enter');
     await expect(page.locator('[data-field=poco]')).toHaveValue('LOCACAO KML-200');
-    await expect(page.locator('[data-part=lat]')).toHaveValue('-12.501000');
-    await expect(page.locator('[data-part=lng]')).toHaveValue('-38.501000');
+    await expect(page.locator('[data-part=lat]')).toHaveText('-12.501000');
+    await expect(page.locator('[data-part=lng]')).toHaveText('-38.501000');
   });
 
   test('arquivo inválido não substitui a base atual', async () => {
@@ -139,6 +139,6 @@ test('base importada continua após reabrir; Limpar Base volta à digitação li
     navigator.geolocation.getCurrentPosition = (ok) => ok({ coords: { latitude: -12.44, longitude: -38.33, accuracy: 5 } });
   });
   await page.getByRole('button', { name: 'Obter Localização Atual' }).click();
-  await expect(page.locator('[data-part=lat]')).toHaveValue('-12.440000');
+  await expect(page.locator('[data-part=lat]')).toHaveText('-12.440000');
   await ctx.close();
 });

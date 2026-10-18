@@ -33,7 +33,7 @@ function fieldHtml(f, data) {
     const links = c && mapLinks(c);
     return `<div class="${cls}"><dt>${esc(f.label)}</dt>
       <dd>${c ? `<a href="${links.google}" target="_blank" rel="noopener" title="Abrir no Google Maps">${esc(displayValue(f, data[f.id]))}</a>
-        <span class="geo-links">Abrir em: <a href="${links.google}" target="_blank" rel="noopener">Google Maps</a> · <a href="${links.waze}" target="_blank" rel="noopener">Waze</a> · <a href="${links.osm}" target="_blank" rel="noopener">OpenStreetMap</a></span>` : '<span class="muted">—</span>'}</dd></div>`;
+        <span class="geo-links">Rota até a locação: <a href="${links.google}" target="_blank" rel="noopener">Google Maps</a> · <a href="${links.waze}" target="_blank" rel="noopener">Waze</a> · <a href="${links.osm}" target="_blank" rel="noopener">OpenStreetMap</a></span>` : '<span class="muted">—</span>'}</dd></div>`;
   }
 
   const v = displayValue(f, data[f.id]);
@@ -50,10 +50,10 @@ export function geoHeaderHtml(module, data) {
   const f = module.sections.flatMap((s) => s.fields).find((x) => x.type === 'geo');
   const c = f && parseCoords(data[f.id]);
   if (!c) return '';
-  const links = mapLinks(c);
+  const links = mapLinks(c); // navegação com a locação como DESTINO
   return `<span class="geo-head"><strong>Coordenadas GPS:</strong>
-    <a href="${links.google}" target="_blank" rel="noopener" title="Abrir no Google Maps">${esc(displayValue(f, data[f.id]))}</a>
-    · <a href="${links.google}" target="_blank" rel="noopener">Google Maps</a>
+    <a href="${links.google}" target="_blank" rel="noopener" title="Rota até a locação no Google Maps">${esc(displayValue(f, data[f.id]))}</a>
+    · Rota até a locação: <a href="${links.google}" target="_blank" rel="noopener">Google Maps</a>
     · <a href="${links.waze}" target="_blank" rel="noopener">Waze</a>
     · <a href="${links.osm}" target="_blank" rel="noopener">OpenStreetMap</a></span>`;
 }

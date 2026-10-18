@@ -93,7 +93,12 @@ test('app como página web (GitHub Pages): abre, funciona offline, importa base 
     await page.locator('#view[data-ready=bdo]').waitFor();
     await page.locator('[data-field=poco]').fill('tst-01');
     await page.locator('.combo__opt').first().click();
-    await expect(page.locator('[data-part=lat]')).toHaveValue('-12.370500');
+    await expect(page.locator('[data-part=lat]')).toHaveText('-12.370500');
+    // rota até o poço também no navegador (PWA): aviso com o poço como DESTINO
+    const rota = page.locator('.route-prompt[data-route-prompt=poco]');
+    await expect(rota).toContainText('TST-010');
+    await expect(rota.locator('[data-route-link=google]')).toHaveAttribute('href', 'https://www.google.com/maps/dir/?api=1&destination=-12.370500,-38.401200&travelmode=driving');
+    await rota.getByRole('button', { name: 'Agora não' }).click();
 
     // PDF no navegador: abre o relatório formatado e chama a impressão ("Salvar como PDF")
     await page.evaluate(() => {

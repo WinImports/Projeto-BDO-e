@@ -8,6 +8,7 @@ import { syncNow, startSyncScheduler, onSyncState } from './core/sync.js';
 import { getPref, setPref } from './core/prefs.js';
 import { FormView, validate, cleanData, requiredProgress, rehydrate } from './ui/form.js';
 import { confirmDialog } from './ui/confirm.js';
+import { closeRoutePrompt } from './ui/route-prompt.js';
 import { openPreview } from './ui/preview.js';
 import { OutboxView } from './ui/outbox-view.js';
 import { SettingsView } from './ui/settings-view.js';
@@ -126,6 +127,7 @@ async function showTab(tab) {
     settingsView.dirty = false;
   }
   await flushSave();
+  closeRoutePrompt();
   state.formView?.destroy();
   state.sectionObserver?.disconnect();
   state.formView = null;

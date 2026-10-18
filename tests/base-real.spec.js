@@ -35,8 +35,8 @@ test.describe('base real UO-BA', () => {
     await expect(page.locator('.combo__opt').first()).toContainText(nome);
     await page.locator('.combo__opt').first().click();
     await expect(page.locator('[data-field=poco]')).toHaveValue(nome);
-    await expect(page.locator('[data-part=lat]')).toHaveValue(lat.toFixed(6));
-    await expect(page.locator('[data-part=lng]')).toHaveValue(lng.toFixed(6));
+    await expect(page.locator('[data-part=lat]')).toHaveText(lat.toFixed(6));
+    await expect(page.locator('[data-part=lng]')).toHaveText(lng.toFixed(6));
     await ctx.close();
   });
 });

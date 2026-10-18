@@ -11,7 +11,8 @@
 // Propriedades comuns: id, label, type, required, options, unit, placeholder, full, min, max, step, hint
 // table:     columns [{ id, label, type: text|number|time|select|checkbox, options, width, placeholder,
 //                       locked (fixa nas linhas pré-definidas), aux (não conta como preenchimento),
-//                       computed: (row) => valor (coluna calculada, somente leitura) }],
+//                       computed: (row) => valor (coluna calculada, somente leitura),
+//                       routeTrigger: true → "deslocamento"/"mobilização" digitado oferece a rota até o poço }],
 //            presetRows (linhas pré-definidas), allowAdd (padrão true), addLabel
 // photos:    categories (lista de categorias; cada uma com botões Arquivo / Câmera)
 
@@ -48,7 +49,7 @@ export const PRIORIDADES = ['Alta', 'Média', 'Baixa'];
 
 export const TURNOS = ['Diurno', 'Noturno', 'Integral'];
 
-// Captura GPS + edição manual + mapa (valor: { lat, lng, accuracy, source, capturedAt })
+// Coordenadas SOMENTE pelo GPS ou pelo poço da base (sem digitação) + rota até a locação (valor: { lat, lng, accuracy, source, capturedAt })
 // hideLabel: o subtítulo "Coordenadas GPS da locação" já identifica o bloco na tela
 export const coordenadas = () => ({ id: 'coordenadas', label: 'Coordenadas GPS', type: 'geo', hideLabel: true });
 

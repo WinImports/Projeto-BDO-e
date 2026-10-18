@@ -72,8 +72,8 @@ test.describe('autocompletar do Poço / Locação', () => {
 
       await expect(input).toHaveValue('TST-002');
       await expect(page.locator('.combo__list')).toBeHidden();
-      await expect(page.locator('[data-part=lat]')).toHaveValue('-12.360000');
-      await expect(page.locator('[data-part=lng]')).toHaveValue('-38.390000');
+      await expect(page.locator('[data-part=lat]')).toHaveText('-12.360000');
+      await expect(page.locator('[data-part=lng]')).toHaveText('-38.390000');
       await expect(page.locator('.geo__meta')).toContainText('cadastro oficial de poços (TST-002)');
     });
   }
@@ -85,7 +85,7 @@ test.describe('autocompletar do Poço / Locação', () => {
     await expect(page.locator('.combo__opt')).toHaveCount(1);
     await page.locator('.combo__opt').click();
     await expect(page.locator('[data-field=poco]')).toHaveValue('TST-089');
-    await expect(page.locator('[data-part=lat]')).toHaveValue('-12.380000');
+    await expect(page.locator('[data-part=lat]')).toHaveText('-12.380000');
     await expect(toast(page)).toContainText('cadastro oficial');
   });
 
@@ -96,7 +96,7 @@ test.describe('autocompletar do Poço / Locação', () => {
     await expect(page.locator('.combo__empty')).toContainText('Nenhum poço da base');
     await page.locator('[data-field=poco]').press('Escape');
     await expect(page.locator('[data-field=poco]')).toHaveValue('LOCACAO NOVA 1');
-    await expect(page.locator('[data-part=lat]')).toHaveValue('');
+    await expect(page.locator('[data-part=lat]')).toHaveText('');
   });
 
   test('digitar o nome exato e sair do campo também preenche as coordenadas vazias', async () => {
@@ -104,7 +104,7 @@ test.describe('autocompletar do Poço / Locação', () => {
     await openTab(page, 'handover');
     await page.locator('[data-field=poco]').fill('TST-010');
     await page.locator('[data-field=poco]').press('Tab');
-    await expect(page.locator('[data-part=lat]')).toHaveValue('-12.370500');
+    await expect(page.locator('[data-part=lat]')).toHaveText('-12.370500');
   });
 
   test('coordenadas de GPS já capturadas não são trocadas sem confirmação', async () => {
@@ -114,39 +114,40 @@ test.describe('autocompletar do Poço / Locação', () => {
       navigator.geolocation.getCurrentPosition = (ok) => ok({ coords: { latitude: -12.5, longitude: -38.5, accuracy: 6 } });
     });
     await page.getByRole('button', { name: 'Obter Localização Atual' }).click();
-    await expect(page.locator('[data-part=lat]')).toHaveValue('-12.500000');
+    await expect(page.locator('[data-part=lat]')).toHaveText('-12.500000');
 
     await page.locator('[data-field=poco]').fill('TST-001');
     await page.locator('.combo__opt').first().click();
     const dialog = page.locator('dialog.modal--confirm[open]');
     await expect(dialog).toContainText('obtidas pelo GPS');
     await dialog.getByRole('button', { name: 'Manter as atuais' }).click();
-    await expect(page.locator('[data-part=lat]')).toHaveValue('-12.500000');
+    await expect(page.locator('[data-part=lat]')).toHaveText('-12.500000');
     await expect(page.locator('[data-field=poco]')).toHaveValue('TST-001');
 
     await page.locator('[data-field=poco]').fill('TST-002');
     await page.locator('.combo__opt').first().click();
     await page.locator('dialog.modal--confirm[open]').getByRole('button', { name: 'Usar coordenadas do cadastro' }).click();
-    await expect(page.locator('[data-part=lat]')).toHaveValue('-12.360000');
+    await expect(page.locator('[data-part=lat]')).toHaveText('-12.360000');
   });
 
-  test('após escolher o poço, ainda dá para corrigir à mão ou usar o GPS', async () => {
+  test('após escolher o poço, o GPS pode registrar a posição, mas a rota continua indo até o poço', async () => {
     const { page } = ctx;
     await openTab(page, 'bdo');
     await page.locator('[data-field=poco]').fill('TST-001');
     await page.locator('.combo__opt').first().click();
-    await expect(page.locator('[data-part=lat]')).toHaveValue('-12.352400');
-
-    await page.locator('[data-part=lng]').fill('-38.4000');
-    await page.locator('[data-part=lng]').blur();
-    await expect(page.locator('.geo__meta')).toContainText('digitadas manualmente');
+    await expect(page.locator('[data-part=lat]')).toHaveText('-12.352400');
+    await expect(page.locator('.geo__meta')).toContainText('cadastro oficial de poços');
 
     await page.evaluate(() => {
       navigator.geolocation.getCurrentPosition = (ok) => ok({ coords: { latitude: -12.351, longitude: -38.378, accuracy: 4 } });
     });
     await page.getByRole('button', { name: 'Obter Localização Atual' }).click();
-    await expect(page.locator('[data-part=lat]')).toHaveValue('-12.351000');
-    await expect(page.locator('.geo__meta')).toContainText('Capturado por GPS');
+    const dlg = page.locator('dialog.modal--confirm[open]');
+    if (await dlg.isVisible().catch(() => false)) await dlg.getByRole('button').last().click();
+    await expect(page.locator('[data-part=lat]')).toHaveText('-12.351000');
+    await expect(page.locator('.geo__meta')).toContainText('Capturado pelo GPS');
+    // destino = poço da base, não a posição do aparelho
+    await expect(page.locator('.geo__route')).toHaveAttribute('data-route-target', '-12.352400,-38.379100');
   });
 });
 

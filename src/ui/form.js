@@ -10,6 +10,7 @@ import { confirmDialog } from './confirm.js';
 import { loadPocos, searchPocos, findPoco } from '../core/pocos.js';
 import { consolidateFromHistory, hasConsolidation } from '../core/consolidar.js';
 import { consolidationHtml } from './consolidacao-view.js';
+import { routeLinks, showRoutePrompt } from './route-prompt.js';
 
 const INPUT_TYPES = { text: 'text', number: 'number', date: 'date', time: 'time', datetime: 'datetime-local' };
 
@@ -47,13 +48,12 @@ export function parseCoords(v) {
   return valid ? { lat, lng } : null;
 }
 
-export function mapLinks({ lat, lng }) {
-  return {
-    google: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
-    waze: `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`,
-    osm: `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`
-  };
-}
+/** Links de navegação com o ponto como DESTINO da rota (partida = posição atual do aparelho). */
+export const mapLinks = (coords) => routeLinks(coords);
+
+// Palavras que indicam deslocamento na apropriação de atividades do BDO
+const TRAVEL_RE = /\b(deslocamento|deslocando|deslocar|mobilizacao|mobilizando|mobilizar|desmobilizacao)\b/;
+export const isTravel = (text) => TRAVEL_RE.test(String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase());
 
 const geoBlank = (v) => isBlank(v?.lat) && isBlank(v?.lng);
 
@@ -81,7 +81,7 @@ export function displayValue(field, value) {
     const c = parseCoords(value);
     if (!c) return '';
     const origin = value.source === 'gps' ? `GPS${value.accuracy ? `, ±${value.accuracy} m` : ''}`
-      : value.source === 'base' ? 'cadastro de poços' : 'manual';
+      : value.source === 'base' ? 'cadastro de poços' : 'versão anterior';
     return `${c.lat.toFixed(6)}, ${c.lng.toFixed(6)} (${origin})`;
   }
   if (isBlank(value)) return '';
@@ -135,8 +135,7 @@ export function validate(module, data) {
   for (const f of fields) {
     if (f.type === 'geo') {
       const v = data[f.id];
-      if (!geoBlank(v) && !parseCoords(v)) errors.push({ field: f.id, label: f.label, message: 'Coordenadas inválidas (latitude -90 a 90, longitude -180 a 180)' });
-      else if (f.required && geoBlank(v)) errors.push({ field: f.id, label: f.label, message: 'Campo obrigatório' });
+      if (f.required && !parseCoords(v)) errors.push({ field: f.id, label: f.label, message: 'Capture pelo GPS ou escolha o poço na base' });
       continue;
     }
     if (!f.required) continue;
@@ -219,7 +218,7 @@ export class FormView {
       this.pickWell(input, this.comboItems[Number(opt.dataset.index)]);
     });
     if ([...this.fields.values()].some((f) => f.autocomplete === 'pocos')) {
-      loadPocos().then((base) => { this.pocos = base; this.updatePocosHint(); });
+      loadPocos().then((base) => { this.pocos = base; this.updatePocosHint(); if (this.el.isConnected) this.refreshGeo(); });
     }
     ['pointerdown', 'pointermove', 'pointerup', 'pointercancel'].forEach((t) =>
       this.el.addEventListener(t, (e) => this.handlePointer(e)));
@@ -258,6 +257,8 @@ export class FormView {
   }
 
   destroy() {
+    clearTimeout(this.travelTimer);
+    clearTimeout(this.routeRefreshTimer);
     this.photoUrls.forEach((url) => URL.revokeObjectURL(url));
     this.photoUrls.clear();
   }
@@ -430,65 +431,77 @@ export class FormView {
       ${f.allowAdd !== false ? `<button type="button" class="btn btn--ghost btn--sm" data-action="add-row" data-table="${id}">${icon('plus', 16)} ${esc((f.addLabel || 'Adicionar linha').replace(/^\+\s*/, ''))}</button>` : ''}`;
   }
 
+  // Coordenadas SOMENTE LEITURA: vêm do botão de GPS ou do cadastro do poço escolhido (sem digitação)
   geoHtml(f) {
     const v = this.draft.data[f.id] || {};
     const id = esc(f.id);
+    const c = parseCoords(v);
+    let meta = 'Sem coordenadas. Toque em "Obter Localização Atual" ou escolha o poço da base no campo Poço / Locação.';
+    if (c && v.source === 'gps') {
+      meta = `Capturado pelo GPS do aparelho em ${new Date(v.capturedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`
+        + (v.accuracy ? ` · precisão ±${v.accuracy} m` : '')
+        + (v.accuracy > 100 ? ' — precisão baixa' : '');
+    } else if (c && v.source === 'base') {
+      meta = `Coordenadas do cadastro oficial de poços${v.poco ? ` (${v.poco})` : ''}.`;
+    } else if (c) {
+      meta = 'Coordenadas registradas numa versão anterior do app.';
+    }
     return `
       <div class="geo">
-        <div class="geo__row">
-          <label class="geo__coord">
-            <span>Latitude</span>
-            <input type="text" inputmode="decimal" id="f-${id}-lat" data-geo="${id}" data-part="lat" value="${esc(v.lat)}" placeholder="-12.345678">
-          </label>
-          <label class="geo__coord">
-            <span>Longitude</span>
-            <input type="text" inputmode="decimal" id="f-${id}-lng" data-geo="${id}" data-part="lng" value="${esc(v.lng)}" placeholder="-38.345678">
-          </label>
-          <button type="button" class="btn btn--primary geo__btn" data-action="gps" data-target="${id}">${icon('crosshair', 17)} Obter Localização Atual</button>
+        <div class="geo__readout">
+          <div class="geo__value-box"><span class="geo__label">Latitude</span><output class="geo__value" data-geo="${id}" data-part="lat">${c ? c.lat.toFixed(6) : ''}</output></div>
+          <div class="geo__value-box"><span class="geo__label">Longitude</span><output class="geo__value" data-geo="${id}" data-part="lng">${c ? c.lng.toFixed(6) : ''}</output></div>
+          <div class="geo__actions">
+            <button type="button" class="btn btn--primary geo__btn" data-action="gps" data-target="${id}">${icon('crosshair', 17)} Obter Localização Atual</button>
+            ${c ? `<button type="button" class="btn btn--text btn--sm" data-action="clear-geo" data-target="${id}">${icon('x', 15)} Limpar</button>` : ''}
+          </div>
         </div>
-        <div class="geo__extra" data-geo-extra="${id}">${this.geoExtraHtml(f)}</div>
+        <p class="geo__meta muted small">${esc(meta)}</p>
+        ${this.routeHtml()}
       </div>`;
   }
 
-  // Aviso de origem/precisão, links e mapa. Atualizado sozinho ao digitar, sem recriar os
-  // campos (recriar tiraria o foco de quem passa da Latitude para a Longitude com Tab).
-  refreshGeoExtra(id) {
-    const box = $(`[data-geo-extra="${CSS.escape(id)}"]`, this.el);
-    if (box) box.innerHTML = this.geoExtraHtml(this.fields.get(id));
+  /**
+   * Destino da rota: o POÇO cadastrado na base (pelo nome no cabeçalho). Sem cadastro, usa as
+   * coordenadas do relatório — avisando quando são a posição capturada pelo GPS.
+   */
+  routeTarget() {
+    const d = this.draft.data;
+    const geo = [...this.fields.values()].find((f) => f.type === 'geo');
+    const poco = this.pocos && d.poco ? findPoco(this.pocos, d.poco) : null;
+    if (poco) return { lat: poco.lat, lng: poco.lng, nome: poco.nome, origem: 'cadastro' };
+    const v = geo ? d[geo.id] : null;
+    const c = parseCoords(v);
+    if (!c) return null;
+    return { ...c, nome: (v.source === 'base' && v.poco) || d.poco || '', origem: v.source === 'base' ? 'cadastro' : 'relatorio', gps: v.source === 'gps' };
   }
 
-  geoExtraHtml(f) {
-    const v = this.draft.data[f.id] || {};
-    const coords = parseCoords(v);
-    let meta = 'Sem sinal de GPS? Digite as coordenadas manualmente (graus decimais).';
-    if (coords && v.source === 'gps') {
-      meta = `Capturado por GPS em ${new Date(v.capturedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`
-        + (v.accuracy ? ` · precisão ±${v.accuracy} m` : '')
-        + (v.accuracy > 100 ? ' — precisão baixa, confira no mapa' : '');
-    } else if (coords) {
-      meta = v.source === 'base'
-        ? `Coordenadas do cadastro oficial de poços${v.poco ? ` (${v.poco})` : ''}. Ajuste manualmente ou use "Obter Localização Atual" se precisar.`
-        : 'Coordenadas digitadas manualmente.';
-    }
-
-    let map = '';
-    if (coords) {
-      const links = mapLinks(coords);
-      const d = 0.004;
-      const bbox = [coords.lng - d, coords.lat - d, coords.lng + d, coords.lat + d].map((n) => n.toFixed(6)).join(',');
-      map = `
+  routeHtml() {
+    const t = this.routeTarget();
+    if (!t) return '';
+    const links = routeLinks(t);
+    const d = 0.004;
+    const bbox = [t.lng - d, t.lat - d, t.lng + d, t.lat + d].map((n) => n.toFixed(6)).join(',');
+    return `
+      <div class="geo__route" data-route-target="${t.lat.toFixed(6)},${t.lng.toFixed(6)}">
+        <p class="geo__route-title">${icon('navigation', 16)} Rota até ${t.nome ? `a locação <strong>${esc(t.nome)}</strong>` : 'o ponto registrado'}
+          <span class="muted small">(${t.lat.toFixed(5)}, ${t.lng.toFixed(5)})</span></p>
+        ${t.gps ? '<p class="geo__route-warn small">Poço não encontrado na base: o destino é a posição capturada pelo GPS do aparelho.</p>' : ''}
         <div class="geo__links">
-          <a class="btn btn--ghost btn--sm" href="${links.google}" target="_blank" rel="noopener">${icon('mapPin', 15)} Google Maps</a>
-          <a class="btn btn--ghost btn--sm" href="${links.waze}" target="_blank" rel="noopener">${icon('navigation', 15)} Waze</a>
-          <a class="btn btn--ghost btn--sm" href="${links.osm}" target="_blank" rel="noopener">${icon('map', 15)} OpenStreetMap</a>
+          <a class="btn btn--primary btn--sm" data-route-link="google" href="${links.google}" target="_blank" rel="noopener">${icon('navigation', 15)} Iniciar rota (Google Maps)</a>
+          <a class="btn btn--ghost btn--sm" data-route-link="waze" href="${links.waze}" target="_blank" rel="noopener">Waze</a>
+          <a class="btn btn--ghost btn--sm" data-route-link="osm" href="${links.osm}" target="_blank" rel="noopener">${icon('map', 15)} OpenStreetMap</a>
         </div>
         ${navigator.onLine
           ? `<iframe class="geo__map" title="Mapa da locação" loading="lazy" referrerpolicy="no-referrer"
-               src="https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${coords.lat},${coords.lng}"></iframe>`
-          : '<div class="geo__map geo__map--offline">Mapa indisponível sem internet. As coordenadas ficam salvas e os links funcionam quando houver conexão.</div>'}`;
-    }
+               src="https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${t.lat},${t.lng}"></iframe>`
+          : '<div class="geo__map geo__map--offline">Mapa indisponível sem internet. Os botões de rota funcionam quando houver conexão.</div>'}
+      </div>`;
+  }
 
-    return `<p class="geo__meta muted small">${esc(meta)}</p>${map}`;
+  refreshGeo() {
+    const geo = [...this.fields.values()].find((f) => f.type === 'geo');
+    if (geo) this.refreshField(geo.id);
   }
 
   captureGps(id, btn) {
@@ -509,8 +522,8 @@ export class FormView {
       (err) => {
         this.refreshField(id);
         const msg = err.code === 1 ? 'Permissão de localização negada. Verifique Configurações do Windows › Privacidade › Localização.'
-          : err.code === 3 ? 'O GPS não respondeu a tempo. Tente novamente ou digite as coordenadas.'
-          : 'Não foi possível obter a posição. Digite as coordenadas manualmente.';
+          : err.code === 3 ? 'O GPS não respondeu a tempo. Tente novamente em local aberto ou escolha o poço na base.'
+          : 'Não foi possível obter a posição. Tente novamente ou escolha o poço na base.';
         toast(msg, 'error', 7000);
       },
       { enableHighAccuracy: true, timeout: 30_000, maximumAge: 0 }
@@ -666,14 +679,9 @@ export class FormView {
         const cell = $(`[data-computed="${CSS.escape(`${table}:${rowIdx}:${c.id}`)}"]`, this.el);
         if (cell) cell.textContent = row[c.id] || '—';
       }
+      const col = this.fields.get(table).columns.find((x) => x.id === t.dataset.col);
+      if (col?.routeTrigger && e.type === 'input') this.checkTravel(row, t.value);
       return this.changed(table);
-    }
-
-    if (t.dataset.geo) {
-      const id = t.dataset.geo;
-      data[id] = { ...(data[id] || {}), [t.dataset.part]: t.value, source: 'manual', accuracy: null, capturedAt: null };
-      if (e.type === 'change') this.refreshGeoExtra(id); // atualiza aviso, links e mapa ao sair do campo
-      return this.changed(id);
     }
 
     const id = t.dataset.field;
@@ -726,6 +734,10 @@ export class FormView {
       } catch (err) {
         toast(err.message, 'error', 6000);
       }
+    } else if (action === 'clear-geo') {
+      this.draft.data[btn.dataset.target] = {};
+      this.refreshField(btn.dataset.target);
+      this.changed(btn.dataset.target);
     } else if (action === 'consolidar') {
       this.runConsolidation({ manual: true });
     } else if (action === 'gps') {
@@ -813,31 +825,53 @@ export class FormView {
     this.closeCombo(input);
     this.changed(input.dataset.field);
     await this.applyWellCoords(poco);
+    this.offerRoute(poco);
   }
 
-  // Digitou o nome exato de um poço da base sem escolher na lista: usa as coordenadas se estiverem vazias
-  acceptExactWell(input) {
+  // Digitou o nome exato de um poço da base sem escolher na lista: coordenadas (se vazias) + convite à rota
+  async acceptExactWell(input) {
     const poco = findPoco(this.pocos, input.value);
     const geo = [...this.fields.values()].find((f) => f.type === 'geo');
     if (!poco || !geo) return;
-    // Espera o foco chegar no próximo campo: se o técnico foi para Latitude/Longitude,
-    // ele vai digitar as coordenadas dele — não preencher por cima.
-    setTimeout(() => {
-      const geoData = this.draft.data[geo.id];
-      const typingCoords = document.activeElement?.dataset?.geo === geo.id;
-      const anyTyped = geoData && (String(geoData.lat || '').trim() || String(geoData.lng || '').trim());
-      if (!typingCoords && !anyTyped) this.applyWellCoords(poco);
-    }, 0);
+    if (!parseCoords(this.draft.data[geo.id])) await this.applyWellCoords(poco);
+    this.offerRoute(poco);
   }
 
-  // Atualiza Latitude/Longitude no lugar (sem recriar os campos e sem tirar o foco de ninguém)
-  setGeoInputs(id) {
-    const v = this.draft.data[id] || {};
-    for (const part of ['lat', 'lng']) {
-      const inp = $(`[data-geo="${CSS.escape(id)}"][data-part="${part}"]`, this.el);
-      if (inp) inp.value = v[part] ?? '';
-    }
-    this.refreshGeoExtra(id);
+  /** Gatilho 1: poço identificado no cabeçalho → convite discreto para navegar até a locação. */
+  offerRoute(poco) {
+    this.routeOffered ||= new Set();
+    if (this.routeOffered.has(poco.nome)) return; // uma vez por poço nesta tela
+    this.routeOffered.add(poco.nome);
+    showRoutePrompt({
+      kind: 'poco',
+      title: 'Navegação até a locação',
+      message: `Deseja iniciar a navegação GPS para a locação ${poco.nome}?`,
+      target: { lat: poco.lat, lng: poco.lng, nome: poco.nome }
+    });
+  }
+
+  /** Gatilho 2: atividade de deslocamento/mobilização digitada na apropriação do BDO. */
+  checkTravel(row, text) {
+    clearTimeout(this.travelTimer);
+    if (!isTravel(text)) return;
+    this.travelTimer = setTimeout(() => {
+      this.travelRows ||= new WeakSet();
+      if (this.travelRows.has(row) || !isTravel(row.atividade || row.codigo || text)) return; // um aviso por linha
+      this.travelRows.add(row);
+      const target = this.routeTarget();
+      showRoutePrompt(target
+        ? {
+          kind: 'deslocamento',
+          title: 'Deslocamento identificado',
+          message: `Identificamos um deslocamento. Deseja abrir a rota no Google Maps/Waze para ${target.nome ? `o poço ${target.nome}` : 'o ponto registrado'}?`,
+          target
+        }
+        : {
+          kind: 'deslocamento',
+          title: 'Deslocamento identificado',
+          message: 'Informe o Poço / Locação no cabeçalho (ou capture o GPS) para abrir a rota até a locação.'
+        });
+    }, 600);
   }
 
   async applyWellCoords(poco) {
@@ -850,7 +884,7 @@ export class FormView {
     if (curCoords && cur.source !== 'base') {
       const ok = await confirmDialog({
         title: 'Substituir as coordenadas atuais?',
-        message: `Este relatório já tem coordenadas ${cur.source === 'gps' ? 'obtidas pelo GPS' : 'digitadas'} (${curCoords.lat.toFixed(5)}, ${curCoords.lng.toFixed(5)}). Usar as do cadastro do poço ${poco.nome} (${poco.lat.toFixed(5)}, ${poco.lng.toFixed(5)})?`,
+        message: `Este relatório já tem coordenadas ${cur.source === 'gps' ? 'obtidas pelo GPS' : 'registradas anteriormente'} (${curCoords.lat.toFixed(5)}, ${curCoords.lng.toFixed(5)}). Usar as do cadastro do poço ${poco.nome} (${poco.lat.toFixed(5)}, ${poco.lng.toFixed(5)})?`,
         confirmLabel: 'Usar coordenadas do cadastro', cancelLabel: 'Manter as atuais', iconName: 'mapPin'
       });
       if (!ok) return;
@@ -859,7 +893,7 @@ export class FormView {
       lat: poco.lat.toFixed(6), lng: poco.lng.toFixed(6),
       source: 'base', poco: poco.nome, accuracy: null, capturedAt: null
     };
-    this.setGeoInputs(geo.id);
+    this.refreshField(geo.id);
     this.changed(geo.id);
     toast(`Coordenadas do poço ${poco.nome} preenchidas pelo cadastro oficial.`, 'success', 3500);
   }
@@ -918,6 +952,7 @@ export class FormView {
 
   changed(fieldId) {
     if (['poco', 'periodo_inicio', 'periodo_fim'].includes(fieldId) && this.consolField()) this.scheduleConsolidation();
+    if (fieldId === 'poco') { clearTimeout(this.routeRefreshTimer); this.routeRefreshTimer = setTimeout(() => this.refreshGeo(), 300); }
     this.clearError(fieldId);
     this.updateComputed();
     this.updateSectionBadges();

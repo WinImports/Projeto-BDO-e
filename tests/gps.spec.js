@@ -1,4 +1,4 @@
-// Coordenadas GPS: presença nos cabeçalhos, botão "Obter Localização Atual", edição manual e PDF.
+// Coordenadas GPS: presença nos cabeçalhos, botão "Obter Localização Atual" (somente leitura, sem digitação) e PDF.
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
@@ -20,7 +20,7 @@ let ctx;
 test.beforeEach(async () => { ctx = await launchApp(); });
 test.afterEach(async () => { await ctx.close(); });
 
-test('os 3 relatórios têm Latitude, Longitude e "Obter Localização Atual" no bloco de identificação', async () => {
+test('os 3 relatórios têm Latitude, Longitude (somente leitura) e "Obter Localização Atual" no bloco de identificação', async () => {
   const { page } = ctx;
   for (const tab of REPORTS) {
     await openTab(page, tab);
@@ -28,42 +28,41 @@ test('os 3 relatórios têm Latitude, Longitude e "Obter Localização Atual" no
     await expect(header.locator('[data-geo=coordenadas][data-part=lat]')).toBeVisible();
     await expect(header.locator('[data-geo=coordenadas][data-part=lng]')).toBeVisible();
     await expect(header.getByRole('button', { name: 'Obter Localização Atual' })).toBeVisible();
+    // não existe digitação manual de coordenadas
+    await expect(header.locator('input[data-geo], [data-geo] input')).toHaveCount(0);
   }
 });
 
-test('"Obter Localização Atual" preenche as coordenadas e mostra os links de mapa', async () => {
+test('"Obter Localização Atual" preenche as coordenadas e mostra a rota com destino', async () => {
   const { page } = ctx;
   await openTab(page, 'bdo');
   await mockGps(page, { latitude: -12.3524123, longitude: -38.3791456, accuracy: 8 });
   await page.getByRole('button', { name: 'Obter Localização Atual' }).click();
 
-  await expect(page.locator('[data-part=lat]')).toHaveValue('-12.352412');
-  await expect(page.locator('[data-part=lng]')).toHaveValue('-38.379146');
-  await expect(page.locator('.geo__meta')).toContainText('Capturado por GPS');
+  await expect(page.locator('[data-part=lat]')).toHaveText('-12.352412');
+  await expect(page.locator('[data-part=lng]')).toHaveText('-38.379146');
+  await expect(page.locator('.geo__meta')).toContainText('Capturado pelo GPS');
   await expect(page.locator('.geo__meta')).toContainText('±8 m');
-  await expect(page.locator('.geo__links a').first()).toHaveAttribute('href', 'https://www.google.com/maps/search/?api=1&query=-12.352412,-38.379146');
+  await expect(page.locator('.geo__route [data-route-link=google]')).toHaveAttribute('href', 'https://www.google.com/maps/dir/?api=1&destination=-12.352412,-38.379146&travelmode=driving');
   await expect(toast(page)).toContainText('Coordenadas capturadas');
 });
 
-test('sem sinal: avisa o erro e aceita digitação manual (com validação)', async () => {
+test('sem sinal: avisa o erro sem oferecer digitação; "Limpar" apaga a captura', async () => {
   const { page } = ctx;
   await openTab(page, 'visita_tecnica');
   await mockGps(page, { error: 3 }); // timeout do GPS
   await page.getByRole('button', { name: 'Obter Localização Atual' }).click();
   await expect(toast(page)).toContainText('não respondeu');
-  await expect(page.locator('[data-part=lat]')).toBeEditable();
+  await expect(toast(page)).not.toContainText('digit');
+  await expect(page.locator('[data-part=lat]')).toHaveText('');
+  await expect(page.locator('[data-action=clear-geo]')).toHaveCount(0);
 
-  // coordenada impossível é recusada ao finalizar
-  await page.locator('[data-part=lat]').fill('123');
-  await page.locator('[data-part=lng]').fill('-38.4');
-  await page.locator('#btn-finalize').click();
-  await expect(page.locator('[data-wrap=coordenadas] .field__error')).toContainText('Coordenadas inválidas');
-
-  // coordenada válida digitada à mão
-  await page.locator('[data-part=lat]').fill('-12,3456'); // vírgula decimal aceita
-  await page.locator('[data-part=lat]').blur();
-  await expect(page.locator('.geo__meta')).toContainText('digitadas manualmente');
-  await expect(page.locator('.geo__links a')).toHaveCount(3);
+  await mockGps(page, { latitude: -12.3456, longitude: -38.4, accuracy: 5 });
+  await page.getByRole('button', { name: 'Obter Localização Atual' }).click();
+  await expect(page.locator('[data-part=lat]')).toHaveText('-12.345600');
+  await page.locator('[data-action=clear-geo]').click();
+  await expect(page.locator('[data-part=lat]')).toHaveText('');
+  await expect(page.locator('.geo__route')).toHaveCount(0);
 });
 
 test('coordenadas aparecem no cabeçalho da prévia e viram links clicáveis no PDF', async () => {
@@ -75,10 +74,10 @@ test('coordenadas aparecem no cabeçalho da prévia e viram links clicáveis no 
   }, pdfPath);
 
   await openTab(page, 'handover');
-  await fill(page, 'poco', 'RCB-34');
-  await page.locator('[data-part=lat]').fill('-12.3524');
-  await page.locator('[data-part=lng]').fill('-38.3791');
-  await page.locator('[data-part=lng]').blur();
+  await fill(page, 'poco', 'LOCACAO SEM CADASTRO');
+  await mockGps(page, { latitude: -12.3524, longitude: -38.3791, accuracy: 6 });
+  await page.getByRole('button', { name: 'Obter Localização Atual' }).click();
+  await expect(page.locator('[data-part=lat]')).toHaveText('-12.352400');
 
   await page.locator('#btn-preview').click();
   const preview = page.locator('dialog.modal[open]');
@@ -90,8 +89,8 @@ test('coordenadas aparecem no cabeçalho da prévia e viram links clicáveis no 
   await expect(toast(page)).toContainText('PDF salvo', { timeout: 15_000 });
   const raw = fs.readFileSync(pdfPath).toString('latin1');
   const uris = [...raw.matchAll(/\/URI\s*\(([^)]*)\)/g)].map((m) => m[1]);
-  expect(uris).toContain('https://www.google.com/maps/search/?api=1&query=-12.3524,-38.3791');
-  expect(uris).toContain('https://waze.com/ul?ll=-12.3524,-38.3791&navigate=yes');
+  expect(uris).toContain('https://www.google.com/maps/dir/?api=1&destination=-12.352400,-38.379100&travelmode=driving');
+  expect(uris).toContain('https://waze.com/ul?ll=-12.352400,-38.379100&navigate=yes');
 });
 
 test('coordenadas ficam salvas no rascunho ao reabrir o app', async () => {
@@ -99,11 +98,11 @@ test('coordenadas ficam salvas no rascunho ao reabrir o app', async () => {
   await openTab(page, 'bdo');
   await mockGps(page, { latitude: -10.6512, longitude: -36.9871, accuracy: 15 });
   await page.getByRole('button', { name: 'Obter Localização Atual' }).click();
-  await expect(page.locator('[data-part=lat]')).toHaveValue('-10.651200');
+  await expect(page.locator('[data-part=lat]')).toHaveText('-10.651200');
   await ctx.close({ keepData: true });
 
   ctx = await launchApp({ userData });
   await openTab(ctx.page, 'bdo');
-  await expect(ctx.page.locator('[data-part=lat]')).toHaveValue('-10.651200');
-  await expect(ctx.page.locator('[data-part=lng]')).toHaveValue('-36.987100');
+  await expect(ctx.page.locator('[data-part=lat]')).toHaveText('-10.651200');
+  await expect(ctx.page.locator('[data-part=lng]')).toHaveText('-36.987100');
 });

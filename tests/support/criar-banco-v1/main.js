@@ -18,7 +18,7 @@ app.whenReady().then(async () => {
     req.onsuccess = () => {
       const tx = req.result.transaction(['outbox', 'drafts'], 'readwrite');
       tx.objectStore('outbox').put({ uniqueId: 'antigo-1', module: 'bdo', base: 'BA', createdAt: new Date().toISOString(),
-        data: { poco: 'TST-V1', data: '${new Date().toISOString().slice(0, 10)}', atividades: [{ atividade: 'Registro da versão antiga', duracao: '1h00' }] },
+        data: { poco: 'TST-V1', data: '${new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)}', atividades: [{ atividade: 'Registro da versão antiga', duracao: '1h00' }] },
         photos: [], status: 'pending', attempts: 0, nextAttemptAt: new Date().toISOString() });
       tx.objectStore('drafts').put({ key: 'BA:handover', uniqueId: 'rasc-1', module: 'handover', data: { poco: 'TST-V1' }, photos: [] });
       tx.oncomplete = () => { req.result.close(); resolve('banco v1 criado'); };
