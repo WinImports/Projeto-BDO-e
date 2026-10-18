@@ -3,16 +3,17 @@
 
 const DB_NAME = 'bdo-e';
 const DB_VERSION = 2;
-// history: cópia local (sem fotos) de todo relatório finalizado, mesmo depois de enviado ao
-// servidor — usada na consolidação da quinzena do Relatório de Execução.
+// history: cópia local (com fotos) de todo relatório finalizado, mesmo depois de enviado ao
+// servidor — lista "Histórico" (reabrir, gerar PDF, reutilizar) e consolidação da quinzena.
 export const STORES = { outbox: 'outbox', drafts: 'drafts', history: 'history' };
 
 let dbPromise = null;
 
-/** Registro do histórico a partir de um item da caixa de saída (fotos viram só a contagem). */
+/** Registro do histórico a partir de um item da caixa de saída (fotos guardadas para refazer o PDF). */
 export const toHistory = (rec) => ({
-  uniqueId: rec.uniqueId, module: rec.module, data: rec.data,
-  createdAt: rec.createdAt, photosCount: (rec.photos || []).length
+  uniqueId: rec.uniqueId, module: rec.module, data: rec.data, createdAt: rec.createdAt,
+  photos: (rec.photos || []).map(({ name, type, blob, category }) => ({ name, type, blob, category: category || null })),
+  photosCount: (rec.photos || []).length
 });
 
 export function openDb() {

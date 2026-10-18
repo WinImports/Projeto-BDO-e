@@ -1,5 +1,5 @@
 // Prévia / conferência do relatório. O mesmo HTML do corpo é usado no PDF (report-pdf.js).
-// Modos: "confirm" (finalizar → caixa de saída), "draft" (conferência do rascunho) e "view" (item da fila).
+// Modos: "confirm" (finalizar → caixa de saída), "draft" (conferência do rascunho) e "view" (relatório salvo no histórico).
 
 import { icon } from './icons.js';
 import { esc, $ } from './dom.js';
@@ -86,22 +86,31 @@ export function reportBodyHtml(module, data, photos, photoSrcs) {
 const EYEBROW = {
   confirm: 'Conferência final antes de enviar',
   draft: 'Prévia do relatório (rascunho)',
-  view: 'Relatório na caixa de saída'
+  view: 'Relatório salvo neste aparelho'
 };
 
 /**
  * @param {object} o
  * @param {Array<{field,message}>} [o.pending] campos obrigatórios ainda pendentes (avisados no topo)
+ * @param {() => void} [o.onNewReport] botão "Início / Novo relatório" (chamado depois de fechar a prévia)
+ * @param {() => void} [o.onReuse] botão "Reutilizar / Editar como novo" (idem)
+ * @param {string} [o.notice] aviso informativo no topo do corpo
  * @returns {Promise<boolean>} true se o usuário confirmou (modo "confirm")
  */
-export function openPreview({ module, uniqueId, data, photos = [], mode = 'confirm', meta = '', pending = [] }) {
+export function openPreview({ module, uniqueId, data, photos = [], mode = 'confirm', meta = '', pending = [], onNewReport, onReuse, notice = '' }) {
   // Relatório finalizado usa a empresa "congelada" no envio; rascunho usa as Configurações atuais
   const company = data._empresa || companyInfo();
   return new Promise((resolve) => {
     const urls = photos.map((p) => URL.createObjectURL(p.blob));
     const dialog = document.createElement('dialog');
     dialog.className = 'modal';
+    const backLabel = mode === 'view' ? 'Voltar ao histórico' : 'Voltar e editar';
     dialog.innerHTML = `
+      <div class="modal__nav" role="toolbar" aria-label="Navegação da prévia">
+        <button type="button" class="btn btn--ghost btn--sm" data-close data-back>${icon('arrowLeft', 16)} ${backLabel}</button>
+        ${onNewReport ? `<button type="button" class="btn btn--ghost btn--sm" data-new>${icon('home', 16)} Início / Novo relatório</button>` : ''}
+        ${onReuse ? `<button type="button" class="btn btn--ghost btn--sm" data-reuse>${icon('copy', 16)} Reutilizar / Editar como novo</button>` : ''}
+      </div>
       <div class="modal__header">
         <div>
           <p class="eyebrow">${EYEBROW[mode]}</p>
@@ -113,9 +122,11 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
         <button type="button" class="icon-btn" data-close aria-label="Fechar">${icon('x', 18)}</button>
       </div>
       <div class="modal__body">
+        ${notice ? `<div class="notice notice--info notice--icon">${icon('info', 18)}<div>${esc(notice)}</div></div>` : ''}
         ${pending.length ? `<div class="notice notice--warn notice--icon">${icon('alert', 18)}<div><strong>Faltam ${pending.length} campo${pending.length > 1 ? 's' : ''} obrigatório${pending.length > 1 ? 's' : ''} para finalizar</strong><ul class="notice__list">${pending.map((p) => `<li>${esc(p.label || p.field)}</li>`).join('')}</ul></div></div>` : ''}
         ${(() => {
-          const empty = emptyOptionalSections(module, data, photos);
+          // relatório já finalizado (histórico): não há mais o que "voltar e preencher"
+          const empty = mode === 'view' ? [] : emptyOptionalSections(module, data, photos);
           return empty.length
             ? `<div class="notice notice--info notice--icon">${icon('info', 18)}<div><strong>Bloco${empty.length > 1 ? 's' : ''} sem dados — não aparece${empty.length > 1 ? 'm' : ''} no PDF</strong><ul class="notice__list">${empty.map((t) => `<li>${esc(t)}</li>`).join('')}</ul><span class="small">Se houve registro no turno, volte e preencha.</span></div></div>`
             : '';
@@ -123,18 +134,20 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
         ${reportBodyHtml(module, data, photos, urls)}
       </div>
       <div class="modal__footer">
-        <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Salvar PDF</button>
+        <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Gerar PDF / Imprimir</button>
         <span class="modal__spacer"></span>
         ${mode === 'confirm'
-          ? `<button type="button" class="btn btn--ghost" data-close>Voltar e editar</button>
-             <button type="button" class="btn btn--primary" data-confirm>${icon('send', 17)} Confirmar e enviar para a Caixa de Saída</button>`
+          ? `<button type="button" class="btn btn--primary" data-confirm>${icon('send', 17)} Confirmar e enviar para a Caixa de Saída</button>`
           : '<button type="button" class="btn btn--primary" data-close>Fechar</button>'}
       </div>`;
 
     let confirmed = false;
+    let after = null; // ação executada depois de fechar (novo relatório / reutilizar)
     dialog.addEventListener('click', async (e) => {
       if (e.target === dialog || e.target.closest('[data-close]')) return dialog.close();
       if (e.target.closest('[data-confirm]')) { confirmed = true; return dialog.close(); }
+      if (e.target.closest('[data-new]')) { after = onNewReport; return dialog.close(); }
+      if (e.target.closest('[data-reuse]')) { after = onReuse; return dialog.close(); }
       const pdfBtn = e.target.closest('[data-pdf]');
       if (pdfBtn && !pdfBtn.disabled) {
         const label = pdfBtn.innerHTML;
@@ -158,6 +171,7 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
       urls.forEach((u) => URL.revokeObjectURL(u));
       dialog.remove();
       resolve(confirmed);
+      after?.();
     });
 
     document.body.appendChild(dialog);

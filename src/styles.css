@@ -738,3 +738,40 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .
   .route-prompt { left: 16px; right: 16px; width: auto; }
   .route-prompt__actions .btn { flex: 1; }
 }
+
+/* ---------- Histórico (relatórios salvos) e navegação da prévia ---------- */
+.outbox-item--sent { border-left-color: var(--ok); }
+.status--sent { background: var(--ok-soft); color: var(--ok); }
+.outbox-item__main {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0; flex: 1;
+  background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; text-align: left; cursor: pointer;
+  border-radius: var(--radius-sm, 6px);
+}
+.outbox-item__main:hover .outbox-item__title strong { color: var(--primary); text-decoration: underline; }
+.outbox-item__main:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
+.outbox-item__poco { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); }
+.outbox-item__actions { flex-wrap: wrap; justify-content: flex-end; }
+
+.history-filter { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 12px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: .85rem; cursor: pointer;
+}
+.chip:hover { border-color: var(--primary); }
+.chip.is-active { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); font-weight: 600; }
+.chip__n { font-size: .75rem; color: var(--text-muted); }
+.chip.is-active .chip__n { color: inherit; }
+
+.modal__nav {
+  display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 22px;
+  border-bottom: 1px solid var(--border); background: var(--surface-2);
+}
+.modal__nav [data-back] { font-weight: 600; }
+
+@media (pointer: coarse), (max-width: 640px) {
+  .chip { min-height: 44px; padding: 8px 14px; }
+  .modal__nav { padding: 10px 16px; }
+  .modal__nav .btn { flex: 1 1 auto; justify-content: center; }
+  .outbox-item__actions .btn { flex: 1 1 auto; justify-content: center; }
+  .outbox-item__side { flex-wrap: wrap; gap: 10px; }
+}

@@ -5,7 +5,7 @@ const { execFileSync } = require('child_process');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { launchApp } = require('./helpers');
+const { launchApp, fill } = require('./helpers');
 
 const ROOT = path.join(__dirname, '..');
 const BASE = '/Projeto-BDO-e/';
@@ -127,6 +127,69 @@ test('app como página web (GitHub Pages): abre, funciona offline, importa base 
     await page.locator('#tabs [data-tab=bdo]').click();
     await page.locator('#view[data-ready=bdo]').waitFor();
     await expect(page.locator('[data-field=poco]')).toHaveValue('TST-010');
+    expect(errors).toEqual([]);
+  } finally {
+    server.close();
+    await ctx.close();
+  }
+});
+
+test('PWA: relatório finalizado fica no Histórico do navegador, reabre na prévia e imprime o PDF', async () => {
+  const server = await startPagesServer();
+  const url = `http://127.0.0.1:${server.address().port}${BASE}`;
+  const ctx = await launchApp();
+  try {
+    const [page] = await Promise.all([
+      ctx.app.waitForEvent('window'),
+      ctx.app.evaluate(({ BrowserWindow }, u) => {
+        const w = new BrowserWindow({ show: false, width: 390, height: 844, webPreferences: { sandbox: true, contextIsolation: true } });
+        w.loadURL(u);
+      }, url)
+    ]);
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.locator('#view[data-ready]').waitFor();
+    const tab = async (id) => { await page.locator(`#tabs [data-tab=${id}]`).click(); await page.locator(`#view[data-ready=${id}]`).waitFor(); };
+
+    await tab('visita_tecnica');
+    for (const [f, v] of [['poco', 'FBM-89'], ['turno', 'Diurno'], ['frente', 'Equipe 02'], ['tecnicos', 'João'], ['cliente', 'PETROBRAS'], ['status_locacao', 'OK'], ['estado_antepoco', 'Limpo']]) {
+      await fill(page, f, v);
+    }
+    await page.locator('[data-table=valvulas][data-row="4"][data-col=status]').selectOption('Vazamento / Sem Estanqueidade');
+    await page.locator('[data-table=fixadores][data-row="0"][data-col=status]').selectOption('Oxidado');
+    await page.locator('.route-prompt [data-route-close]').first().click().catch(() => {});
+    await page.locator('#btn-finalize').click();
+    await page.locator('dialog.modal[open] [data-confirm]').click();
+    await expect(page.locator('#toasts .toast').last()).toContainText('Caixa de Saída');
+    await expect(page.locator('#outbox-badge')).toHaveText('1');
+
+    // recarregar a página (como fechar e abrir o app no celular): continua no Histórico
+    await page.reload();
+    await page.locator('#view[data-ready]').waitFor();
+    await tab('outbox');
+    const item = page.locator('[data-history] .outbox-item');
+    await expect(item).toHaveCount(1);
+    await expect(item).toContainText('FBM-89');
+    await expect(item.locator('.status')).toHaveText('Aguardando envio');
+
+    await page.evaluate(() => {
+      const open = window.open.bind(window);
+      window.open = (...args) => {
+        const w = open(...args);
+        w.print = () => { window.__printed = { text: w.document.body.innerText }; };
+        return w;
+      };
+    });
+    await item.locator('.outbox-item__main').click();
+    const preview = page.locator('dialog.modal[open]');
+    await expect(preview.getByRole('button', { name: 'Voltar ao histórico' })).toBeVisible();
+    await preview.getByRole('button', { name: 'Gerar PDF / Imprimir' }).click();
+    await expect.poll(() => page.evaluate(() => window.__printed || null)).not.toBeNull();
+    expect((await page.evaluate(() => window.__printed)).text).toContain('FBM-89');
+
+    await preview.getByRole('button', { name: 'Reutilizar / Editar como novo' }).click();
+    await page.locator('#view[data-ready=visita_tecnica]').waitFor();
+    await expect(page.locator('[data-field=frente]')).toHaveValue('Equipe 02');
     expect(errors).toEqual([]);
   } finally {
     server.close();

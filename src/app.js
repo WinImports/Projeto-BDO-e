@@ -6,6 +6,7 @@ import { loadDraft, saveDraft, discardDraft, hasDraft, restoreDraft } from './co
 import { enqueue, pendingCount, onOutboxChange, takeBack } from './core/outbox.js';
 import { syncNow, startSyncScheduler, onSyncState } from './core/sync.js';
 import { getPref, setPref } from './core/prefs.js';
+import { newUniqueId } from './core/ids.js';
 import { FormView, validate, cleanData, requiredProgress, rehydrate } from './ui/form.js';
 import { confirmDialog } from './ui/confirm.js';
 import { closeRoutePrompt } from './ui/route-prompt.js';
@@ -99,7 +100,7 @@ function renderTabs() {
     <span class="tabs__spacer"></span>
     <button type="button" role="tab" class="tab" data-tab="${OUTBOX_TAB}">
       <span class="tab__icon">${icon('inbox', 18)}</span>
-      <span class="tab__text"><span class="tab__title">Caixa de Saída <span id="outbox-badge" class="badge" hidden>0</span></span><span class="tab__sub">Envio ao servidor</span></span>
+      <span class="tab__text"><span class="tab__title">Histórico <span id="outbox-badge" class="badge" hidden>0</span></span><span class="tab__sub">Relatórios salvos e Caixa de Saída</span></span>
     </button>
     <button type="button" role="tab" class="tab" data-tab="${SETTINGS_TAB}">
       <span class="tab__icon">${icon('sliders', 18)}</span>
@@ -310,7 +311,8 @@ async function previewDraft(module) {
   await flushSave();
   await openPreview({
     module, uniqueId: draft.uniqueId, data: cleanData(module, draft.data),
-    photos: draft.photos, mode: 'draft', pending: validate(module, draft.data)
+    photos: draft.photos, mode: 'draft', pending: validate(module, draft.data),
+    onNewReport: () => newReport(module)
   });
 }
 
@@ -327,7 +329,7 @@ async function finalize(module) {
 
   const data = cleanData(module, draft.data);
   data._empresa = companyInfo(); // congela empresa/logo no relatório finalizado
-  const ok = await openPreview({ module, uniqueId: draft.uniqueId, data, photos: draft.photos });
+  const ok = await openPreview({ module, uniqueId: draft.uniqueId, data, photos: draft.photos, onNewReport: () => newReport(module) });
   if (!ok) return;
 
   try {
@@ -369,6 +371,49 @@ async function discard(module) {
   await discardDraft(module.id);
   await showTab(module.id);
   toast('Formulário limpo. Um novo relatório foi iniciado.', 'info');
+}
+
+/** "Início / Novo relatório" (prévia): apaga o rascunho atual e abre o formulário em branco, no topo. */
+async function newReport(module) {
+  const ok = await confirmDialog({
+    title: 'Iniciar um novo relatório?',
+    message: `Os dados preenchidos e as fotos deste rascunho de "${module.shortTitle}" serão apagados deste aparelho. Relatórios já finalizados continuam no Histórico.`,
+    confirmLabel: 'Limpar e começar novo', cancelLabel: 'Continuar editando', danger: true, iconName: 'home'
+  });
+  if (!ok) return;
+  clearTimeout(state.saveTimer);
+  state.saveTimer = null;
+  state.draft = null;
+  await discardDraft(module.id);
+  await showTab(module.id);
+  window.scrollTo(0, 0);
+  toast('Novo relatório iniciado.', 'info', 2500);
+}
+
+// Campos que não fazem sentido copiar para um relatório novo
+const NOT_REUSED = new Set(['date', 'datetime', 'time', 'signature', 'photos', 'consolidation']);
+
+/** Histórico → novo rascunho (novo ID) preenchido com os dados de um relatório salvo. */
+async function reuseReport(rec) {
+  const module = getModule(rec.module);
+  if (!module) return;
+  if (await hasDraft(module.id)) {
+    const ok = await confirmDialog({
+      title: 'Substituir o rascunho atual?',
+      message: `Já existe um rascunho de "${module.shortTitle}" em andamento. Ele será substituído por um novo relatório preenchido com os dados do relatório escolhido.`,
+      confirmLabel: 'Substituir e reutilizar', danger: true
+    });
+    if (!ok) return;
+  }
+  const data = rehydrate(module, structuredClone(rec.data));
+  for (const f of module.sections.flatMap((s) => s.fields)) {
+    if (NOT_REUSED.has(f.type)) delete data[f.id];
+  }
+  await flushSave();
+  await saveDraft({ key: module.id, uniqueId: newUniqueId(), module: module.id, data, photos: [] });
+  await showTab(module.id);
+  window.scrollTo(0, 0);
+  toast('Novo relatório preenchido com os dados do relatório salvo. Confira datas, horários, fotos e assinatura.', 'success', 7000);
 }
 
 /** Caixa de Saída → volta a ser rascunho para correção (só se nunca foi enviado). */
@@ -445,7 +490,7 @@ async function init() {
   settingsView = new SettingsView();
   settingsView.onSaved = () => syncNow();
   onSettingsChange(() => settingsView.refreshStatus());
-  outboxView = new OutboxView(document.createElement('div'), { onSyncNow: () => syncNow({ force: true }), onEdit: editFromOutbox });
+  outboxView = new OutboxView(document.createElement('div'), { onSyncNow: () => syncNow({ force: true }), onEdit: editFromOutbox, onReuse: reuseReport });
 
   renderTabs();
   $('#tabs').addEventListener('click', (e) => {

@@ -65,7 +65,26 @@ export async function updateRecord(rec) {
 /** Remove da fila. Chamado SOMENTE pelo sync após confirmação do servidor. */
 export async function confirmDelivered(uniqueId) {
   await remove(STORES.outbox, uniqueId);
+  const hist = await get(STORES.history, uniqueId);
+  if (hist) await put(STORES.history, { ...hist, sentAt: new Date().toISOString() });
   await notify();
+}
+
+/**
+ * Todos os relatórios finalizados neste aparelho (histórico + fila), do mais recente ao mais antigo.
+ * status: 'pending' | 'error' (ainda na Caixa de Saída) | 'sent' (confirmado pelo servidor).
+ * Fotos: as da fila quando ainda pendente; senão as guardadas no histórico.
+ */
+export async function reports() {
+  const [hist, queue] = await Promise.all([getAll(STORES.history), list()]);
+  const byId = new Map(queue.map((r) => [r.uniqueId, r]));
+  const out = hist.map((h) => {
+    const q = byId.get(h.uniqueId);
+    byId.delete(h.uniqueId);
+    return { ...h, photos: q?.photos || h.photos || [], outbox: q || null, status: q ? q.status : 'sent' };
+  });
+  for (const q of byId.values()) out.push({ ...q, outbox: q, status: q.status }); // fila sem cópia no histórico
+  return out.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 }
 
 /**
