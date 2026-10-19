@@ -2,7 +2,7 @@
 // por componente (legenda e "Figura N" no PDF), comparativo Antes (Visita) x Depois (Execução),
 // relatórios no formato anterior e BDO intacto.
 const { test, expect } = require('@playwright/test');
-const { launchApp, fill, openTab, preencherVisita } = require('./helpers');
+const { launchApp, fill, openTab, preencherVisita, cell } = require('./helpers');
 
 const toast = (page) => page.locator('#toasts .toast').last();
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
@@ -41,20 +41,28 @@ test('Visita Técnica segue a sequência de campo, com um bloco de fotos em cada
   await expect(page.locator('[data-wrap=valvulas]')).toHaveCount(0);
 });
 
-test('parágrafo de abertura é gerado a partir do cabeçalho', async () => {
+test('texto de abertura: gerado em segundo plano, só com botão de prévia no formulário', async () => {
   const { page } = ctx;
   await openTab(page, 'visita_tecnica');
   await fill(page, 'poco', 'RCB-34');
   await fill(page, 'campo', 'Campo de Buracica');
-  await fill(page, 'tecnicos', 'João, Maria');
-  await fill(page, 'acompanhantes', 'operador Carlos');
+  await cell(page, 'equipe', 0, 'nome').fill('João');
+  await page.locator('[data-action=add-row][data-table=equipe]').click();
+  await cell(page, 'equipe', 1, 'nome').fill('Carlos');
+  await cell(page, 'equipe', 1, 'funcao').selectOption('Operador');
   await fill(page, 'objetivo', 'Avaliar as válvulas e flanges.');
-  await expect(page.locator('[data-computed-field=introducao]')).toHaveText(
-    `No dia ${hojeBR()} fizemos uma visita técnica ao poço RCB-34, localizado em Campo de Buracica, com a equipe formada por João e Maria, acompanhados por operador Carlos, com o objetivo de avaliar as válvulas e flanges.`
-  );
+  const esperado = `No dia ${hojeBR()} fizemos uma visita técnica ao poço RCB-34, localizado em Campo de Buracica, com a equipe formada por João (Técnico) e Carlos (Operador), com o objetivo de avaliar as válvulas e flanges.`;
+
+  // nada de caixa de texto gigante no formulário: só o botão
+  await expect(page.locator('[data-computed-field=introducao]')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Visualizar Prévia do Texto de abertura' }).click();
+  const dlg = page.locator('dialog.modal--info[open]');
+  await expect(dlg.locator('[data-info-text]')).toHaveText(esperado);
+  await dlg.getByRole('button', { name: 'Fechar' }).click();
+
   await page.locator('#btn-preview').click();
   const prev = page.locator('dialog.modal[open]');
-  await expect(prev.locator('.preview__item', { hasText: 'Introdução' })).toContainText('fizemos uma visita técnica ao poço RCB-34');
+  await expect(prev.locator('.preview__item', { hasText: 'Introdução' }).locator('dd')).toHaveText(esperado);
 });
 
 test('fotos ficam no bloco do componente, com legenda, e viram "Figura N" na ordem do relatório', async () => {

@@ -100,9 +100,8 @@ test('sem rolagem lateral da página e botões do rodapé com rótulo legível n
     expect(sw, `${tab}: largura da página`).toBeLessThanOrEqual(cw);
   }
   await openTab(page, 'bdo');
-  await expect(page.locator('#btn-save')).toHaveText('Salvar', { useInnerText: true });
   await expect(page.locator('#btn-preview')).toHaveText('Prévia', { useInnerText: true });
-  await expect(page.locator('#btn-finalize')).toHaveText('Finalizar', { useInnerText: true });
+  await expect(page.locator('#btn-finalize')).toHaveText('Salvar e Finalizar', { useInnerText: true });
 });
 
 test('campos de data/hora com altura confortável para toque', async () => {

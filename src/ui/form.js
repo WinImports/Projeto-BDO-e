@@ -6,7 +6,9 @@ import { openCamera } from './camera.js';
 import { toast } from './toast.js';
 import { getSettings } from '../core/settings.js';
 import { icon } from './icons.js';
-import { confirmDialog } from './confirm.js';
+import { confirmDialog, infoDialog } from './confirm.js';
+import { comprimirFoto } from './compress.js';
+import { kmEstrada, posicaoAtual } from '../core/distancia.js';
 import { loadPocos, searchPocos, findPoco } from '../core/pocos.js';
 import { consolidateFromHistory, hasConsolidation } from '../core/consolidar.js';
 import { consolidationHtml } from './consolidacao-view.js';
@@ -31,6 +33,12 @@ const isBlank = (v) => v == null || v === '' || v === false || (Array.isArray(v)
 
 // newRow(data): valores iniciais de uma linha nova (ex.: data do boletim) — use em colunas "aux"
 const newRow = (f, data) => (f.newRow ? f.newRow(data) : {});
+/** Linha nova de uma tabela com chain: começa onde a anterior terminou (ex.: hora fim → hora início). */
+const chainedRow = (f, data, prev) => {
+  const row = newRow(f, data);
+  for (const [from, to] of f.chain || []) if (prev?.[from]) row[to] = prev[from];
+  return row;
+};
 const initialRows = (f, data) => (f.presetRows ? f.presetRows.map((r) => ({ ...r, _preset: true })) : [newRow(f, data)]);
 
 const rowFilled = (row, columns) =>
@@ -272,6 +280,7 @@ export class FormView {
     const settings = getSettings();
     for (const f of this.fields.values()) {
       if (f.settingsKey && settings[f.settingsKey]) this.draft.data[f.id] ??= settings[f.settingsKey];
+      if (f.type === 'table' && f.defaultRows && this.draft.data[f.id] === undefined) this.draft.data[f.id] = f.defaultRows(settings);
       if (f.type === 'date' && f.defaultDaysAgo) {
         const d = new Date();
         d.setDate(d.getDate() - f.defaultDaysAgo);
@@ -315,13 +324,14 @@ export class FormView {
   }
 
   fieldInnerHtml(f) {
-    const label = f.label
+    const label = f.label && !f.previewButton
       ? `<span class="field__label">${esc(f.label)}${f.required ? '<span class="req" aria-hidden="true">*</span>' : ''}</span>`
       : '';
     const hint = f.hint ? `<small class="field__hint">${esc(f.hint)}</small>` : '';
     const error = '<small class="field__error" aria-live="polite"></small>';
     const grouped = ['checklist', 'yesno', 'table', 'photos', 'signature', 'geo', 'consolidation'].includes(f.type);
     const control = this.controlHtml(f);
+    if (f.previewButton) return `${control}${hint}${error}`; // sem <label>: o texto do botão é o nome acessível
     return grouped
       ? `<fieldset class="field__group">${label ? `<legend${f.hideLabel ? ' class="sr-only"' : ''}>${label}</legend>` : `<legend class="sr-only">${esc(f.id)}</legend>`}${control}${hint}${error}</fieldset>`
       : `<label class="field__label-wrap" for="f-${esc(f.id)}">${label}</label>${control}${hint}${error}`;
@@ -374,6 +384,9 @@ export class FormView {
           </div>`;
 
       case 'computed':
+        if (f.previewButton) {
+          return `<button type="button" class="btn btn--ghost" id="f-${id}" data-action="preview-computed" data-target="${id}">${icon('eye', 16)} Visualizar Prévia do ${esc(f.label)}</button>`;
+        }
         return `<output id="f-${id}" class="computed-value" data-computed-field="${id}">${esc(v) || '—'}</output>`;
 
       case 'signature':
@@ -453,8 +466,9 @@ export class FormView {
     return `
       <div class="geo">
         <div class="geo__readout">
-          <div class="geo__value-box"><span class="geo__label">Latitude</span><output class="geo__value" data-geo="${id}" data-part="lat">${c ? c.lat.toFixed(6) : ''}</output></div>
-          <div class="geo__value-box"><span class="geo__label">Longitude</span><output class="geo__value" data-geo="${id}" data-part="lng">${c ? c.lng.toFixed(6) : ''}</output></div>
+          <span class="geo__badge geo__badge--${c ? 'ok' : 'empty'}" data-geo-badge="${id}">${icon(c ? 'mapPin' : 'crosshair', 16)} ${c ? 'Localização capturada' : 'Localização não capturada'}</span>
+          <output class="sr-only" data-geo="${id}" data-part="lat">${c ? c.lat.toFixed(6) : ''}</output>
+          <output class="sr-only" data-geo="${id}" data-part="lng">${c ? c.lng.toFixed(6) : ''}</output>
           <div class="geo__actions">
             <button type="button" class="btn btn--primary geo__btn" data-action="gps" data-target="${id}">${icon('crosshair', 17)} Obter Localização Atual</button>
             ${c ? `<button type="button" class="btn btn--text btn--sm" data-action="clear-geo" data-target="${id}">${icon('x', 15)} Limpar</button>` : ''}
@@ -522,6 +536,7 @@ export class FormView {
         this.refreshField(id);
         this.changed(id);
         toast(`Coordenadas capturadas (precisão ±${Math.round(accuracy)} m).`, accuracy > 100 ? 'info' : 'success');
+        this.addKmFromGps(latitude, longitude);
       },
       (err) => {
         this.refreshField(id);
@@ -622,7 +637,8 @@ export class FormView {
     this.paintSignatures(wrap);
   }
 
-  addPhoto(fieldId, category, { name, type, blob }, fase) {
+  async addPhoto(fieldId, category, shot, fase) {
+    const { name, type, blob } = await comprimirFoto(shot);
     this.draft.photos.push({ id: crypto.randomUUID(), ...photoMeta({ name, type, blob, category, field: fieldId, fase }) });
     this.refreshField(fieldId);
     this.changed(fieldId);
@@ -701,18 +717,23 @@ export class FormView {
       if (e.type !== 'change') return;
       const files = [...t.files].filter((f) => f.type.startsWith('image/'));
       const { photosField, category, fase } = t.dataset;
-      for (const file of files) {
-        this.draft.photos.push({ id: crypto.randomUUID(), ...photoMeta({ name: file.name, type: file.type, blob: file, category, field: photosField, fase }) });
-      }
-      this.refreshField(photosField);
-      return this.changed(photosField);
+      t.value = ''; // permite escolher o mesmo arquivo de novo
+      Promise.all(files.map((file) => comprimirFoto({ name: file.name, type: file.type, blob: file }))).then((fotos) => {
+        for (const f of fotos) this.draft.photos.push({ id: crypto.randomUUID(), ...photoMeta({ ...f, category, field: photosField, fase }) });
+        if (!this.el.isConnected) return;
+        this.refreshField(photosField);
+        this.changed(photosField);
+      });
+      return;
     }
 
     if (t.dataset.table) {
       const table = t.dataset.table;
       const rowIdx = Number(t.dataset.row);
       const row = data[table][rowIdx];
+      const anterior = row[t.dataset.col];
       row[t.dataset.col] = t.type === 'checkbox' ? t.checked : t.value;
+      this.propagateChain(table, rowIdx, t.dataset.col, anterior);
       for (const c of this.fields.get(table).columns.filter((col) => col.computed)) {
         row[c.id] = c.computed(row) || '';
         const cell = $(`[data-computed="${CSS.escape(`${table}:${rowIdx}:${c.id}`)}"]`, this.el);
@@ -745,7 +766,8 @@ export class FormView {
     const { action, table } = btn.dataset;
 
     if (action === 'add-row') {
-      this.draft.data[table].push(newRow(this.fields.get(table), this.draft.data));
+      const rows = this.draft.data[table];
+      rows.push(chainedRow(this.fields.get(table), this.draft.data, rows[rows.length - 1]));
       this.refreshField(table);
       const inputs = $$(`[data-table="${CSS.escape(table)}"][data-row="${this.draft.data[table].length - 1}"]`, this.el);
       inputs[0]?.focus();
@@ -779,6 +801,14 @@ export class FormView {
       this.draft.data[btn.dataset.target] = {};
       this.refreshField(btn.dataset.target);
       this.changed(btn.dataset.target);
+    } else if (action === 'preview-computed') {
+      const f = this.fields.get(btn.dataset.target);
+      this.updateComputed();
+      infoDialog({
+        title: `Prévia do ${f.label.toLowerCase()}`,
+        message: this.draft.data[f.id] || 'Preencha o Poço / Locação e a data para montar o texto.',
+        note: 'Este texto é gerado automaticamente a partir do cabeçalho e aparece só na prévia e no PDF.'
+      });
     } else if (action === 'consolidar') {
       this.runConsolidation({ manual: true });
     } else if (action === 'gps') {
@@ -867,6 +897,7 @@ export class FormView {
     this.changed(input.dataset.field);
     await this.applyWellCoords(poco);
     this.offerRoute(poco);
+    this.estimateKm(poco);
   }
 
   // Digitou o nome exato de um poço da base sem escolher na lista: coordenadas (se vazias) + convite à rota
@@ -876,6 +907,7 @@ export class FormView {
     if (!poco || !geo) return;
     if (!parseCoords(this.draft.data[geo.id])) await this.applyWellCoords(poco);
     this.offerRoute(poco);
+    this.estimateKm(poco);
   }
 
   /** Gatilho 1: poço identificado no cabeçalho → convite discreto para navegar até a locação. */
@@ -1023,7 +1055,91 @@ export class FormView {
     fields.forEach((f) => this.refreshField(f.id));
   }
 
+  /** Linhas automáticas (module.autoRows), ex.: Quadro de Ações da Visita a partir da inspeção. */
+  syncAutoRows() {
+    const cfg = this.module.autoRows;
+    if (!cfg) return;
+    const d = this.draft.data;
+    const rows = Array.isArray(d[cfg.table]) ? d[cfg.table] : [];
+    const atuais = new Map(rows.filter((r) => r._auto).map((r) => [r._auto, r]));
+    const desejadas = cfg.rows(d);
+    const novas = desejadas.map((x) => ({ necessario: true, prioridade: 'Alta', ...atuais.get(x._auto), acao: x.acao, _auto: x._auto }));
+    const antes = JSON.stringify([...atuais.values()].map((r) => [r._auto, r.acao]));
+    const depois = JSON.stringify(novas.map((r) => [r._auto, r.acao]));
+    if (antes === depois) return;
+    d[cfg.table] = [...rows.filter((r) => !r._auto), ...novas];
+    this.refreshField(cfg.table);
+    const adicionadas = novas.filter((r) => !atuais.has(r._auto));
+    if (adicionadas.length) toast(`Adicionado ao Quadro de Ações: ${adicionadas.map((r) => r.acao).join('; ')}`, 'info', 5000);
+  }
+
+  /** Tabela com chain: ao preencher o fim de uma linha, a próxima começa nesse horário (se estava vazia). */
+  propagateChain(table, rowIdx, col, anterior) {
+    const f = this.fields.get(table);
+    const rows = this.draft.data[table];
+    const next = rows[rowIdx + 1];
+    if (!f.chain || !next) return;
+    for (const [from, to] of f.chain) {
+      if (from !== col || (next[to] && next[to] !== anterior)) continue;
+      next[to] = rows[rowIdx][from];
+      const input = $(`[data-table="${CSS.escape(table)}"][data-row="${rowIdx + 1}"][data-col="${CSS.escape(to)}"]`, this.el);
+      if (input) input.value = next[to] || '';
+      for (const c of f.columns.filter((x) => x.computed)) {
+        next[c.id] = c.computed(next) || '';
+        const cell = $(`[data-computed="${CSS.escape(`${table}:${rowIdx + 1}:${c.id}`)}"]`, this.el);
+        if (cell) cell.textContent = next[c.id] || '—';
+      }
+    }
+  }
+
+  // ---------- KM rodado (campo kmAuto) ----------
+
+  kmField() {
+    return [...this.fields.values()].find((f) => f.kmAuto);
+  }
+
+  setKm(valor) {
+    const f = this.kmField();
+    this.draft.data[f.id] = String(Math.round(valor * 10) / 10);
+    const input = $(`[data-field="${CSS.escape(f.id)}"]`, this.el);
+    if (input) input.value = this.draft.data[f.id];
+    this.changed(f.id);
+  }
+
+  /** Poço escolhido: estima o KM até a locação a partir da posição atual do aparelho (se o KM estiver vazio). */
+  async estimateKm(poco) {
+    const f = this.kmField();
+    if (!f || !poco) return;
+    const d = this.draft.data;
+    if (d._km?.poco === poco.nome) return; // já estimado para este poço (ex.: escolheu na lista e saiu do campo)
+    d._km = { ...d._km, poco: poco.nome };
+    let pos;
+    try { pos = await posicaoAtual(); } catch { return; } // sem GPS / permissão: o técnico informa à mão
+    if (!this.el.isConnected) return;
+    d._km = { poco: poco.nome, ultimo: { lat: pos.lat, lng: pos.lng } };
+    if (String(d[f.id] ?? '').trim()) return;
+    const km = kmEstrada(pos, poco);
+    this.setKm(km);
+    toast(`KM estimado até ${poco.nome}: ${km.toLocaleString('pt-BR')} km (distância em linha reta × 1,3). Confira e corrija se preciso.`, 'info', 6000);
+  }
+
+  /** Nova captura de GPS: soma o trecho desde a última posição registrada. */
+  addKmFromGps(lat, lng) {
+    const f = this.kmField();
+    if (!f) return;
+    const d = this.draft.data;
+    const ultimo = d._km?.ultimo;
+    d._km = { ...d._km, ultimo: { lat, lng } };
+    if (!ultimo) return;
+    const trecho = kmEstrada(ultimo, { lat, lng });
+    if (trecho < 0.1) return; // mesma posição (ruído do GPS)
+    const atual = parseFloat(String(d[f.id] ?? '').replace(',', '.')) || 0;
+    this.setKm(atual + trecho);
+    toast(`+${trecho.toLocaleString('pt-BR')} km somados ao KM rodado.`, 'info', 3500);
+  }
+
   changed(fieldId) {
+    if (fieldId !== this.module.autoRows?.table) this.syncAutoRows();
     if (['poco', 'periodo_inicio', 'periodo_fim'].includes(fieldId) && this.consolField()) this.scheduleConsolidation();
     if (fieldId === 'poco') { clearTimeout(this.routeRefreshTimer); this.routeRefreshTimer = setTimeout(() => this.refreshGeo(), 300); }
     this.clearError(fieldId);

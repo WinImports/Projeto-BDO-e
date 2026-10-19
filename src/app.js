@@ -3,7 +3,11 @@
 import { MODULES, getModule } from './modules/index.js';
 import { openDb, requestPersistence } from './core/db.js';
 import { loadDraft, saveDraft, discardDraft, hasDraft, restoreDraft } from './core/drafts.js';
-import { enqueue, pendingCount, onOutboxChange, takeBack } from './core/outbox.js';
+import { enqueue, pendingCount, onOutboxChange, takeBack, saveLocalOnly, sendFromHistory, takeBackLocal } from './core/outbox.js';
+import { shareMessage, waUrl, uploadShareCopy, whatsappConfigurado } from './core/share.js';
+import { reportFile } from './ui/report-pdf.js';
+import { isSupabaseConfigured } from './config.js';
+import { showSharePrompt } from './ui/share-prompt.js';
 import { syncNow, startSyncScheduler, onSyncState } from './core/sync.js';
 import { getPref, setPref } from './core/prefs.js';
 import { newUniqueId } from './core/ids.js';
@@ -14,7 +18,7 @@ import { closeRoutePrompt } from './ui/route-prompt.js';
 import { openPreview } from './ui/preview.js';
 import { OutboxView } from './ui/outbox-view.js';
 import { SettingsView } from './ui/settings-view.js';
-import { companyInfo, onSettingsChange } from './core/settings.js';
+import { companyInfo, onSettingsChange, getSettings } from './core/settings.js';
 import { toast } from './ui/toast.js';
 import { icon } from './ui/icons.js';
 import { $, $$, esc } from './ui/dom.js';
@@ -206,9 +210,8 @@ async function showTab(tab) {
         <span id="ready-status" class="ready-status"></span>
       </div>
       <div class="action-bar__buttons">
-        <button type="button" class="btn btn--ghost" id="btn-save" title="Salvar rascunho (Ctrl+S)">${icon('save', 17)}<span class="lbl">Salvar rascunho</span><span class="lbl-short">Salvar</span></button>
-        <button type="button" class="btn btn--ghost" id="btn-preview">${icon('fileText', 17)}<span class="lbl">Prévia do PDF / Conferência</span><span class="lbl-short">Prévia</span></button>
-        <button type="button" class="btn btn--primary" id="btn-finalize">${icon('send', 17)}<span class="lbl">Finalizar e enviar</span><span class="lbl-short">Finalizar</span></button>
+        <button type="button" class="btn btn--ghost" id="btn-preview">${icon('fileText', 17)}<span class="lbl">Prévia do PDF</span><span class="lbl-short">Prévia</span></button>
+        <button type="button" class="btn btn--primary" id="btn-finalize">${icon('save', 17)}<span class="lbl">Salvar e Finalizar</span><span class="lbl-short">Salvar e Finalizar</span></button>
       </div>
     </div>`;
 
@@ -216,7 +219,6 @@ async function showTab(tab) {
   state.formView = new FormView($('#form-root'), module, draft, {
     onChange: () => { scheduleSave(); refreshFormChrome(); }
   });
-  $('#btn-save').addEventListener('click', saveNow);
   $('#btn-preview').addEventListener('click', () => previewDraft(module));
   $('#btn-finalize').addEventListener('click', () => finalize(module));
   $('#btn-discard').addEventListener('click', () => discard(module));
@@ -330,19 +332,16 @@ async function finalize(module) {
 
   const data = cleanData(module, draft.data);
   data._empresa = companyInfo(); // congela empresa/logo no relatório finalizado
-  const ok = await openPreview({ module, uniqueId: draft.uniqueId, data, photos: draft.photos, onNewReport: () => newReport(module) });
-  if (!ok) return;
+  const choice = await openPreview({ module, uniqueId: draft.uniqueId, data, photos: draft.photos, onNewReport: () => newReport(module) });
+  if (!choice) return;
 
+  const report = { uniqueId: draft.uniqueId, module: module.id, data, photos: draft.photos.map(photoMeta) };
   try {
-    // 1) grava na caixa de saída (persistido em disco antes de seguir)
+    // 1) grava no aparelho (persistido em disco antes de seguir): fila de envio ou só o histórico
     clearTimeout(state.saveTimer);
     state.saveTimer = null;
-    await enqueue({
-      uniqueId: draft.uniqueId,
-      module: module.id,
-      data,
-      photos: draft.photos.map(photoMeta)
-    });
+    if (choice === 'send') await enqueue(report);
+    else await saveLocalOnly(report);
     // 2) só então descarta o rascunho
     state.draft = null;
     await discardDraft(module.id);
@@ -352,11 +351,68 @@ async function finalize(module) {
     return;
   }
 
+  await showTab(module.id);
+  if (choice === 'local') {
+    toast('Relatório salvo neste aparelho (não enviado). Para enviar depois: Histórico › Enviar.', 'success', 7000);
+    return;
+  }
   toast(navigator.onLine
     ? 'Relatório na Caixa de Saída. Enviando ao servidor…'
     : 'Relatório na Caixa de Saída. Será enviado quando houver conexão.', 'success');
   syncNow();
-  await showTab(module.id);
+  await shareReport(module, report);
+}
+
+/**
+ * Depois do envio: gera o link do relatório (Supabase Storage) e abre o WhatsApp para o número
+ * das Configurações. Sem número, mostra o botão "Abrir WhatsApp" (o técnico escolhe o contato).
+ */
+async function shareReport(module, report) {
+  let link = null;
+  let aviso = '';
+  try {
+    if (isSupabaseConfigured() && navigator.onLine) {
+      const file = await reportFile({ module, uniqueId: report.uniqueId, data: report.data, photos: report.photos, company: report.data._empresa });
+      link = await uploadShareCopy(module, report.uniqueId, file);
+    }
+  } catch (err) {
+    console.error('[share]', err);
+    aviso = 'Não foi possível gerar o link agora.';
+  }
+  const url = waUrl(getSettings().whatsapp_padrao, shareMessage(module, report.data, report.uniqueId, link));
+  showSharePrompt({ url, link, titulo: 'Enviar pelo WhatsApp', aviso });
+  // com número configurado, abre direto (no iPhone a janela pode ser bloqueada: o botão do painel resolve)
+  if (whatsappConfigurado()) window.open(url, '_blank', 'noopener');
+}
+
+/** Histórico › Enviar: relatório salvo só no aparelho vai para a Caixa de Saída + WhatsApp. */
+async function sendSaved(rec) {
+  const module = getModule(rec.module);
+  if (!module) return;
+  const sent = await sendFromHistory(rec.uniqueId);
+  if (!sent) return toast('Relatório não encontrado neste aparelho.', 'error');
+  toast('Relatório na Caixa de Saída. Enviando ao servidor…', 'success');
+  syncNow();
+  await shareReport(module, sent);
+}
+
+/** Histórico › Editar (relatório salvo, nunca enviado): volta a ser rascunho com o mesmo ID. */
+async function editLocal(rec) {
+  const module = getModule(rec.module);
+  if (!module) return;
+  if (await hasDraft(rec.module)) {
+    const ok = await confirmDialog({
+      title: 'Substituir o rascunho atual?',
+      message: `Já existe um rascunho de "${module.shortTitle}". Ele será substituído pelo relatório que você vai editar.`,
+      confirmLabel: 'Substituir e editar', danger: true
+    });
+    if (!ok) return;
+  }
+  const taken = await takeBackLocal(rec.uniqueId);
+  if (!taken) return toast('Este relatório já foi enviado e não pode mais ser editado.', 'error');
+  await restoreDraft({ ...taken, photos: taken.photos || [] }, rehydrate(module, taken.data));
+  await showTab(rec.module);
+  toast('Relatório voltou para edição com o mesmo ID.', 'success', 5000);
 }
 
 async function discard(module) {
@@ -491,7 +547,7 @@ async function init() {
   settingsView = new SettingsView();
   settingsView.onSaved = () => syncNow();
   onSettingsChange(() => settingsView.refreshStatus());
-  outboxView = new OutboxView(document.createElement('div'), { onSyncNow: () => syncNow({ force: true }), onEdit: editFromOutbox, onReuse: reuseReport });
+  outboxView = new OutboxView(document.createElement('div'), { onSyncNow: () => syncNow({ force: true }), onEdit: editFromOutbox, onReuse: reuseReport, onSend: sendSaved, onEditLocal: editLocal });
 
   renderTabs();
   $('#tabs').addEventListener('click', (e) => {

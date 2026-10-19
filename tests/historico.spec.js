@@ -82,7 +82,7 @@ test('tocar no relatório salvo abre a prévia completa (com fotos) e gera o PDF
   const preview = page.locator('dialog.modal[open]');
   await expect(preview.locator('.eyebrow')).toHaveText('Relatório salvo neste aparelho');
   await expect(preview.locator('.modal__header')).toContainText('FBM-89');
-  await expect(preview.locator('.modal__body')).toContainText('Equipe 02');
+  await expect(preview.locator('.modal__body')).toContainText('João');
   await expect(preview.locator('.photo-grid img')).toHaveCount(1);
   await expect(preview.getByRole('button', { name: 'Voltar ao histórico' })).toBeVisible();
   await expect(preview.getByRole('button', { name: 'Reutilizar / Editar como novo' })).toBeVisible();
@@ -105,7 +105,7 @@ test('"Reutilizar / Editar como novo" abre um rascunho novo com os dados (sem da
 
   await page.locator('#view[data-ready=visita_tecnica]').waitFor();
   await expect(page.locator('[data-field=poco]')).toHaveValue('FBM-89');
-  await expect(page.locator('[data-field=frente]')).toHaveValue('Equipe 02');
+  await expect(page.locator('[data-table=equipe][data-row="0"][data-col=nome]')).toHaveValue('João');
   await expect(page.locator('[data-field=data]')).toHaveValue(hojeISO()); // data volta ao padrão (hoje)
   await expect(page.locator('.photo-grid img')).toHaveCount(0);
   await expect(page.locator('.doc-head__meta code')).not.toHaveText(idOriginal); // novo ID: não sobrescreve o original

@@ -104,7 +104,7 @@ export function reportBodyHtml(module, data, photos, photoSrcs) {
 }
 
 const EYEBROW = {
-  confirm: 'Conferência final antes de enviar',
+  confirm: 'Salvar e Finalizar — confira o relatório',
   draft: 'Prévia do relatório (rascunho)',
   view: 'Relatório salvo neste aparelho'
 };
@@ -115,7 +115,7 @@ const EYEBROW = {
  * @param {() => void} [o.onNewReport] botão "Início / Novo relatório" (chamado depois de fechar a prévia)
  * @param {() => void} [o.onReuse] botão "Reutilizar / Editar como novo" (idem)
  * @param {string} [o.notice] aviso informativo no topo do corpo
- * @returns {Promise<boolean>} true se o usuário confirmou (modo "confirm")
+ * @returns {Promise<false|'send'|'local'>} modo "confirm": 'send' (salvar e enviar) | 'local' (só salvar no aparelho)
  */
 export function openPreview({ module, uniqueId, data, photos = [], mode = 'confirm', meta = '', pending = [], onNewReport, onReuse, notice = '' }) {
   // Relatório finalizado usa a empresa "congelada" no envio; rascunho usa as Configurações atuais
@@ -154,19 +154,30 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
         })()}
         ${reportBodyHtml(module, data, photos, urls)}
       </div>
+      ${mode === 'confirm' ? `
+      <div class="modal__footer modal__footer--finalize">
+        <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Gerar PDF / Imprimir</button>
+        <div class="finalize-ask">
+          <strong>Deseja enviar este relatório?</strong>
+          <span class="muted small">Ao enviar, ele vai para o banco de dados e o WhatsApp abre com o link. Se não, fica salvo só neste aparelho (Histórico) e pode ser enviado depois.</span>
+        </div>
+        <div class="finalize-ask__buttons">
+          <button type="button" class="btn btn--ghost" data-local>${icon('save', 17)} Não, só salvar no aparelho</button>
+          <button type="button" class="btn btn--primary" data-confirm>${icon('send', 17)} Sim, enviar</button>
+        </div>
+      </div>` : `
       <div class="modal__footer">
         <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Gerar PDF / Imprimir</button>
         <span class="modal__spacer"></span>
-        ${mode === 'confirm'
-          ? `<button type="button" class="btn btn--primary" data-confirm>${icon('send', 17)} Confirmar e enviar para a Caixa de Saída</button>`
-          : '<button type="button" class="btn btn--primary" data-close>Fechar</button>'}
-      </div>`;
+        <button type="button" class="btn btn--primary" data-close>Fechar</button>
+      </div>`}`;
 
-    let confirmed = false;
+    let confirmed = false; // false | 'send' | 'local'
     let after = null; // ação executada depois de fechar (novo relatório / reutilizar)
     dialog.addEventListener('click', async (e) => {
       if (e.target === dialog || e.target.closest('[data-close]')) return dialog.close();
-      if (e.target.closest('[data-confirm]')) { confirmed = true; return dialog.close(); }
+      if (e.target.closest('[data-confirm]')) { confirmed = 'send'; return dialog.close(); }
+      if (e.target.closest('[data-local]')) { confirmed = 'local'; return dialog.close(); }
       if (e.target.closest('[data-new]')) { after = onNewReport; return dialog.close(); }
       if (e.target.closest('[data-reuse]')) { after = onReuse; return dialog.close(); }
       const pdfBtn = e.target.closest('[data-pdf]');
@@ -176,7 +187,7 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
         pdfBtn.innerHTML = '<span class="spinner" aria-hidden="true"></span> Gerando PDF…';
         try {
           const res = await savePdf({ module, uniqueId, data, photos, company, draft: mode === 'draft' });
-          if (res?.printed) toast('Relatório aberto para impressão. Escolha "Salvar como PDF" para gerar o arquivo.', 'info', 7000);
+          if (res?.printed) toast('Na janela de impressão, escolha "Salvar como PDF" (no iPhone: Compartilhar › Salvar em Arquivos).', 'info', 7000);
           else if (res?.saved) toast(`PDF salvo e aberto: ${res.filePath}`, 'success', 6000);
           else toast('Geração do PDF cancelada.', 'info', 2500);
         } catch (err) {

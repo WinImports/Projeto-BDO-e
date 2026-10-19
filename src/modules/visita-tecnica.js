@@ -2,7 +2,7 @@
 // cabeçalho → chegada ao poço (placa e conjunto) → pressões e manômetros → inspeção de cada
 // componente com o SEU bloco de fotos → outras fotos → recomendações e assinatura.
 import {
-  poco, pressoes, coordenadas, fotosDe, paragrafoAbertura, PRIORIDADES, TURNOS,
+  poco, pressoes, coordenadas, fotosDe, paragrafoAbertura, equipe, PRIORIDADES, TURNOS,
   FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, FLANGES,
   ESTANQUEIDADE, ABERTURA, CORROSAO
 } from './common.js';
@@ -14,6 +14,44 @@ const CORRECOES = [
   'Limpeza com carro sugador',
   'Aterramento e Barricamento'
 ];
+
+/**
+ * Quadro de Ações / Recomendações preenchido a partir da inspeção: componente com
+ * "Necessita intervenção? = Sim" (e o diagnóstico) e verificações do antipoço marcadas "Sim".
+ * Linhas automáticas levam _auto (chave do componente): somem se a condição deixar de valer.
+ */
+const ANTEPOCO_ACOES = {
+  'Sugador (carro sugador)': 'Limpeza com carro sugador',
+  'Limpeza química': 'Limpeza química',
+  'Limpeza mecânica': 'Limpeza mecânica',
+  'Quebra (estrutura danificada)': 'Reparo da estrutura (quebra)'
+};
+
+export function acoesAutomaticas(d) {
+  const out = [];
+  for (const r of d.antepoco_checklist || []) {
+    if (r.situacao === 'Sim' && ANTEPOCO_ACOES[r.item]) out.push({ _auto: `antepoco:${r.item}`, acao: `Antipoço: ${ANTEPOCO_ACOES[r.item]}` });
+  }
+  for (const v of VALVULAS_CABECA) {
+    if (d[`${v.p}_intervencao`] !== 'Sim') continue;
+    const est = d[`${v.p}_estanqueidade`];
+    const ab = d[`${v.p}_abertura`];
+    const motivo = est === 'Sem estanqueidade (vazamento)' ? 'Necessária substituição da válvula devido à falta de estanqueidade'
+      : ab === 'Não opera (travada)' ? 'Necessário reparo ou substituição da válvula (não opera)'
+      : ab === 'Abre / fecha com dificuldade' ? 'Necessária manutenção da válvula (abertura / fechamento com dificuldade)'
+      : 'Necessária intervenção na válvula';
+    out.push({ _auto: v.p, acao: `${v.short}: ${motivo}` });
+  }
+  for (const fl of FLANGES) {
+    if (d[`${fl.p}_intervencao`] !== 'Sim') continue;
+    const cor = d[`${fl.p}_corrosao`];
+    const motivo = cor === 'Moderada' || cor === 'Severa'
+      ? `Necessária substituição dos parafusos / prisioneiros devido à corrosão ${cor.toLowerCase()}`
+      : 'Necessária intervenção no flange (parafusos / prisioneiros)';
+    out.push({ _auto: fl.p, acao: `${fl.short}: ${motivo}` });
+  }
+  return out;
+}
 
 const valvula = (v, n) => ({
   title: `${n}. ${v.nome}`,
@@ -62,17 +100,16 @@ export default {
         { id: 'campo', label: 'Locação / Campo', type: 'text', placeholder: 'Ex.: Campo de Buracica' },
         { id: 'data', label: 'Data da visita', type: 'date', required: true },
         { id: 'turno', label: 'Turno', type: 'select', options: TURNOS },
-        { type: 'divider', label: 'Equipe', icon: 'users' },
-        { id: 'tecnicos', label: 'Técnico(s)', type: 'text', required: true, span: 6, settingsKey: 'tecnico_nome', placeholder: 'Nomes separados por vírgula' },
-        { id: 'acompanhantes', label: 'Acompanhantes / Operador', type: 'text', span: 6, placeholder: 'Ex.: operador Carlos (PETROBRAS)' },
-        { id: 'frente', label: 'Frente / Equipe', type: 'text', placeholder: 'Ex.: Equipe de válvulas 02' },
         { id: 'cliente', label: 'Cliente / Contratante', type: 'text', required: true, settingsKey: 'cliente_padrao' },
         { id: 'contrato', label: 'Contrato', type: 'text', settingsKey: 'contrato_padrao' },
+        { type: 'divider', label: 'Equipe', icon: 'users' },
+        equipe(),
         { type: 'divider', label: 'Objetivo da visita', icon: 'flag' },
         { id: 'objetivo', label: 'Objetivo', type: 'textarea', required: true, placeholder: 'Ex.: avaliar as condições das válvulas e flanges da cabeça de poço' },
         {
-          id: 'introducao', label: 'Parágrafo de abertura (gerado automaticamente)', pdfLabel: 'Introdução', type: 'computed', full: true,
-          compute: (d) => paragrafoAbertura(d, { verbo: 'fizemos uma visita técnica ao', equipe: 'tecnicos', acompanhantes: 'acompanhantes', data: 'data' })
+          // gerado em segundo plano: no formulário só um botão de prévia; o texto sai na prévia/PDF
+          id: 'introducao', label: 'Texto de abertura', pdfLabel: 'Introdução', type: 'computed', previewButton: true,
+          compute: (d) => paragrafoAbertura(d, { verbo: 'fizemos uma visita técnica ao', data: 'data', equipeLegado: ['tecnicos', 'acompanhantes'] })
         },
         { type: 'divider', label: 'Coordenadas GPS da locação', icon: 'crosshair' },
         coordenadas()
@@ -162,8 +199,12 @@ export default {
           id: 'fixadores', label: 'Prisioneiros, parafusos e porcas', type: 'table',
           columns: [{ id: 'item', label: 'Local' }, { id: 'status', label: 'Estado' }, { id: 'obs', label: 'Observação' }]
         },
-        { id: 'obs_locacao', label: 'Observações da locação', type: 'textarea' }
+        { id: 'obs_locacao', label: 'Observações da locação', type: 'textarea' },
+        { id: 'tecnicos', label: 'Técnico(s)', type: 'text' },
+        { id: 'acompanhantes', label: 'Acompanhantes / Operador', type: 'text' },
+        { id: 'frente', label: 'Frente / Equipe', type: 'text' }
       ]
     }
-  ]
+  ],
+  autoRows: { table: 'correcoes', rows: acoesAutomaticas }
 };

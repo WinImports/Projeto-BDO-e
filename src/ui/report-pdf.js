@@ -67,14 +67,21 @@ const PDF_CSS = `
   footer { margin-top: 14px; padding-top: 6px; border-top: 1px solid #dde3ea; font-size: 7.5pt; color: #5b6676; }
 `;
 
-/** inlineCss=false: sem <style> (no navegador o CSS entra via CSSOM, por causa da CSP do app). */
-export function buildReportHtml({ module, uniqueId, data, photos, photoSrcs, company, draft, inlineCss = true }) {
+/** Documento completo (PDF do desktop e cópia compartilhada por link). */
+export function buildReportHtml(opts) {
+  const { module, data } = opts;
+  return `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(module.title)} — ${esc(data.poco || '')}</title>
+<style>${PDF_CSS}</style></head>
+<body>${reportDocHtml(opts)}</body></html>`;
+}
+
+/** Miolo do relatório: cabeçalho, seções e rodapé. */
+function reportDocHtml({ module, uniqueId, data, photos, photoSrcs, company, draft }) {
   const generated = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   const brandMark = company?.logo ? `<img class="logo" src="${esc(company.logo)}" alt="">` : '<div class="mark">BDO</div>';
-  return `<!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(module.title)} — ${esc(data.poco || '')}</title>
-${inlineCss ? `<style>${PDF_CSS}</style>` : ''}</head>
-<body>
+  return `
   <header>
     <div class="brand">
       ${brandMark}
@@ -91,36 +98,109 @@ ${inlineCss ? `<style>${PDF_CSS}</style>` : ''}</head>
     </div>
   </header>
   ${reportBodyHtml(module, data, photos, photoSrcs)}
-  <footer>Documento gerado pelo BDO-e. O ID acima identifica este relatório de forma única no sistema.</footer>
-</body></html>`;
+  <footer>Documento gerado pelo BDO-e. O ID acima identifica este relatório de forma única no sistema.</footer>`;
 }
 
-/**
- * Navegador/PWA: abre o relatório numa janela e chama a impressão do sistema
- * ("Salvar como PDF" no celular e no computador).
- */
-function printInBrowser(html, title) {
-  const win = window.open('', '_blank');
-  if (!win) throw new Error('O navegador bloqueou a janela do relatório. Permita pop-ups para este site e tente de novo.');
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  win.document.title = title;
-  const sheet = new win.CSSStyleSheet();
-  sheet.replaceSync(PDF_CSS);
-  win.document.adoptedStyleSheets = [sheet];
-  setTimeout(() => { win.focus(); win.print(); }, 400); // tempo para as imagens (logo/fotos) carregarem
+// ---------- Navegador / PWA (inclusive iPhone) ----------
+// O Safari do iOS bloqueia janelas abertas por script e não imprime janelas criadas assim.
+// Por isso o relatório é montado DENTRO da página (#print-root) e impresso com window.print():
+// o CSS @media print esconde o app e mostra só o relatório ("Salvar como PDF" / "Compartilhar").
+
+/** Prefixa cada regra do CSS do PDF com #print-root (CSS simples, sem blocos aninhados). */
+function scopeCss(css, root) {
+  return css.replace(/([^{}]+)\{([^{}]*)\}/g, (_, sel, body) => {
+    const selectors = sel.trim();
+    if (selectors.startsWith('@')) return `${selectors} {${body}}`;
+    const scoped = selectors.split(',').map((x) => {
+      const t = x.trim();
+      if (t === 'body' || t === 'html') return root;
+      if (t === '*') return `${root}, ${root} *`;
+      return `${root} ${t}`;
+    }).join(', ');
+    return `${scoped} {${body}}`;
+  });
+}
+
+const SCREEN_RULE = '@media screen { #print-root { display: none !important; } }';
+const PRINT_RULE = `@media print {
+  html, body { background: #fff !important; }
+  body > *:not(#print-root) { display: none !important; }
+  #print-root { display: block !important; }
+  ${scopeCss(PDF_CSS, '#print-root')}
+}`;
+
+let printSheetReady = false;
+// CSP do app proíbe <style>: o CSS entra por CSSOM (folha construída; Safari antigo: regra na styles.css)
+function ensurePrintSheet() {
+  if (printSheetReady) return;
+  try {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(`${SCREEN_RULE}\n${PRINT_RULE}`);
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  } catch {
+    const host = [...document.styleSheets].find((x) => /styles\.css/.test(x.href || ''));
+    for (const rule of [SCREEN_RULE, PRINT_RULE]) {
+      try { host?.insertRule(rule, host.cssRules.length); } catch (err) { console.warn('[pdf] regra de impressão', err); }
+    }
+  }
+  printSheetReady = true;
+}
+
+const waitImages = (root) => Promise.race([
+  Promise.all([...root.querySelectorAll('img')].map((img) => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()))),
+  new Promise((r) => setTimeout(r, 2500))
+]);
+
+async function printInPage(opts, title) {
+  document.getElementById('print-root')?.remove();
+  ensurePrintSheet();
+  const root = document.createElement('div');
+  root.id = 'print-root';
+  root.innerHTML = reportDocHtml(opts);
+  document.body.appendChild(root);
+  await waitImages(root);
+  const prevTitle = document.title;
+  document.title = title; // nome sugerido para o arquivo PDF
+  const cleanup = () => {
+    root.remove();
+    document.title = prevTitle;
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
+  window.print();
   return { saved: true, printed: true };
 }
 
-export async function savePdf({ module, uniqueId, data, photos, company, draft }) {
-  const photoSrcs = await Promise.all(photos.map((p) => blobToDataUrl(p.blob)));
-  const desktop = Boolean(window.desktop?.savePdf);
-  const html = buildReportHtml({ module, uniqueId, data, photos, photoSrcs, company, draft, inlineCss: desktop });
+const fileNameOf = (module, data) => {
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const day = data.data || today; // data do relatório; senão, data local (não UTC)
-  const fileName = `${[module.shortTitle, data.poco, day].map(fileSafe).filter(Boolean).join('_')}.pdf`;
-  if (!desktop) return printInBrowser(html, fileName.replace(/.pdf$/, ''));
-  return window.desktop.savePdf(html, fileName);
+  const day = String(data.data || data.data_hora || today).slice(0, 10); // data do relatório; senão, data local (não UTC)
+  return `${[module.shortTitle, data.poco, day].map(fileSafe).filter(Boolean).join('_')}.pdf`;
+};
+
+async function docOpts({ module, uniqueId, data, photos, company, draft }) {
+  const photoSrcs = await Promise.all(photos.map((p) => blobToDataUrl(p.blob)));
+  return { module, uniqueId, data, photos, photoSrcs, company, draft };
+}
+
+export async function savePdf(args) {
+  const opts = await docOpts(args);
+  const fileName = fileNameOf(args.module, args.data);
+  if (!window.desktop?.savePdf) return printInPage(opts, fileName.replace(/\.pdf$/, ''));
+  return window.desktop.savePdf(buildReportHtml(opts), fileName);
+}
+
+/**
+ * Arquivo do relatório para o link compartilhado: PDF no desktop (Electron gera o PDF);
+ * no navegador, o relatório em HTML autocontido (abre e imprime em qualquer celular).
+ */
+export async function reportFile(args) {
+  const opts = await docOpts({ ...args, draft: false });
+  const html = buildReportHtml(opts);
+  const base = fileNameOf(args.module, args.data).replace(/\.pdf$/, '');
+  if (window.desktop?.renderPdf) {
+    const bytes = await window.desktop.renderPdf(html);
+    return { blob: new Blob([bytes], { type: 'application/pdf' }), ext: 'pdf', name: `${base}.pdf` };
+  }
+  return { blob: new Blob([html], { type: 'text/html;charset=utf-8' }), ext: 'html', name: `${base}.html` };
 }

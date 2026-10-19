@@ -100,20 +100,22 @@ test('app como página web (GitHub Pages): abre, funciona offline, importa base 
     await expect(rota.locator('[data-route-link=google]')).toHaveAttribute('href', 'https://www.google.com/maps/dir/?api=1&destination=-12.370500,-38.401200&travelmode=driving');
     await rota.getByRole('button', { name: 'Agora não' }).click();
 
-    // PDF no navegador: abre o relatório formatado e chama a impressão ("Salvar como PDF")
+    // PDF no navegador (inclusive iPhone): relatório montado na própria página e impresso com window.print(),
+    // sem abrir janela nova (o Safari do iOS bloqueia)
     await page.evaluate(() => {
-      const open = window.open.bind(window);
-      window.open = (...args) => {
-        const w = open(...args);
-        w.print = () => { window.__printed = { title: w.document.title, styled: w.document.adoptedStyleSheets.length, text: w.document.body.innerText }; };
-        return w;
+      window.open = () => { window.__popup = true; return null; };
+      window.print = () => {
+        const root = document.getElementById('print-root');
+        window.__printed = { title: document.title, styled: document.adoptedStyleSheets.length, text: root ? root.textContent : '' };
       };
     });
     await page.locator('#btn-preview').click();
     await page.locator('dialog.modal[open] [data-pdf]').click();
     await expect.poll(() => page.evaluate(() => window.__printed || null)).not.toBeNull();
     const printed = await page.evaluate(() => window.__printed);
-    expect(printed.styled).toBe(1);
+    expect(printed.styled).toBeGreaterThanOrEqual(1);
+    expect(printed.title).toMatch(/^BDO-e_TST-010_/); // nome sugerido do arquivo
+    expect(await page.evaluate(() => window.__popup || false)).toBe(false);
     expect(printed.text).toContain('Boletim Diário Operacional Eletrônico');
     expect(printed.text).toContain('TST-010');
     await expect(page.locator('#toasts .toast').last()).toContainText('Salvar como PDF');
@@ -135,6 +137,7 @@ test('app como página web (GitHub Pages): abre, funciona offline, importa base 
 });
 
 test('PWA: relatório finalizado fica no Histórico do navegador, reabre na prévia e imprime o PDF', async () => {
+  test.setTimeout(150_000); // página servida por HTTP + Service Worker + recarga: mais lento que os demais
   const server = await startPagesServer();
   const url = `http://127.0.0.1:${server.address().port}${BASE}`;
   const ctx = await launchApp();
@@ -169,12 +172,7 @@ test('PWA: relatório finalizado fica no Histórico do navegador, reabre na pré
     await expect(item.locator('.status')).toHaveText('Aguardando envio');
 
     await page.evaluate(() => {
-      const open = window.open.bind(window);
-      window.open = (...args) => {
-        const w = open(...args);
-        w.print = () => { window.__printed = { text: w.document.body.innerText }; };
-        return w;
-      };
+      window.print = () => { window.__printed = { text: document.getElementById('print-root')?.textContent || '' }; };
     });
     await item.locator('.outbox-item__main').click();
     const preview = page.locator('dialog.modal[open]');
@@ -185,7 +183,7 @@ test('PWA: relatório finalizado fica no Histórico do navegador, reabre na pré
 
     await preview.getByRole('button', { name: 'Reutilizar / Editar como novo' }).click();
     await page.locator('#view[data-ready=visita_tecnica]').waitFor();
-    await expect(page.locator('[data-field=frente]')).toHaveValue('Equipe 02');
+    await expect(page.locator('[data-table=equipe][data-row="0"][data-col=nome]')).toHaveValue('João');
     expect(errors).toEqual([]);
   } finally {
     server.close();

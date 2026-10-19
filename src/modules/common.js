@@ -17,7 +17,12 @@
 // photos:    categories (uma "vaga" por foto esperada, com botões Arquivo / Câmera e legenda por foto);
 //            vários campos photos por relatório: cada foto guarda o campo (p.field). No PDF viram
 //            "Figura N — legenda" logo abaixo do componente. compare: true → bloco "Antes (Visita) x Depois"
-// computed:  compute(data) → texto gerado (ex.: parágrafo de abertura), também vai para o PDF
+// computed:  compute(data) → texto gerado, também vai para o PDF; previewButton: true → no formulário
+//            só um botão "Visualizar Prévia" (ex.: texto de abertura), o texto aparece na prévia/PDF
+// table.chain: [['hora_fim','hora_inicio']] → a linha seguinte herda o fim da anterior como início
+// table.defaultRows(settings): linhas de um relatório novo (ex.: equipe com o técnico padrão)
+// number.kmAuto: KM rodado estimado ao escolher o poço e somado a cada captura de GPS
+// módulo.autoRows: { table, rows(data) } → linhas automáticas (_auto) num quadro (ex.: ações da Visita)
 // Seção legacy: true → não aparece no formulário; só na prévia/PDF de relatórios antigos que tenham esses dados
 
 // autocomplete 'pocos': sugere poços da base oficial (src/data/pocos-ba.json) e, ao escolher,
@@ -110,19 +115,40 @@ export const CORROSAO = ['Sem corrosão', 'Leve', 'Moderada', 'Severa'];
 const brData = (iso) => (/^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(0, 10).split('-').reverse().join('/') : '');
 const juntar = (lista) => (lista.length > 1 ? `${lista.slice(0, -1).join(', ')} e ${lista[lista.length - 1]}` : lista[0] || '');
 
+/** Integrante da equipe como texto: "João (Técnico)". */
+const integrante = (r) => (r.funcao ? `${r.nome.trim()} (${r.funcao})` : r.nome.trim());
+
 /**
- * Parágrafo de abertura gerado a partir do cabeçalho.
+ * Parágrafo de abertura (gerado em segundo plano: só aparece na prévia/PDF).
  * verbo: 'fizemos uma visita técnica ao' | 'executamos os serviços no'
+ * Equipe: quadro "equipe" (nome + função); relatórios antigos usavam campos de texto.
  */
-export function paragrafoAbertura(d, { verbo, equipe, acompanhantes, data }) {
+export function paragrafoAbertura(d, { verbo, data, equipeLegado = [] }) {
   const dia = brData(d[data]);
   if (!d.poco || !dia) return '';
-  const nomes = String(d[equipe] || '').split(/\s*[,;]\s*/).filter(Boolean);
-  const partes = [`No dia ${dia} ${verbo} poço ${String(d.poco).trim()}`];
-  if (d.campo) partes[0] += `, localizado em ${String(d.campo).trim()}`;
-  if (nomes.length) partes.push(`com a equipe formada por ${juntar(nomes)}`);
-  if (acompanhantes && d[acompanhantes]) partes.push(`acompanhados por ${String(d[acompanhantes]).trim()}`);
-  let texto = partes.join(', ');
+  let nomes = (Array.isArray(d.equipe) ? d.equipe : []).filter((r) => String(r.nome || '').trim()).map(integrante);
+  if (!nomes.length) {
+    nomes = equipeLegado.flatMap((k) => String(d[k] || '').split(/\s*[,;]\s*/)).filter(Boolean);
+  }
+  let texto = `No dia ${dia} ${verbo} poço ${String(d.poco).trim()}`;
+  if (d.campo) texto += `, localizado em ${String(d.campo).trim()}`;
+  if (nomes.length) texto += `, com a equipe formada por ${juntar(nomes)}`;
   if (d.objetivo) texto += `, com o objetivo de ${String(d.objetivo).trim().replace(/^[A-ZÀ-Ú]/, (c) => c.toLowerCase()).replace(/[.\s]+$/, '')}`;
   return `${texto}.`;
 }
+
+// ---------- Equipe (cabeçalho dos relatórios) ----------
+
+export const FUNCOES = ['Técnico', 'Operador', 'Supervisor', 'Técnico de Segurança', 'Gestor Técnico', 'Fiscal'];
+
+/** Quadro "Equipe": nome + função por integrante. A 1ª linha vem com o técnico das Configurações. */
+export const equipe = ({ required = true } = {}) => ({
+  id: 'equipe', label: 'Equipe', type: 'table', required, addLabel: 'Adicionar integrante',
+  defaultRows: (s) => [{ nome: s.tecnico_nome || '', funcao: 'Técnico' }],
+  newRow: () => ({ funcao: '' }),
+  columns: [
+    { id: 'nome', label: 'Nome', width: 'wide', placeholder: 'Nome do integrante' },
+    // aux: só a função escolhida não conta como integrante preenchido
+    { id: 'funcao', label: 'Função', type: 'select', options: FUNCOES, aux: true, width: 'medium' }
+  ]
+});

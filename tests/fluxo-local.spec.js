@@ -46,7 +46,7 @@ test.describe('salvamento local', () => {
     await openTab(page, 'bdo');
     await fill(page, 'poco', 'RCB-34');
     await fill(page, 'cidade_uf', 'Catu - BA');
-    await page.locator('#btn-save').click();
+    await page.keyboard.press('Control+s'); // salvar agora (o rascunho também é salvo sozinho)
     await expect(toast(page)).toContainText('Rascunho salvo');
     await expect(page.locator('#draft-status')).toContainText('Salvo neste computador');
     await ctx.close({ keepData: true });
@@ -141,7 +141,7 @@ test.describe('prévia, PDF, finalizar e editar', () => {
     await expect(page.locator('[data-field=vc_estanqueidade]')).toHaveValue('Sem estanqueidade (vazamento)');
     await expect(page.locator('#outbox-badge')).toBeHidden();
 
-    await fill(page, 'frente', 'Equipe 03');
+    await fill(page, 'objetivo', 'Reavaliar a VC');
     await page.locator('#btn-finalize').click();
     await page.locator('dialog.modal[open] [data-confirm]').click();
     await expect(page.locator('#outbox-badge')).toHaveText('1');

@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('desktop', {
   },
   /** Abre "Salvar como" e grava o HTML do relatório em PDF. → { saved, filePath } */
   savePdf: (html, fileName) => ipcRenderer.invoke('pdf:save', { html, fileName }),
+  renderPdf: (html) => ipcRenderer.invoke('pdf:render', { html }),
   /** Base de poços: { origem, fonte, importadoEm, total, pocos: [[nome, lat, lng], ...] } */
   getPocos: () => ipcRenderer.invoke('pocos:list'),
   pocosStatus: () => ipcRenderer.invoke('pocos:status'),

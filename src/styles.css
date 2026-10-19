@@ -800,3 +800,37 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .
 @media (pointer: coarse), (max-width: 640px) {
   .photo__caption { font-size: 16px; min-height: 44px; }
 }
+
+/* ---------- GPS: selo no lugar das caixas de latitude/longitude ---------- */
+.geo__readout { align-items: center; }
+.geo__badge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px;
+  font-weight: 650; font-size: .88rem; border: 1px solid var(--border);
+}
+.geo__badge--ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.geo__badge--empty { background: var(--surface-2); color: var(--text-muted); border-style: dashed; }
+
+/* ---------- Salvar e Finalizar: pergunta de envio ---------- */
+.modal__footer--finalize { flex-wrap: wrap; align-items: center; }
+.finalize-ask { flex: 1 1 260px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.finalize-ask__buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+@media (max-width: 640px) {
+  /* celular: rodapé compacto para a prévia do relatório continuar visível */
+  .modal__footer--finalize { gap: 8px; padding: 10px 12px; }
+  .modal__footer--finalize > .btn { width: 100%; justify-content: center; min-height: 40px; }
+  .finalize-ask { flex-basis: 100%; }
+  .finalize-ask .muted { display: none; }
+  .finalize-ask__buttons { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+  .finalize-ask__buttons .btn { justify-content: center; white-space: normal; line-height: 1.2; }
+  .modal__nav { flex-wrap: nowrap; gap: 6px; padding: 8px 12px; }
+  .modal__nav .btn { flex: 1 1 0; min-width: 0; justify-content: center; white-space: normal; line-height: 1.2; font-size: .82rem; padding: 6px 8px; }
+}
+
+/* ---------- Painel do WhatsApp (após enviar) ---------- */
+.share-prompt { border-left-color: var(--ok); }
+.share-prompt .route-prompt__icon { background: var(--ok-soft); color: var(--ok); }
+.share-prompt__link { overflow-wrap: anywhere; color: var(--primary); }
+
+/* ---------- Abas no celular em pé: todas acessíveis com rolagem lateral ---------- */
+.tabs { overscroll-behavior-x: contain; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+.tab { flex: none; scroll-snap-align: start; }

@@ -8,7 +8,7 @@
 // - Supabase e mapas (outros domínios) vão direto para a rede.
 
 // <precache> — gerado por `npm run pwa`; não editar à mão
-const VERSION = 'b7620cd2cefd';
+const VERSION = '43da1c70da1b';
 const PRECACHE = [
   './',
   './icons/icon-192.png',
@@ -20,6 +20,7 @@ const PRECACHE = [
   './src/config.js',
   './src/core/consolidar.js',
   './src/core/db.js',
+  './src/core/distancia.js',
   './src/core/drafts.js',
   './src/core/fotos.js',
   './src/core/ids.js',
@@ -28,6 +29,7 @@ const PRECACHE = [
   './src/core/pocos.js',
   './src/core/prefs.js',
   './src/core/settings.js',
+  './src/core/share.js',
   './src/core/supabase.js',
   './src/core/sync.js',
   './src/modules/bdo.js',
@@ -38,6 +40,7 @@ const PRECACHE = [
   './src/shared/pocos-parser.js',
   './src/styles.css',
   './src/ui/camera.js',
+  './src/ui/compress.js',
   './src/ui/confirm.js',
   './src/ui/consolidacao-view.js',
   './src/ui/dom.js',
@@ -48,6 +51,7 @@ const PRECACHE = [
   './src/ui/report-pdf.js',
   './src/ui/route-prompt.js',
   './src/ui/settings-view.js',
+  './src/ui/share-prompt.js',
   './src/ui/toast.js',
   './src/vendor/supabase.js'
 ];

@@ -70,6 +70,20 @@ function createWindow() {
 registerPocosIpc(ipcMain, app);
 
 // Gera o PDF a partir de um HTML autocontido montado pela interface (ui/report-pdf.js)
+// HTML do relatório → PDF (janela oculta, sem JavaScript)
+async function renderPdf(html) {
+  const tmp = path.join(os.tmpdir(), `bdoe-${Date.now()}-${Math.random().toString(36).slice(2)}.html`);
+  const win = new BrowserWindow({ show: false, webPreferences: { javascript: false, sandbox: true } });
+  try {
+    await fs.writeFile(tmp, html, 'utf8');
+    await win.loadFile(tmp);
+    return await win.webContents.printToPDF({ pageSize: 'A4', printBackground: true, margins: { marginType: 'default' } });
+  } finally {
+    win.destroy();
+    fs.unlink(tmp).catch(() => {});
+  }
+}
+
 ipcMain.handle('pdf:save', async (event, { html, fileName }) => {
   const parent = BrowserWindow.fromWebContents(event.sender);
   const { canceled, filePath } = await dialog.showSaveDialog(parent, {
@@ -78,21 +92,13 @@ ipcMain.handle('pdf:save', async (event, { html, fileName }) => {
     filters: [{ name: 'PDF', extensions: ['pdf'] }]
   });
   if (canceled || !filePath) return { saved: false };
-
-  const tmp = path.join(os.tmpdir(), `bdoe-${Date.now()}.html`);
-  const win = new BrowserWindow({ show: false, webPreferences: { javascript: false, sandbox: true } });
-  try {
-    await fs.writeFile(tmp, html, 'utf8');
-    await win.loadFile(tmp);
-    const pdf = await win.webContents.printToPDF({ pageSize: 'A4', printBackground: true, margins: { marginType: 'default' } });
-    await fs.writeFile(filePath, pdf);
-  } finally {
-    win.destroy();
-    fs.unlink(tmp).catch(() => {});
-  }
+  await fs.writeFile(filePath, await renderPdf(html));
   shell.openPath(filePath);
   return { saved: true, filePath };
 });
+
+// PDF em memória (arquivo do link compartilhado no WhatsApp)
+ipcMain.handle('pdf:render', async (_event, { html }) => renderPdf(html));
 
 app.on('second-instance', () => {
   if (!mainWindow) return;

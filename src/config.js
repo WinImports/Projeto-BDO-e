@@ -7,7 +7,8 @@ export const SUPABASE_ANON_KEY = '';
 
 export const SYNC = {
   rpcName: 'submit_reports',     // função no banco que grava em lote de forma idempotente
-  photoBucket: 'report-photos',  // bucket do Supabase Storage
+  photoBucket: 'report-photos',  // bucket do Supabase Storage (privado, só INSERT)
+  shareBucket: 'report-share',   // cópias dos relatórios para o link do WhatsApp (público, caminho = uniqueId)
   batchSize: 10,                 // relatórios por requisição
   immediateRetries: 3,           // tentativas seguidas dentro de uma rodada (1s, 2s, 4s)
   baseDelayMs: 1000,

@@ -8,7 +8,8 @@ const DEVICE_KEY = 'bdoe.deviceId';
 export const SETTINGS_FIELDS = [
   'empresa_nome', 'empresa_cnpj', 'empresa_logo',
   'cliente_padrao', 'contrato_padrao',
-  'tecnico_nome', 'tecnico_matricula', 'tecnico_cargo'
+  'tecnico_nome', 'tecnico_matricula', 'tecnico_cargo',
+  'whatsapp_padrao'
 ];
 
 const listeners = new Set();

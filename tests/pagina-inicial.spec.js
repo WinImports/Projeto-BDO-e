@@ -14,7 +14,6 @@ test('abre a janela com título, abas e barra de ações', async () => {
 
   await openTab(page, 'bdo');
   await expect(page.locator('#view h2')).toHaveText('Boletim Diário Operacional Eletrônico');
-  await expect(page.locator('#btn-save')).toBeVisible();
   await expect(page.locator('#btn-preview')).toBeVisible();
   await expect(page.locator('#btn-finalize')).toBeVisible();
 });

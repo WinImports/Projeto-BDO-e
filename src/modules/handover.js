@@ -2,7 +2,7 @@
 // serviço executado e o bloco de fotos "Antes (Visita Técnica) x Depois (Execução)": as fotos
 // "Antes" vêm da última Visita Técnica do poço finalizada neste aparelho (ver consolidação).
 import {
-  poco, pressoes, coordenadas, fotosDe, paragrafoAbertura, PRIORIDADES,
+  poco, pressoes, coordenadas, fotosDe, paragrafoAbertura, equipe, PRIORIDADES,
   FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, FLANGES,
   ESTANQUEIDADE, CORROSAO
 } from './common.js';
@@ -37,13 +37,12 @@ export default {
         { id: 'campo', label: 'Locação / Campo', type: 'text', placeholder: 'Ex.: Campo de Buracica' },
         { id: 'data_hora', label: 'Data e hora da passagem', type: 'datetime', required: true },
         { id: 'tipo_passagem', label: 'Tipo', type: 'select', required: true, options: ['Troca de turma (revezamento 14x14)', 'Troca de turno', 'Encerramento do serviço'] },
-        { id: 'turma_entrega', label: 'Turma / equipe que entrega', type: 'text', required: true, span: 6 },
-        { id: 'turma_recebe', label: 'Turma / equipe que recebe', type: 'text', required: true, span: 6 },
-        { id: 'acompanhantes', label: 'Acompanhantes / Operador', type: 'text', span: 6 },
+        { type: 'divider', label: 'Equipe', icon: 'users' },
+        equipe(),
         { id: 'objetivo', label: 'Objetivo / escopo da execução', type: 'textarea', placeholder: 'Ex.: substituir a VA-1 e os parafusos do flange inferior' },
         {
-          id: 'introducao', label: 'Parágrafo de abertura (gerado automaticamente)', pdfLabel: 'Introdução', type: 'computed', full: true,
-          compute: (d) => paragrafoAbertura(d, { verbo: 'executamos os serviços no', equipe: 'turma_entrega', acompanhantes: 'acompanhantes', data: 'data_hora' })
+          id: 'introducao', label: 'Texto de abertura', pdfLabel: 'Introdução', type: 'computed', previewButton: true,
+          compute: (d) => paragrafoAbertura(d, { verbo: 'executamos os serviços no', data: 'data_hora', equipeLegado: ['turma_entrega', 'acompanhantes'] })
         },
         { type: 'divider', label: 'Coordenadas GPS da locação', icon: 'crosshair' },
         coordenadas()
@@ -141,6 +140,15 @@ export default {
         { id: 'fiscal', label: 'Fiscal / Fiscalização', type: 'text' },
         { id: 'liberado', label: 'Poço liberado para a fiscalização?', type: 'yesno', required: true, span: 12 },
         { id: 'assinatura', label: 'Assinatura do técnico responsável', type: 'signature', required: true }
+      ]
+    },
+    {
+      title: 'Identificação (formato anterior)',
+      legacy: true,
+      fields: [
+        { id: 'turma_entrega', label: 'Turma / equipe que entrega', type: 'text' },
+        { id: 'turma_recebe', label: 'Turma / equipe que recebe', type: 'text' },
+        { id: 'acompanhantes', label: 'Acompanhantes / Operador', type: 'text' }
       ]
     }
   ],

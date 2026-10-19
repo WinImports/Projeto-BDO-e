@@ -48,6 +48,14 @@ const GROUPS = [
       { id: 'tecnico_matricula', label: 'Matrícula / Chave', placeholder: 'Ex.: 30882' },
       { id: 'tecnico_cargo', label: 'Cargo', placeholder: 'Ex.: Técnico / Encarregado de Campo' }
     ]
+  },
+  {
+    title: 'Envio de relatórios',
+    icon: 'send',
+    hint: 'Ao enviar um relatório, o app abre o WhatsApp com a mensagem e o link do relatório para este número.',
+    fields: [
+      { id: 'whatsapp_padrao', label: 'Telefone Padrão para Envio de Relatórios (WhatsApp)', placeholder: 'Ex.: (71) 99999-9999 — com DDD', inputmode: 'tel' }
+    ]
   }
 ];
 

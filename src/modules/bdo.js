@@ -1,13 +1,7 @@
-import { poco, coordenadas, duracao, duracaoEntreDatas, TURNOS } from './common.js';
+import { poco, coordenadas, duracao, duracaoEntreDatas, equipe, TURNOS } from './common.js';
 
 // BDO = apropriação diária de horas, paradas, materiais e segurança. Sem fotos
 // (anexos fotográficos ficam no Relatório de Visita & Inspeção Técnica).
-
-const kmPercorrido = (d) => {
-  const ini = parseFloat(String(d.km_inicial ?? '').replace(',', '.'));
-  const fim = parseFloat(String(d.km_final ?? '').replace(',', '.'));
-  return Number.isFinite(ini) && Number.isFinite(fim) && fim >= ini ? `${(fim - ini).toLocaleString('pt-BR')} km` : '';
-};
 
 export default {
   id: 'bdo',
@@ -29,16 +23,15 @@ export default {
         { id: 'data', label: 'Data do boletim', type: 'date', required: true },
         { id: 'turno', label: 'Turno', type: 'select', required: true, options: TURNOS },
         { id: 'atividade_principal', label: 'Atividade principal', type: 'text', required: true, span: 6, placeholder: 'Ex.: Manutenção de Válvulas e Hot Bolt' },
-        { type: 'divider', label: 'Equipe responsável', icon: 'users' },
-        { id: 'tecnico', label: 'Técnico responsável', type: 'text', required: true, span: 5, settingsKey: 'tecnico_nome', placeholder: 'Ex.: ANDERSON SOUZA' },
+        { type: 'divider', label: 'Equipe', icon: 'users' },
+        { id: 'tecnico', label: 'Técnico responsável pelo boletim', type: 'text', required: true, span: 6, settingsKey: 'tecnico_nome', placeholder: 'Ex.: ANDERSON SOUZA' },
         { id: 'matricula', label: 'Matrícula / Chave', type: 'text', required: true, span: 3, settingsKey: 'tecnico_matricula', placeholder: 'Ex.: 30882' },
-        { id: 'cargo', label: 'Cargo', type: 'text', span: 4, settingsKey: 'tecnico_cargo' },
-        { id: 'operador', label: 'Operador de campo', type: 'text', span: 6, placeholder: 'Operador acompanhante' },
-        { id: 'gestor', label: 'Gestor técnico / Encarregado', type: 'text', span: 6 },
+        equipe({ required: false }),
         { type: 'divider', label: 'Deslocamento da jornada', icon: 'truck' },
-        { id: 'km_inicial', label: 'KM inicial', type: 'number', min: 0, step: 'any', unit: 'km', span: 4 },
-        { id: 'km_final', label: 'KM final', type: 'number', min: 0, step: 'any', unit: 'km', span: 4 },
-        { id: 'km_percorrido', label: 'KM percorrido', type: 'computed', span: 4, compute: kmPercorrido },
+        {
+          id: 'km_total', label: 'KM rodado total', type: 'number', min: 0, step: 'any', unit: 'km', span: 4, kmAuto: true,
+          hint: 'Estimado ao escolher o poço (distância até a locação) e somado a cada nova captura de GPS. Pode corrigir.'
+        },
         { type: 'divider', label: 'Coordenadas GPS da locação', icon: 'crosshair' },
         coordenadas()
       ]
@@ -52,6 +45,8 @@ export default {
         id: 'atividades', type: 'table', required: true, addLabel: 'Adicionar atividade',
         // linhas novas já vêm com a data do boletim (colunas aux: não contam como preenchimento)
         newRow: (data) => ({ data_inicio: data.data || '', data_fim: data.data || '' }),
+        // a linha seguinte começa onde a anterior terminou (hora fim → hora início)
+        chain: [['hora_fim', 'hora_inicio'], ['data_fim', 'data_inicio']],
         columns: [
           { id: 'data_inicio', label: 'Data início', type: 'date', aux: true, width: 'date' },
           { id: 'hora_inicio', label: 'Hora início', type: 'time', width: 'time' },
@@ -108,17 +103,24 @@ export default {
         { id: 'observacoes', label: 'Observações do turno', type: 'textarea' },
         { id: 'programacao', label: 'Programação / passagem para a próxima equipe (revezamento 14x14)', type: 'textarea' }
       ]
+    },
+    {
+      title: 'Cabeçalho (formato anterior)',
+      legacy: true,
+      fields: [
+        { id: 'cargo', label: 'Cargo', type: 'text' },
+        { id: 'operador', label: 'Operador de campo', type: 'text' },
+        { id: 'gestor', label: 'Gestor técnico / Encarregado', type: 'text' },
+        { id: 'km_inicial', label: 'KM inicial', type: 'text' },
+        { id: 'km_final', label: 'KM final', type: 'text' },
+        { id: 'km_percorrido', label: 'KM percorrido', type: 'text' }
+      ]
     }
   ],
   validate(data, { filled }) {
     const errors = [];
     if (data.ocorrencia_sms === 'Sim' && !data.descricao_sms?.trim()) {
       errors.push({ field: 'descricao_sms', message: 'Descreva a ocorrência de SMS' });
-    }
-    const kmIni = parseFloat(String(data.km_inicial ?? '').replace(',', '.'));
-    const kmFim = parseFloat(String(data.km_final ?? '').replace(',', '.'));
-    if (Number.isFinite(kmIni) && Number.isFinite(kmFim) && kmFim < kmIni) {
-      errors.push({ field: 'km_final', message: 'KM final menor que o KM inicial' });
     }
     const invertida = filled('atividades').findIndex((r) =>
       r.hora_inicio && r.hora_fim && r.data_inicio && r.data_fim

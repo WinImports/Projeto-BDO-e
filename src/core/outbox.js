@@ -37,6 +37,33 @@ export async function enqueue(report) {
   return record;
 }
 
+/**
+ * "Salvar e Finalizar" sem enviar: o relatório fica só no Histórico deste aparelho (localOnly),
+ * fora da Caixa de Saída — nada vai ao servidor até o técnico tocar em "Enviar".
+ */
+export async function saveLocalOnly(report) {
+  const record = { uniqueId: report.uniqueId, module: report.module, data: report.data, photos: report.photos || [], createdAt: new Date().toISOString() };
+  await put(STORES.history, { ...toHistory(record), localOnly: true });
+  await notify();
+  return record;
+}
+
+/** Relatório salvo só no aparelho → Caixa de Saída (envio ao banco). */
+export async function sendFromHistory(uniqueId) {
+  const h = await get(STORES.history, uniqueId);
+  if (!h) return null;
+  return enqueue({ uniqueId: h.uniqueId, module: h.module, data: h.data, photos: h.photos || [] });
+}
+
+/** Relatório salvo só no aparelho → volta a ser rascunho (nunca foi enviado). */
+export async function takeBackLocal(uniqueId) {
+  const h = await get(STORES.history, uniqueId);
+  if (!h?.localOnly) return null;
+  await remove(STORES.history, uniqueId);
+  await notify();
+  return h;
+}
+
 export const list = () => getAll(STORES.outbox, 'createdAt');
 export const pendingCount = () => count(STORES.outbox);
 
@@ -81,7 +108,7 @@ export async function reports() {
   const out = hist.map((h) => {
     const q = byId.get(h.uniqueId);
     byId.delete(h.uniqueId);
-    return { ...h, photos: q?.photos || h.photos || [], outbox: q || null, status: q ? q.status : 'sent' };
+    return { ...h, photos: q?.photos || h.photos || [], outbox: q || null, status: q ? q.status : h.localOnly ? 'local' : 'sent' };
   });
   for (const q of byId.values()) out.push({ ...q, outbox: q, status: q.status }); // fila sem cópia no histórico
   return out.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));

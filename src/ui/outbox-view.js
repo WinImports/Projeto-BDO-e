@@ -8,6 +8,7 @@ import * as outbox from '../core/outbox.js';
 import { getPref, setPref } from '../core/prefs.js';
 
 const STATUS = {
+  local: { cls: 'local', label: 'Salvo no aparelho (não enviado)' },
   pending: { cls: 'pending', label: 'Aguardando envio' },
   error: { cls: 'error', label: 'Reagendado' },
   sent: { cls: 'sent', label: 'Enviado' }
@@ -21,8 +22,10 @@ function reportDate(module, data) {
 }
 
 export class OutboxView {
-  constructor(root, { onSyncNow, onEdit, onReuse }) {
+  constructor(root, { onSyncNow, onEdit, onReuse, onSend, onEditLocal }) {
     this.root = root;
+    this.onSend = onSend;
+    this.onEditLocal = onEditLocal;
     this.onSyncNow = onSyncNow;
     this.onEdit = onEdit;
     this.onReuse = onReuse;
@@ -56,6 +59,7 @@ export class OutboxView {
     const s = this.sync;
     const status = this.statusLine();
     const pending = this.items.filter((r) => r.outbox).length;
+    const locais = this.items.filter((r) => r.status === 'local').length;
     const canSync = s.configured && s.online && !s.running && pending > 0;
     const shown = this.filter === 'all' ? this.items : this.items.filter((r) => r.module === this.filter);
     const counts = Object.fromEntries(MODULES.map((m) => [m.id, this.items.filter((r) => r.module === m.id).length]));
@@ -65,7 +69,7 @@ export class OutboxView {
         <div>
           <h2>Histórico e Caixa de Saída</h2>
           <p class="muted">${this.items.length
-            ? `${this.items.length} relatório${this.items.length > 1 ? 's' : ''} salvo${this.items.length > 1 ? 's' : ''} neste aparelho · ${pending ? `${pending} aguardando envio` : 'nenhum pendente de envio'}`
+            ? `${this.items.length} relatório${this.items.length > 1 ? 's' : ''} salvo${this.items.length > 1 ? 's' : ''} neste aparelho · ${pending ? `${pending} aguardando envio` : 'nenhum pendente de envio'}${locais ? ` · ${locais} não enviado${locais > 1 ? 's' : ''}` : ''}`
             : 'Nenhum relatório finalizado neste aparelho'}</p>
         </div>
         <button type="button" class="btn btn--primary" data-action="sync"${canSync ? '' : ' disabled'}>
@@ -115,6 +119,9 @@ export class OutboxView {
         <div class="outbox-item__side">
           <span class="status status--${st.cls}">${st.label}</span>
           <div class="outbox-item__actions">
+            ${r.status === 'local' ? `
+              <button type="button" class="btn btn--ghost btn--sm" data-action="edit-local" data-id="${id}" title="Voltar para rascunho e corrigir">${icon('pen', 15)} Editar</button>
+              <button type="button" class="btn btn--primary btn--sm" data-action="send" data-id="${id}" title="Enviar ao banco e abrir o WhatsApp">${icon('send', 15)} Enviar</button>` : ''}
             ${q ? (editable
               ? `<button type="button" class="btn btn--ghost btn--sm" data-action="edit" data-id="${id}" title="Voltar para rascunho e corrigir">${icon('pen', 15)} Editar</button>`
               : `<button type="button" class="btn btn--ghost btn--sm" disabled title="Já houve tentativa de envio ao servidor; não pode mais ser editado">${icon('pen', 15)} Editar</button>`) : ''}
@@ -151,6 +158,8 @@ export class OutboxView {
         return this.render();
       case 'edit': return rec?.outbox && this.onEdit?.(rec.outbox);
       case 'reuse': return rec && this.onReuse?.(rec);
+      case 'send': return rec && this.onSend?.(rec);
+      case 'edit-local': return rec && this.onEditLocal?.(rec);
       case 'view': return rec && this.open(rec);
       default:
     }

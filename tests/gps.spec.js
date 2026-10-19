@@ -20,13 +20,14 @@ let ctx;
 test.beforeEach(async () => { ctx = await launchApp(); });
 test.afterEach(async () => { await ctx.close(); });
 
-test('os 3 relatórios têm Latitude, Longitude (somente leitura) e "Obter Localização Atual" no bloco de identificação', async () => {
+test('os 3 relatórios têm o selo de localização (sem caixas de latitude/longitude) e "Obter Localização Atual"', async () => {
   const { page } = ctx;
   for (const tab of REPORTS) {
     await openTab(page, tab);
     const header = page.locator('#sec-0'); // primeira seção = identificação / cabeçalho
-    await expect(header.locator('[data-geo=coordenadas][data-part=lat]')).toBeVisible();
-    await expect(header.locator('[data-geo=coordenadas][data-part=lng]')).toBeVisible();
+    await expect(header.locator('[data-geo-badge=coordenadas]')).toHaveText('Localização não capturada');
+    await expect(header.locator('[data-geo=coordenadas][data-part=lat]')).toHaveClass(/sr-only/); // números fora da tela
+    await expect(header.locator('.geo__value-box')).toHaveCount(0);
     await expect(header.getByRole('button', { name: 'Obter Localização Atual' })).toBeVisible();
     // não existe digitação manual de coordenadas
     await expect(header.locator('input[data-geo], [data-geo] input')).toHaveCount(0);
@@ -41,6 +42,7 @@ test('"Obter Localização Atual" preenche as coordenadas e mostra a rota com de
 
   await expect(page.locator('[data-part=lat]')).toHaveText('-12.352412');
   await expect(page.locator('[data-part=lng]')).toHaveText('-38.379146');
+  await expect(page.locator('[data-geo-badge=coordenadas]')).toHaveText('Localização capturada');
   await expect(page.locator('.geo__meta')).toContainText('Capturado pelo GPS');
   await expect(page.locator('.geo__meta')).toContainText('±8 m');
   await expect(page.locator('.geo__route [data-route-link=google]')).toHaveAttribute('href', 'https://www.google.com/maps/dir/?api=1&destination=-12.352412,-38.379146&travelmode=driving');
