@@ -8,7 +8,7 @@
 // - Supabase e mapas (outros domínios) vão direto para a rede.
 
 // <precache> — gerado por `npm run pwa`; não editar à mão
-const VERSION = '43da1c70da1b';
+const VERSION = '71cd97b7adfb';
 const PRECACHE = [
   './',
   './icons/icon-192.png',
@@ -20,6 +20,7 @@ const PRECACHE = [
   './src/config.js',
   './src/core/consolidar.js',
   './src/core/db.js',
+  './src/core/deslocamento.js',
   './src/core/distancia.js',
   './src/core/drafts.js',
   './src/core/fotos.js',
@@ -32,6 +33,7 @@ const PRECACHE = [
   './src/core/share.js',
   './src/core/supabase.js',
   './src/core/sync.js',
+  './src/core/telefone.js',
   './src/modules/bdo.js',
   './src/modules/common.js',
   './src/modules/handover.js',
@@ -47,12 +49,16 @@ const PRECACHE = [
   './src/ui/form.js',
   './src/ui/icons.js',
   './src/ui/outbox-view.js',
+  './src/ui/pdf-doc.js',
+  './src/ui/pdf-sheet.js',
   './src/ui/preview.js',
   './src/ui/report-pdf.js',
   './src/ui/route-prompt.js',
   './src/ui/settings-view.js',
   './src/ui/share-prompt.js',
   './src/ui/toast.js',
+  './src/vendor/jspdf.plugin.autotable.min.js',
+  './src/vendor/jspdf.umd.min.js',
   './src/vendor/supabase.js'
 ];
 // </precache>

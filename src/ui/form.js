@@ -9,6 +9,7 @@ import { icon } from './icons.js';
 import { confirmDialog, infoDialog } from './confirm.js';
 import { comprimirFoto } from './compress.js';
 import { kmEstrada, posicaoAtual } from '../core/distancia.js';
+import { isTravel, resolverDestino } from '../core/deslocamento.js';
 import { loadPocos, searchPocos, findPoco } from '../core/pocos.js';
 import { consolidateFromHistory, hasConsolidation } from '../core/consolidar.js';
 import { consolidationHtml } from './consolidacao-view.js';
@@ -63,8 +64,7 @@ export function parseCoords(v) {
 export const mapLinks = (coords) => routeLinks(coords);
 
 // Palavras que indicam deslocamento na apropriação de atividades do BDO
-const TRAVEL_RE = /\b(deslocamento|deslocando|deslocar|mobilizacao|mobilizando|mobilizar|desmobilizacao)\b/;
-export const isTravel = (text) => TRAVEL_RE.test(String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase());
+export { isTravel } from '../core/deslocamento.js';
 
 const geoBlank = (v) => isBlank(v?.lat) && isBlank(v?.lng);
 
@@ -740,7 +740,8 @@ export class FormView {
         if (cell) cell.textContent = row[c.id] || '—';
       }
       const col = this.fields.get(table).columns.find((x) => x.id === t.dataset.col);
-      if (col?.routeTrigger && e.type === 'input') this.checkTravel(row, t.value);
+      // ao terminar de digitar (sair do campo): evita reagir a "FBM-18" no meio de "FBM-182"
+      if (col?.routeTrigger && e.type === 'change') this.checkTravel(row, t.value);
       return this.changed(table);
     }
 
@@ -923,28 +924,93 @@ export class FormView {
     });
   }
 
-  /** Gatilho 2: atividade de deslocamento/mobilização digitada na apropriação do BDO. */
-  checkTravel(row, text) {
-    clearTimeout(this.travelTimer);
+  /**
+   * Gatilho 2: deslocamento / mobilização na apropriação do BDO ("Deslocando para Catu",
+   * "Iniciando deslocamento para o poço FBM-182"). Com destino reconhecido (poço da base, cidade ou
+   * base cadastrada): atualiza o cabeçalho, soma o trecho ao KM rodado e oferece a rota.
+   * Cada linha guarda o que já foi feito (row._desloc): editar o destino troca o KM somado, não duplica.
+   */
+  async checkTravel(row, text) {
     if (!isTravel(text)) return;
-    this.travelTimer = setTimeout(() => {
-      this.travelRows ||= new WeakSet();
-      if (this.travelRows.has(row) || !isTravel(row.atividade || row.codigo || text)) return; // um aviso por linha
-      this.travelRows.add(row);
+    const dest = resolverDestino(text, { pocos: this.pocos, findPoco });
+    const key = !dest ? 'sem-destino' : dest.tipo ? `${dest.tipo}:${dest.nome}` : `?:${dest.texto}`;
+    if (row._desloc?.key === key) return; // esta linha já foi tratada com este destino
+    const anterior = row._desloc;
+    row._desloc = { key, km: 0 };
+    const d = this.draft.data;
+
+    if (!dest?.tipo) {
+      if (anterior?.km) this.ajustarKm(-anterior.km);
       const target = this.routeTarget();
-      showRoutePrompt(target
+      const naoAchou = dest ? `Deslocamento identificado para "${dest.texto}", mas esse destino não está na base de poços nem nas cidades / bases (cadastre em Configurações › Bases e locais personalizados). ` : '';
+      return showRoutePrompt(target
         ? {
-          kind: 'deslocamento',
-          title: 'Deslocamento identificado',
-          message: `Identificamos um deslocamento. Deseja abrir a rota no Google Maps/Waze para ${target.nome ? `o poço ${target.nome}` : 'o ponto registrado'}?`,
-          target
+          kind: 'deslocamento', title: 'Deslocamento identificado', target,
+          message: naoAchou
+            ? `${naoAchou}Abrir a rota até ${target.nome ? `o poço ${target.nome}` : 'o ponto registrado'}?`
+            : `Identificamos um deslocamento. Deseja abrir a rota no Google Maps/Waze para ${target.nome ? `o poço ${target.nome}` : 'o ponto registrado'}?`
         }
         : {
-          kind: 'deslocamento',
-          title: 'Deslocamento identificado',
-          message: 'Informe o Poço / Locação no cabeçalho (ou capture o GPS) para abrir a rota até a locação.'
+          kind: 'deslocamento', title: 'Deslocamento identificado',
+          message: naoAchou || 'Informe o Poço / Locação no cabeçalho (ou capture o GPS) para abrir a rota até a locação.'
         });
-    }, 600);
+    }
+
+    // ponto de partida do trecho: última posição conhecida (destino anterior / GPS) ou a locação do cabeçalho
+    const geo = [...this.fields.values()].find((f) => f.type === 'geo');
+    const origem = d._km?.ultimo || (geo && parseCoords(d[geo.id])) || null;
+
+    // 1) cabeçalho: poço → Poço / Locação (+ coordenadas); cidade / base → Cidade / Estado
+    if (dest.tipo === 'poco' && this.fields.has('poco') && String(d.poco || '').trim() !== dest.nome) {
+      const antes = d.poco;
+      this.setFieldValue('poco', dest.nome);
+      d._km = { ...d._km, poco: dest.nome }; // não reestimar o KM ao sair do campo Poço
+      const poco = findPoco(this.pocos, dest.nome);
+      if (poco) await this.applyWellCoords(poco);
+      toast(`Cabeçalho atualizado: Poço / Locação = ${dest.nome}${antes ? ` (antes: ${antes})` : ''}.`, 'info', 5000);
+    } else if (dest.tipo === 'cidade' && this.fields.has('cidade_uf')) {
+      const valor = dest.uf ? `${dest.nome} - ${dest.uf}` : dest.nome;
+      if (d.cidade_uf !== valor) {
+        this.setFieldValue('cidade_uf', valor);
+        toast(`Cabeçalho atualizado: Cidade / Estado = ${valor}.`, 'info', 4000);
+      }
+    }
+
+    // 2) KM rodado: soma o trecho até o destino (troca o que esta linha já tinha somado)
+    if (this.kmField()) {
+      let de = origem;
+      if (!de) { try { de = await posicaoAtual(); } catch { de = null; } }
+      const trecho = de ? kmEstrada(de, dest) : 0;
+      row._desloc.km = trecho >= 0.1 ? trecho : 0;
+      const delta = row._desloc.km - (anterior?.km || 0);
+      if (delta) this.ajustarKm(delta);
+      d._km = { ...d._km, ultimo: { lat: dest.lat, lng: dest.lng } };
+      if (row._desloc.km) toast(`+${row._desloc.km.toLocaleString('pt-BR')} km até ${dest.nome} somados ao KM rodado.`, 'info', 4000);
+      this.onChange(this.draft);
+    }
+
+    // 3) rota até o destino
+    showRoutePrompt({
+      kind: 'deslocamento', title: 'Deslocamento identificado',
+      message: `Deslocamento identificado para ${dest.nome}. Deseja abrir a rota no GPS?`,
+      target: { lat: dest.lat, lng: dest.lng, nome: dest.nome }
+    });
+  }
+
+  /** Soma (ou subtrai) km ao KM rodado total. */
+  ajustarKm(delta) {
+    const f = this.kmField();
+    if (!f) return;
+    const atual = parseFloat(String(this.draft.data[f.id] ?? '').replace(',', '.')) || 0;
+    this.setKm(Math.max(0, atual + delta));
+  }
+
+  /** Altera um campo simples por código (valor + tela + salvamento). */
+  setFieldValue(id, value) {
+    this.draft.data[id] = value;
+    const input = $(`[data-field="${CSS.escape(id)}"]`, this.el);
+    if (input) input.value = value;
+    this.changed(id);
   }
 
   async applyWellCoords(poco) {

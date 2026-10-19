@@ -145,7 +145,7 @@ test('"Salvar e Finalizar": só salvar fica no Histórico; "Enviar" depois vai p
   await expect(modal.locator('.finalize-ask')).toContainText('Deseja enviar este relatório?');
   await expect(modal.locator('[data-pdf]')).toBeVisible();
   await modal.getByRole('button', { name: 'Não, só salvar no aparelho' }).click();
-  await expect(toast(page)).toContainText('salvo neste aparelho');
+  await expect(page.locator('#toasts')).toContainText('memória local do app (IndexedDB)');
   await expect(page.locator('#outbox-badge')).toBeHidden(); // não foi para a fila de envio
 
   await openTab(page, 'outbox');
@@ -157,7 +157,7 @@ test('"Salvar e Finalizar": só salvar fica no Histórico; "Enviar" depois vai p
 
   const share = page.locator('[data-share-prompt]');
   const href = await share.locator('[data-share-whatsapp]').getAttribute('href');
-  expect(href).toMatch(/^https:\/\/wa\.me\/5571999998888\?text=/);
+  expect(href).toMatch(/^https:\/\/api\.whatsapp\.com\/send\?phone=5571999998888&text=/);
   const texto = decodeURIComponent(href.split('text=')[1]);
   expect(texto).toContain('Relatório de Visita Técnica');
   expect(texto).toContain('Poço / Locação: FBM-89');
@@ -173,7 +173,7 @@ test('"Sim, enviar" sem número configurado: mostra o botão do WhatsApp para es
   await page.locator('#btn-finalize').click();
   await page.locator('dialog.modal[open]').getByRole('button', { name: 'Sim, enviar' }).click();
   await expect(page.locator('#outbox-badge')).toHaveText('1');
-  await expect(page.locator('[data-share-whatsapp]')).toHaveAttribute('href', /^https:\/\/wa\.me\/\?text=/);
+  await expect(page.locator('[data-share-whatsapp]')).toHaveAttribute('href', /^https:\/\/api\.whatsapp\.com\/send\?text=/);
   await page.waitForTimeout(500);
   expect(await app.evaluate(() => global.__opened || '')).toBe(''); // não abre sozinho
 });

@@ -9,13 +9,15 @@
     "test": "playwright test",
     "pocos": "node scripts/gerar-pocos.js",
     "postinstall": "node node_modules/electron/install.js",
-    "vendor": "node -e \"require('fs').copyFileSync('node_modules/@supabase/supabase-js/dist/umd/supabase.js','src/vendor/supabase.js')\"",
+    "vendor": "node -e \"const f=require('fs');f.copyFileSync('node_modules/@supabase/supabase-js/dist/umd/supabase.js','src/vendor/supabase.js');f.copyFileSync('node_modules/jspdf/dist/jspdf.umd.min.js','src/vendor/jspdf.umd.min.js');f.copyFileSync('node_modules/jspdf-autotable/dist/jspdf.plugin.autotable.min.js','src/vendor/jspdf.plugin.autotable.min.js')\"",
     "pwa": "node scripts/gerar-pwa.js && npm test",
     "pwa:sw": "node scripts/gerar-pwa.js",
     "prepare": "git config core.hooksPath .githooks || echo \"(sem git: hooks não configurados)\""
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.118.0"
+    "@supabase/supabase-js": "^2.118.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.9"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",

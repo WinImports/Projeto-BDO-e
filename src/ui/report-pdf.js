@@ -3,6 +3,8 @@
 
 import { esc } from './dom.js';
 import { reportBodyHtml, geoHeaderHtml } from './preview.js';
+import { buildPdfBlob } from './pdf-doc.js';
+import { showPdfSheet } from './pdf-sheet.js';
 
 const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
   const r = new FileReader();
@@ -183,16 +185,24 @@ async function docOpts({ module, uniqueId, data, photos, company, draft }) {
   return { module, uniqueId, data, photos, photoSrcs, company, draft };
 }
 
+/**
+ * Desktop: PDF do Electron (printToPDF) com diálogo "Salvar como".
+ * Navegador / PWA (inclusive iPhone): PDF gerado no aparelho (jsPDF) e painel "PDF pronto" com
+ * Compartilhar / Salvar em Arquivos (Web Share), Baixar e Imprimir.
+ */
 export async function savePdf(args) {
-  const opts = await docOpts(args);
   const fileName = fileNameOf(args.module, args.data);
-  if (!window.desktop?.savePdf) return printInPage(opts, fileName.replace(/\.pdf$/, ''));
-  return window.desktop.savePdf(buildReportHtml(opts), fileName);
+  if (window.desktop?.savePdf) return window.desktop.savePdf(buildReportHtml(await docOpts(args)), fileName);
+  const blob = await buildPdfBlob(args);
+  await showPdfSheet({
+    blob, fileName,
+    onPrint: async () => printInPage(await docOpts(args), fileName.replace(/\.pdf$/, ''))
+  });
+  return { saved: true, sheet: true };
 }
 
 /**
- * Arquivo do relatório para o link compartilhado: PDF no desktop (Electron gera o PDF);
- * no navegador, o relatório em HTML autocontido (abre e imprime em qualquer celular).
+ * Arquivo do relatório para o link compartilhado: PDF (Electron no desktop; jsPDF no navegador).
  */
 export async function reportFile(args) {
   const opts = await docOpts({ ...args, draft: false });
@@ -202,5 +212,5 @@ export async function reportFile(args) {
     const bytes = await window.desktop.renderPdf(html);
     return { blob: new Blob([bytes], { type: 'application/pdf' }), ext: 'pdf', name: `${base}.pdf` };
   }
-  return { blob: new Blob([html], { type: 'text/html;charset=utf-8' }), ext: 'html', name: `${base}.html` };
+  return { blob: await buildPdfBlob({ ...args, draft: false }), ext: 'pdf', name: `${base}.pdf` };
 }

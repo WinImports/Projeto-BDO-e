@@ -5,19 +5,16 @@
 import { SYNC, isSupabaseConfigured } from '../config.js';
 import { getClient } from './supabase.js';
 import { getSettings } from './settings.js';
+import { sanitizarWhatsApp } from './telefone.js';
 
 const brData = (iso) => (/^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(0, 10).split('-').reverse().join('/') : '');
 
-/** Número no formato do wa.me: só dígitos, com 55 (Brasil) quando vier só DDD + número. */
-export function waNumber(raw) {
-  const digits = String(raw || '').replace(/\D/g, '').replace(/^0+/, '');
-  if (!digits) return '';
-  return digits.length <= 11 ? `55${digits}` : digits;
-}
+export const waNumber = sanitizarWhatsApp;
 
+/** Link oficial: abre a conversa direto no app (sem número → o WhatsApp pede para escolher o contato). */
 export function waUrl(numero, texto) {
-  const n = waNumber(numero);
-  return `https://wa.me/${n}?text=${encodeURIComponent(texto)}`;
+  const n = sanitizarWhatsApp(numero);
+  return `https://api.whatsapp.com/send?${n ? `phone=${n}&` : ''}text=${encodeURIComponent(texto)}`;
 }
 
 export function shareMessage(module, data, uniqueId, link) {

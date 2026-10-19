@@ -1,4 +1,5 @@
 // Aba "Configurações do Sistema": empresa prestadora, contrato/cliente e técnico padrão.
+import { sanitizarWhatsApp } from '../core/telefone.js';
 import { icon } from './icons.js';
 import { esc, $, $$, formatDateTime } from './dom.js';
 import { toast } from './toast.js';
@@ -54,7 +55,15 @@ const GROUPS = [
     icon: 'send',
     hint: 'Ao enviar um relatório, o app abre o WhatsApp com a mensagem e o link do relatório para este número.',
     fields: [
-      { id: 'whatsapp_padrao', label: 'Telefone Padrão para Envio de Relatórios (WhatsApp)', placeholder: 'Ex.: (71) 99999-9999 — com DDD', inputmode: 'tel' }
+      { id: 'whatsapp_padrao', label: 'Telefone Padrão para Envio de Relatórios (WhatsApp)', placeholder: 'Ex.: (71) 99961-2118 — vira 5571999612118', inputmode: 'tel' }
+    ]
+  },
+  {
+    title: 'Bases e locais personalizados (deslocamentos)',
+    icon: 'mapPin',
+    hint: 'Destinos reconhecidos na apropriação do BDO ("Indo para Taquipe") além dos poços da base e das cidades da região. Um local por linha: Nome; latitude; longitude.',
+    fields: [
+      { id: 'locais_personalizados', label: 'Locais (Nome; latitude; longitude)', multiline: true, placeholder: 'Base Taquipe; -12.5500; -38.4000\nFazenda Imbé; -12.3000; -38.1000', hint: 'Use as coordenadas do Google Maps (toque e segure no local › copie os números).' }
     ]
   }
 ];
@@ -92,9 +101,12 @@ export class SettingsView {
             </header>
             <div class="form-grid">
               ${g.fields.map((f) => `
-                <div class="field" data-wrap="${f.id}">
+                <div class="field${f.multiline ? ' span-12' : ''}" data-wrap="${f.id}">
                   <label class="field__label-wrap" for="s-${f.id}"><span class="field__label">${esc(f.label)}${f.required ? '<span class="req">*</span>' : ''}</span></label>
-                  <input id="s-${f.id}" data-setting="${f.id}" type="text" value="${esc(s[f.id])}" placeholder="${esc(f.placeholder || '')}"${f.inputmode ? ` inputmode="${f.inputmode}"` : ''}>
+                  ${f.multiline
+                    ? `<textarea id="s-${f.id}" data-setting="${f.id}" rows="4" placeholder="${esc(f.placeholder || '')}">${esc(s[f.id])}</textarea>`
+                    : `<input id="s-${f.id}" data-setting="${f.id}" type="text" value="${esc(s[f.id])}" placeholder="${esc(f.placeholder || '')}"${f.inputmode ? ` inputmode="${f.inputmode}"` : ''}>`}
+                  ${f.hint ? `<small class="field__hint">${esc(f.hint)}</small>` : ''}
                   <small class="field__error"></small>
                 </div>`).join('')}
               ${g.logo ? `
@@ -278,6 +290,14 @@ export class SettingsView {
   }
 
   async handleChange(e) {
+    if (e.target.dataset.setting === 'whatsapp_padrao') {
+      // ao sair do campo: só dígitos, com o 55 do Brasil — ex.: (71) 99961-2118 → 5571999612118
+      const raw = e.target.value.trim();
+      const limpo = sanitizarWhatsApp(raw);
+      if (raw && !limpo) toast('Número de WhatsApp incompleto: informe DDD + número (ex.: 71 99961-2118).', 'warn', 6000);
+      if (limpo) e.target.value = limpo;
+      return;
+    }
     if (e.target.matches('[data-pocos-input]')) {
       const file = e.target.files[0];
       if (file) this.importPocos(file);

@@ -100,10 +100,16 @@ test('app como página web (GitHub Pages): abre, funciona offline, importa base 
     await expect(rota.locator('[data-route-link=google]')).toHaveAttribute('href', 'https://www.google.com/maps/dir/?api=1&destination=-12.370500,-38.401200&travelmode=driving');
     await rota.getByRole('button', { name: 'Agora não' }).click();
 
-    // PDF no navegador (inclusive iPhone): relatório montado na própria página e impresso com window.print(),
-    // sem abrir janela nova (o Safari do iOS bloqueia)
+    // PDF no navegador / iPhone: arquivo PDF gerado no aparelho (jsPDF) + painel "PDF pronto" com
+    // Compartilhar / Salvar em Arquivos (Web Share), Baixar e Imprimir — sem janela nova (o iOS bloqueia)
     await page.evaluate(() => {
       window.open = () => { window.__popup = true; return null; };
+      navigator.canShare = (d) => Boolean(d?.files?.length);
+      navigator.share = async (d) => {
+        const f = d.files[0];
+        const raw = new TextDecoder('latin1').decode(await f.arrayBuffer());
+        window.__shared = { title: d.title, name: f.name, type: f.type, size: f.size, head: raw.slice(0, 5), uris: [...raw.matchAll(/\/URI\s*\(([^)]*)\)/g)].map((m) => m[1]) };
+      };
       window.print = () => {
         const root = document.getElementById('print-root');
         window.__printed = { title: document.title, styled: document.adoptedStyleSheets.length, text: root ? root.textContent : '' };
@@ -111,14 +117,27 @@ test('app como página web (GitHub Pages): abre, funciona offline, importa base 
     });
     await page.locator('#btn-preview').click();
     await page.locator('dialog.modal[open] [data-pdf]').click();
+    const sheet = page.locator('dialog[data-pdf-sheet][open]');
+    await expect(sheet).toContainText('PDF pronto');
+    await expect(sheet.locator('[data-download]')).toHaveAttribute('download', /^BDO-e_TST-010_.*\.pdf$/);
+    await sheet.getByRole('button', { name: 'Compartilhar / Salvar em Arquivos' }).click();
+    await expect.poll(() => page.evaluate(() => window.__shared || null), { timeout: 20_000 }).not.toBeNull();
+    const shared = await page.evaluate(() => window.__shared);
+    expect(shared.type).toBe('application/pdf');
+    expect(shared.head).toBe('%PDF-');
+    expect(shared.name).toMatch(/^BDO-e_TST-010_.*\.pdf$/);
+    expect(shared.uris).toContain('https://www.google.com/maps/dir/?api=1&destination=-12.370500,-38.401200&travelmode=driving');
+    expect(await page.evaluate(() => window.__popup || false)).toBe(false);
+
+    // "Imprimir" continua disponível no painel (impressão dentro da própria página)
+    await page.locator('dialog.modal[open] [data-pdf]').click();
+    await sheet.getByRole('button', { name: 'Imprimir' }).click();
     await expect.poll(() => page.evaluate(() => window.__printed || null)).not.toBeNull();
     const printed = await page.evaluate(() => window.__printed);
     expect(printed.styled).toBeGreaterThanOrEqual(1);
     expect(printed.title).toMatch(/^BDO-e_TST-010_/); // nome sugerido do arquivo
-    expect(await page.evaluate(() => window.__popup || false)).toBe(false);
     expect(printed.text).toContain('Boletim Diário Operacional Eletrônico');
     expect(printed.text).toContain('TST-010');
-    await expect(page.locator('#toasts .toast').last()).toContainText('Salvar como PDF');
 
     // Offline: servidor fora do ar → o app abre pelo cache do Service Worker, com o rascunho salvo
     await page.waitForTimeout(400); // rascunho gravado
@@ -175,9 +194,12 @@ test('PWA: relatório finalizado fica no Histórico do navegador, reabre na pré
       window.print = () => { window.__printed = { text: document.getElementById('print-root')?.textContent || '' }; };
     });
     await item.locator('.outbox-item__main').click();
-    const preview = page.locator('dialog.modal[open]');
+    const preview = page.locator('dialog.modal[open]').first();
     await expect(preview.getByRole('button', { name: 'Voltar ao histórico' })).toBeVisible();
-    await preview.getByRole('button', { name: 'Gerar PDF / Imprimir' }).click();
+    await preview.getByRole('button', { name: 'Baixar / Compartilhar PDF' }).click();
+    const sheet = page.locator('dialog[data-pdf-sheet][open]');
+    await expect(sheet.locator('[data-download]')).toHaveAttribute('download', /\.pdf$/);
+    await sheet.getByRole('button', { name: 'Imprimir' }).click();
     await expect.poll(() => page.evaluate(() => window.__printed || null)).not.toBeNull();
     expect((await page.evaluate(() => window.__printed)).text).toContain('FBM-89');
 

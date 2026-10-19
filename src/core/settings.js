@@ -2,6 +2,8 @@
 // Fonte local: localStorage (disponível offline). Cópia no Supabase via rpc save_device_settings,
 // enviada pela mesma rotina de sincronização dos relatórios (sync.js).
 
+import { sanitizarWhatsApp } from './telefone.js';
+
 const KEY = 'bdoe.settings';
 const DEVICE_KEY = 'bdoe.deviceId';
 
@@ -9,7 +11,8 @@ export const SETTINGS_FIELDS = [
   'empresa_nome', 'empresa_cnpj', 'empresa_logo',
   'cliente_padrao', 'contrato_padrao',
   'tecnico_nome', 'tecnico_matricula', 'tecnico_cargo',
-  'whatsapp_padrao'
+  'whatsapp_padrao',
+  'locais_personalizados'
 ];
 
 const listeners = new Set();
@@ -28,6 +31,7 @@ export function getSettings() {
 export function saveSettings(values) {
   const next = { ...read() };
   for (const k of SETTINGS_FIELDS) next[k] = (values[k] ?? '').toString().trim();
+  next.whatsapp_padrao = sanitizarWhatsApp(next.whatsapp_padrao); // ex.: (71) 99961-2118 → 5571999612118
   next.updatedAt = new Date().toISOString();
   next.syncPending = true;
   localStorage.setItem(KEY, JSON.stringify(next));

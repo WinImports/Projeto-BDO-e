@@ -353,12 +353,10 @@ async function finalize(module) {
 
   await showTab(module.id);
   if (choice === 'local') {
-    toast('Relatório salvo neste aparelho (não enviado). Para enviar depois: Histórico › Enviar.', 'success', 7000);
+    toast(`Relatório salvo na memória local do app (IndexedDB). Para salvar na pasta de Arquivos do seu celular, clique em 'Baixar / Compartilhar PDF' (na prévia ou em Histórico › Ver / PDF). Para enviar depois: Histórico › Enviar.`, 'success', 10000);
     return;
   }
-  toast(navigator.onLine
-    ? 'Relatório na Caixa de Saída. Enviando ao servidor…'
-    : 'Relatório na Caixa de Saída. Será enviado quando houver conexão.', 'success');
+  toast(`${navigator.onLine ? 'Relatório na Caixa de Saída. Enviando ao servidor…' : 'Relatório na Caixa de Saída. Será enviado quando houver conexão.'} Relatório salvo na memória local do app (IndexedDB). Para salvar na pasta de Arquivos do seu celular, clique em 'Baixar / Compartilhar PDF' (na prévia ou em Histórico › Ver / PDF).`, 'success', 10000);
   syncNow();
   await shareReport(module, report);
 }

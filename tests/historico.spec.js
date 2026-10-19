@@ -87,7 +87,7 @@ test('tocar no relatório salvo abre a prévia completa (com fotos) e gera o PDF
   await expect(preview.getByRole('button', { name: 'Voltar ao histórico' })).toBeVisible();
   await expect(preview.getByRole('button', { name: 'Reutilizar / Editar como novo' })).toBeVisible();
 
-  await preview.getByRole('button', { name: 'Gerar PDF / Imprimir' }).click();
+  await preview.getByRole('button', { name: 'Baixar / Compartilhar PDF' }).click();
   await expect(toast(page)).toContainText('PDF salvo', { timeout: 15_000 });
   expect(fs.statSync(pdfPath).size).toBeGreaterThan(5000);
 

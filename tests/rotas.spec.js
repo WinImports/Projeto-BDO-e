@@ -75,6 +75,7 @@ test('BDO: atividade de deslocamento oferece a rota até o poço do cabeçalho',
   await page.locator('.route-prompt [data-route-close]').first().click();
 
   await activity(page).fill('Iniciando deslocamento para a locação');
+  await activity(page).press('Tab'); // a detecção roda ao terminar de digitar
   const prompt = page.locator('.route-prompt[data-route-prompt=deslocamento]');
   await expect(prompt).toContainText('Identificamos um deslocamento. Deseja abrir a rota no Google Maps/Waze para o poço TST-001?');
   await expect(prompt.locator('[data-route-link=google]')).toHaveAttribute('href', GOOGLE_TST001);
@@ -83,6 +84,7 @@ test('BDO: atividade de deslocamento oferece a rota até o poço do cabeçalho',
 
   // mesma linha não pergunta de novo; atividade comum não dispara
   await activity(page).fill('Iniciando deslocamento para a locação (atualizado)');
+  await activity(page).press('Tab');
   await page.waitForTimeout(900);
   await expect(page.locator('.route-prompt')).toHaveCount(0);
 });
@@ -91,10 +93,12 @@ test('BDO: "mobilização" sem poço informado pede o Poço / Locação', async 
   const { page } = ctx;
   await openTab(page, 'bdo');
   await activity(page).fill('Troca da válvula VM');
+  await activity(page).press('Tab');
   await page.waitForTimeout(900);
   await expect(page.locator('.route-prompt')).toHaveCount(0);
 
   await activity(page).fill('Mobilização da equipe');
+  await activity(page).press('Tab');
   const prompt = page.locator('.route-prompt[data-route-prompt=deslocamento]');
   await expect(prompt).toContainText('Informe o Poço / Locação');
   await expect(prompt.locator('[data-route-link]')).toHaveCount(0);

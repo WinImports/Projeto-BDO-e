@@ -156,10 +156,10 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
       </div>
       ${mode === 'confirm' ? `
       <div class="modal__footer modal__footer--finalize">
-        <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Gerar PDF / Imprimir</button>
+        <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Baixar / Compartilhar PDF</button>
         <div class="finalize-ask">
           <strong>Deseja enviar este relatório?</strong>
-          <span class="muted small">Ao enviar, ele vai para o banco de dados e o WhatsApp abre com o link. Se não, fica salvo só neste aparelho (Histórico) e pode ser enviado depois.</span>
+          <span class="muted small">Ao salvar, o relatório fica na memória local do app (IndexedDB). Para guardar o arquivo na pasta de Arquivos do celular, use "Baixar / Compartilhar PDF". Ao enviar, ele vai para o banco de dados e o WhatsApp abre com o link.</span>
         </div>
         <div class="finalize-ask__buttons">
           <button type="button" class="btn btn--ghost" data-local>${icon('save', 17)} Não, só salvar no aparelho</button>
@@ -167,7 +167,7 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
         </div>
       </div>` : `
       <div class="modal__footer">
-        <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Gerar PDF / Imprimir</button>
+        <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Baixar / Compartilhar PDF</button>
         <span class="modal__spacer"></span>
         <button type="button" class="btn btn--primary" data-close>Fechar</button>
       </div>`}`;
@@ -187,7 +187,7 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
         pdfBtn.innerHTML = '<span class="spinner" aria-hidden="true"></span> Gerando PDF…';
         try {
           const res = await savePdf({ module, uniqueId, data, photos, company, draft: mode === 'draft' });
-          if (res?.printed) toast('Na janela de impressão, escolha "Salvar como PDF" (no iPhone: Compartilhar › Salvar em Arquivos).', 'info', 7000);
+          if (res?.sheet) { /* painel "PDF pronto" já mostrou as opções */ } else if (res?.printed) toast('Na janela de impressão, escolha "Salvar como PDF" (no iPhone: Compartilhar › Salvar em Arquivos).', 'info', 7000);
           else if (res?.saved) toast(`PDF salvo e aberto: ${res.filePath}`, 'success', 6000);
           else toast('Geração do PDF cancelada.', 'info', 2500);
         } catch (err) {
