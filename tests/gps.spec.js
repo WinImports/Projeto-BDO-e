@@ -4,7 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const { launchApp, fill, openTab } = require('./helpers');
 
-const REPORTS = ['bdo', 'visita_tecnica', 'handover'];
+// GPS e rotas só no BDO-e (Visita / Execução herdam as coordenadas dele)
+const REPORTS = ['bdo'];
 const toast = (page) => page.locator('#toasts .toast').last();
 
 /** Substitui o GPS do Windows por uma posição fixa (ou um erro), para o teste ser determinístico. */
@@ -20,7 +21,7 @@ let ctx;
 test.beforeEach(async () => { ctx = await launchApp(); });
 test.afterEach(async () => { await ctx.close(); });
 
-test('os 3 relatórios têm o selo de localização (sem caixas de latitude/longitude) e "Obter Localização Atual"', async () => {
+test('o BDO-e tem o selo de localização (sem caixas de latitude/longitude) e "Obter Localização Atual"; Visita e Execução não têm GPS', async () => {
   const { page } = ctx;
   for (const tab of REPORTS) {
     await openTab(page, tab);
@@ -31,6 +32,11 @@ test('os 3 relatórios têm o selo de localização (sem caixas de latitude/long
     await expect(header.getByRole('button', { name: 'Obter Localização Atual' })).toBeVisible();
     // não existe digitação manual de coordenadas
     await expect(header.locator('input[data-geo], [data-geo] input')).toHaveCount(0);
+  }
+  for (const tab of ['visita_tecnica', 'handover']) {
+    await openTab(page, tab);
+    await expect(page.locator('[data-geo-badge]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Obter Localização Atual' })).toHaveCount(0);
   }
 });
 
@@ -51,7 +57,7 @@ test('"Obter Localização Atual" preenche as coordenadas e mostra a rota com de
 
 test('sem sinal: avisa o erro sem oferecer digitação; "Limpar" apaga a captura', async () => {
   const { page } = ctx;
-  await openTab(page, 'visita_tecnica');
+  await openTab(page, 'bdo');
   await mockGps(page, { error: 3 }); // timeout do GPS
   await page.getByRole('button', { name: 'Obter Localização Atual' }).click();
   await expect(toast(page)).toContainText('não respondeu');
@@ -75,7 +81,7 @@ test('coordenadas aparecem no cabeçalho da prévia e viram links clicáveis no 
     shell.openPath = async () => '';
   }, pdfPath);
 
-  await openTab(page, 'handover');
+  await openTab(page, 'bdo');
   await fill(page, 'poco', 'LOCACAO SEM CADASTRO');
   await mockGps(page, { latitude: -12.3524, longitude: -38.3791, accuracy: 6 });
   await page.getByRole('button', { name: 'Obter Localização Atual' }).click();

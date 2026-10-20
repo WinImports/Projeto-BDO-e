@@ -30,7 +30,7 @@ let ctx;
 test.beforeEach(async () => { ctx = await launchApp({ env: { BDOE_POCOS_FILE: fixtureJson() } }); });
 test.afterEach(async () => { await ctx.close(); });
 
-for (const tab of ['bdo', 'visita_tecnica', 'handover']) {
+for (const tab of ['bdo']) {
   test(`${tab}: escolher o poço oferece a navegação com o poço como destino`, async () => {
     const { page } = ctx;
     await openTab(page, tab);

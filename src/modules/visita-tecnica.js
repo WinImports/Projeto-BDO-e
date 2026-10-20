@@ -2,7 +2,7 @@
 // cabeçalho → chegada ao poço (placa e conjunto) → pressões e manômetros → inspeção de cada
 // componente com o SEU bloco de fotos → outras fotos → recomendações e assinatura.
 import {
-  poco, pressoes, coordenadas, fotosDe, paragrafoAbertura, equipe, PRIORIDADES, TURNOS,
+  pocoHerdado, herancaBdo, pressoes, coordenadas, fotosDe, paragrafoAbertura, equipe, PRIORIDADES, TURNOS,
   FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, FLANGES,
   ESTANQUEIDADE, ABERTURA, CORROSAO
 } from './common.js';
@@ -21,34 +21,56 @@ const CORRECOES = [
  * Linhas automáticas levam _auto (chave do componente): somem se a condição deixar de valer.
  */
 const ANTEPOCO_ACOES = {
-  'Sugador (carro sugador)': 'Limpeza com carro sugador',
-  'Limpeza química': 'Limpeza química',
-  'Limpeza mecânica': 'Limpeza mecânica',
-  'Quebra (estrutura danificada)': 'Reparo da estrutura (quebra)'
+  'Sugador (carro sugador)': 'Necessária a limpeza do antipoço com carro sugador',
+  'Limpeza química': 'Necessária a limpeza química do antipoço',
+  'Limpeza mecânica': 'Necessária a limpeza mecânica do antipoço',
+  'Quebra (estrutura danificada)': 'Necessário o reparo da estrutura do antipoço (quebra)'
 };
+
+/** Diagnóstico que gerou a ação (coluna Detalhes): "Diagnóstico — Estanqueidade: …; Necessita intervenção: Sim". */
+const diagnostico = (partes) => `Diagnóstico — ${partes.filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('; ')}`;
+
+/** Instrução clara para a coluna Ação / Recomendação a partir do diagnóstico da válvula. */
+export function acaoValvula(est, ab) {
+  if (est === 'Sem estanqueidade (vazamento)') return 'Necessária a substituição da válvula devido à falta de estanqueidade';
+  if (ab === 'Não opera (travada)') return 'Necessário o reparo ou a substituição da válvula, que não opera (travada)';
+  if (ab === 'Abre / fecha com dificuldade') return 'Necessária a manutenção da válvula devido à dificuldade de abertura / fechamento';
+  if (est === 'Não testada') return 'Necessário realizar o teste de estanqueidade e a intervenção na válvula';
+  return 'Necessária intervenção na válvula conforme a inspeção';
+}
+
+/** Instrução para o flange a partir da corrosão constatada. */
+export function acaoFlange(cor) {
+  if (cor === 'Moderada' || cor === 'Severa') return `Necessária a substituição dos parafusos / prisioneiros devido à corrosão ${cor.toLowerCase()}`;
+  if (cor === 'Leve') return 'Necessária a limpeza, a proteção anticorrosiva e o reaperto dos parafusos / prisioneiros (corrosão leve)';
+  return 'Necessária intervenção no flange (parafusos / prisioneiros) conforme a inspeção';
+}
 
 export function acoesAutomaticas(d) {
   const out = [];
   for (const r of d.antepoco_checklist || []) {
-    if (r.situacao === 'Sim' && ANTEPOCO_ACOES[r.item]) out.push({ _auto: `antepoco:${r.item}`, acao: `Antipoço: ${ANTEPOCO_ACOES[r.item]}` });
+    if (r.situacao !== 'Sim' || !ANTEPOCO_ACOES[r.item]) continue;
+    out.push({
+      _auto: `antepoco:${r.item}`, acao: `Antipoço: ${ANTEPOCO_ACOES[r.item]}`,
+      detalhe: diagnostico([[r.item, 'Sim']])
+    });
   }
   for (const v of VALVULAS_CABECA) {
     if (d[`${v.p}_intervencao`] !== 'Sim') continue;
     const est = d[`${v.p}_estanqueidade`];
     const ab = d[`${v.p}_abertura`];
-    const motivo = est === 'Sem estanqueidade (vazamento)' ? 'Necessária substituição da válvula devido à falta de estanqueidade'
-      : ab === 'Não opera (travada)' ? 'Necessário reparo ou substituição da válvula (não opera)'
-      : ab === 'Abre / fecha com dificuldade' ? 'Necessária manutenção da válvula (abertura / fechamento com dificuldade)'
-      : 'Necessária intervenção na válvula';
-    out.push({ _auto: v.p, acao: `${v.short}: ${motivo}` });
+    out.push({
+      _auto: v.p, acao: `${v.short}: ${acaoValvula(est, ab)}`,
+      detalhe: diagnostico([['Estanqueidade', est], ['Abertura / fechamento', ab], ['Necessita intervenção', 'Sim']])
+    });
   }
   for (const fl of FLANGES) {
     if (d[`${fl.p}_intervencao`] !== 'Sim') continue;
     const cor = d[`${fl.p}_corrosao`];
-    const motivo = cor === 'Moderada' || cor === 'Severa'
-      ? `Necessária substituição dos parafusos / prisioneiros devido à corrosão ${cor.toLowerCase()}`
-      : 'Necessária intervenção no flange (parafusos / prisioneiros)';
-    out.push({ _auto: fl.p, acao: `${fl.short}: ${motivo}` });
+    out.push({
+      _auto: fl.p, acao: `${fl.short}: ${acaoFlange(cor)}`,
+      detalhe: diagnostico([['Corrosão', cor], ['Necessita intervenção', 'Sim']])
+    });
   }
   return out;
 }
@@ -96,7 +118,7 @@ export default {
       icon: 'clipboard',
       fields: [
         { type: 'divider', label: 'Poço e data', icon: 'mapPin' },
-        poco(),
+        pocoHerdado(),
         { id: 'campo', label: 'Locação / Campo', type: 'text', placeholder: 'Ex.: Campo de Buracica' },
         { id: 'data', label: 'Data da visita', type: 'date', required: true },
         { id: 'turno', label: 'Turno', type: 'select', options: TURNOS },
@@ -105,14 +127,16 @@ export default {
         { type: 'divider', label: 'Equipe', icon: 'users' },
         equipe(),
         { type: 'divider', label: 'Objetivo da visita', icon: 'flag' },
-        { id: 'objetivo', label: 'Objetivo', type: 'textarea', required: true, placeholder: 'Ex.: avaliar as condições das válvulas e flanges da cabeça de poço' },
+        {
+          id: 'objetivo', label: 'Objetivo', type: 'textarea', required: true, lockEdit: 'Editar Objetivo',
+          defaultValue: 'Avaliar as condições da cabeça de poço (antipoço, válvulas e flanges), verificando estanqueidade, operação e corrosão, e indicar as intervenções necessárias',
+          placeholder: 'Ex.: avaliar as condições das válvulas e flanges da cabeça de poço'
+        },
         {
           // gerado em segundo plano: no formulário só um botão de prévia; o texto sai na prévia/PDF
           id: 'introducao', label: 'Texto de abertura', pdfLabel: 'Introdução', type: 'computed', previewButton: true,
           compute: (d) => paragrafoAbertura(d, { verbo: 'fizemos uma visita técnica ao', data: 'data', equipeLegado: ['tecnicos', 'acompanhantes'] })
-        },
-        { type: 'divider', label: 'Coordenadas GPS da locação', icon: 'crosshair' },
-        coordenadas()
+        }
       ]
     },
     {
@@ -172,7 +196,7 @@ export default {
           presetRows: CORRECOES.map((acao) => ({ acao })),
           addLabel: 'Outra ação',
           columns: [
-            { id: 'acao', label: 'Ação', locked: true, placeholder: 'Descreva a ação' },
+            { id: 'acao', label: 'Ação / Recomendação', locked: true, width: 'wide', placeholder: 'Descreva a ação' },
             { id: 'necessario', label: 'Necessário', type: 'checkbox' },
             { id: 'detalhe', label: 'Detalhes / especificação', width: 'wide' },
             { id: 'prioridade', label: 'Prioridade', type: 'select', options: PRIORIDADES, width: 'narrow' }
@@ -202,9 +226,12 @@ export default {
         { id: 'obs_locacao', label: 'Observações da locação', type: 'textarea' },
         { id: 'tecnicos', label: 'Técnico(s)', type: 'text' },
         { id: 'acompanhantes', label: 'Acompanhantes / Operador', type: 'text' },
-        { id: 'frente', label: 'Frente / Equipe', type: 'text' }
+        { id: 'frente', label: 'Frente / Equipe', type: 'text' },
+        // GPS e rotas ficam no BDO-e: as coordenadas vêm dele (herdaDoBdo) e saem só no cabeçalho do PDF
+        coordenadas()
       ]
     }
   ],
-  autoRows: { table: 'correcoes', rows: acoesAutomaticas }
+  herdaDoBdo: herancaBdo('data'),
+  autoRows: { table: 'correcoes', col: 'acao', label: 'Quadro de Ações', defaults: { necessario: true, prioridade: 'Alta' }, rows: acoesAutomaticas }
 };

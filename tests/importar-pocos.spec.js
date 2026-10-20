@@ -75,7 +75,7 @@ test.describe('Configurações → Base de Poços e Locações', () => {
     await expect(page.locator('[data-pocos-count]')).toHaveText('Base Ativa: 5 poços carregados');
     await expect(page.locator('[data-pocos-report]')).toContainText('(KML');
 
-    await openTab(page, 'handover');
+    await openTab(page, 'bdo');
     await page.locator('[data-field=poco]').fill('kml 200');
     await page.locator('[data-field=poco]').press('ArrowDown');
     await page.locator('[data-field=poco]').press('Enter');
@@ -129,7 +129,7 @@ test('base importada continua após reabrir; Limpar Base volta à digitação li
   await page.locator('dialog.modal--confirm[open] [data-ok]').click();
   await expect(page.locator('[data-pocos-status]')).toContainText('Nenhuma base carregada');
 
-  await openTab(page, 'visita_tecnica');
+  await openTab(page, 'bdo');
   await expect(page.locator('[data-pocos-hint]')).toContainText('Nenhuma base de poços carregada');
   await page.locator('[data-field=poco]').fill('TST-001');
   await expect(page.locator('.combo__list')).toBeHidden();

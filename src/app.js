@@ -11,6 +11,9 @@ import { showSharePrompt } from './ui/share-prompt.js';
 import { syncNow, startSyncScheduler, onSyncState } from './core/sync.js';
 import { getPref, setPref } from './core/prefs.js';
 import { newUniqueId } from './core/ids.js';
+import { bdoAtivo, herdar } from './core/heranca.js';
+import { currentUser, displayName, logout } from './core/auth.js';
+import { showLogin } from './ui/login-view.js';
 import { photoMeta } from './core/fotos.js';
 import { FormView, validate, cleanData, requiredProgress, rehydrate } from './ui/form.js';
 import { confirmDialog } from './ui/confirm.js';
@@ -167,7 +170,10 @@ async function showTab(tab) {
 
   const module = getModule(tab);
   const draft = await loadDraft(module.id);
+  // Visita Técnica / Execução: Poço, Locação, Data e Cliente vêm do BDO-e ativo
+  const bdo = module.herdaDoBdo ? await bdoAtivo() : null;
   if (state.tab !== tab) return; // usuário trocou de aba enquanto carregava
+  const herdados = module.herdaDoBdo ? herdar(module, draft, bdo) : [];
   state.draft = draft;
   state.module = module;
   if (draft.legacyLeft) {
@@ -201,6 +207,7 @@ async function showTab(tab) {
             <button type="button" class="btn btn--text btn--sm btn--danger-text" id="btn-discard">${icon('trash', 15)} Limpar formulário</button>
           </div>
         </header>
+        ${module.herdaDoBdo ? herancaNoticeHtml(bdo, herdados) : ''}
         <div id="form-root"></div>
       </div>
     </div>
@@ -231,7 +238,20 @@ async function showTab(tab) {
 
   refreshFormChrome();
   observeSections();
+  if (herdados.length) scheduleSave();
   view.dataset.ready = module.id;
+}
+
+/** Aviso no topo da Visita / Execução: de qual BDO-e vieram os dados (ou como trazê-los). */
+function herancaNoticeHtml(bdo, herdados) {
+  if (!bdo) {
+    return `<div class="notice notice--warn notice--icon" data-heranca>${icon('info', 16)}<span>O poço, a data e o cliente vêm do BDO-e. <button type="button" class="link-btn" data-goto="bdo">Abra o BDO-e</button> e escolha o Poço / Locação (a busca de poços, o GPS e as rotas ficam lá).</span></div>`;
+  }
+  const origem = bdo.origem === 'rascunho' ? 'BDO-e em andamento' : 'último BDO-e finalizado';
+  const texto = herdados.length
+    ? `${herdados.join(', ')} preenchido${herdados.length > 1 ? 's' : ''} com os dados do ${origem} (poço ${bdo.data.poco}).`
+    : `Dados herdados do ${origem} (poço ${bdo.data.poco}). Campos alterados aqui não são sobrescritos.`;
+  return `<div class="notice notice--info notice--icon" data-heranca>${icon('clipboard', 16)}<span>${esc(texto)}</span></div>`;
 }
 
 function companyChipHtml() {
@@ -535,6 +555,36 @@ function registerServiceWorker() {
   navigator.serviceWorker.register('./sw.js').catch((err) => console.error('[pwa]', err));
 }
 
+// ---------- Usuário logado ----------
+
+function renderUser() {
+  const el = $('#user-chip');
+  const user = currentUser();
+  if (!el) return;
+  el.hidden = !user;
+  if (!user) return;
+  const nome = user.nome || getSettings().tecnico_nome || displayName(user);
+  el.innerHTML = `${icon('user', 16)}<span class="user-chip__name">${esc(nome)}</span>`;
+  el.title = `${user.email}${user.modo === 'supabase' ? '' : user.modo === 'offline' ? ' · acesso offline' : ' · usuário local'}`;
+}
+
+/** Configurações › Sair: grava o rascunho, encerra a sessão e volta para a tela de login. */
+async function signOut() {
+  const ok = await confirmDialog({
+    title: 'Sair do aplicativo?',
+    message: 'Os rascunhos e relatórios continuam guardados neste aparelho. Para voltar, entre de novo com o e-mail e a senha (funciona sem internet depois do primeiro acesso).',
+    confirmLabel: 'Sair', cancelLabel: 'Cancelar', iconName: 'user'
+  });
+  if (!ok) return;
+  await flushSave();
+  logout();
+  renderUser();
+  // a tela de login cobre o app (sem recarregar: o Electron bloqueia navegação na janela)
+  await showLogin();
+  renderUser();
+  await showTab(state.tab);
+}
+
 // ---------- Inicialização ----------
 
 async function init() {
@@ -542,9 +592,14 @@ async function init() {
   await openDb();
   requestPersistence();
 
+  // Login: primeira tela quando não há sessão salva neste aparelho
+  if (!currentUser()) await showLogin();
+  renderUser();
+
   settingsView = new SettingsView();
   settingsView.onSaved = () => syncNow();
-  onSettingsChange(() => settingsView.refreshStatus());
+  settingsView.onLogout = signOut;
+  onSettingsChange(() => { settingsView.refreshStatus(); renderUser(); });
   outboxView = new OutboxView(document.createElement('div'), { onSyncNow: () => syncNow({ force: true }), onEdit: editFromOutbox, onReuse: reuseReport, onSend: sendSaved, onEditLocal: editLocal });
 
   renderTabs();

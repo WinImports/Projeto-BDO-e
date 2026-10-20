@@ -7,7 +7,8 @@ const path = require('path');
 const { launchApp, openTab } = require('./helpers');
 const { parseFile, convertCsv, parseCoord, decode } = require('../src/shared/pocos-parser.js');
 
-const REPORTS = ['bdo', 'visita_tecnica', 'handover'];
+// busca de poços e coordenadas só no BDO-e (Visita / Execução herdam o poço dele)
+const REPORTS = ['bdo'];
 const FIXTURE_CSV = path.join(__dirname, 'fixtures', 'pocos-teste.csv');
 const toast = (page) => page.locator('#toasts .toast').last();
 
@@ -101,7 +102,7 @@ test.describe('autocompletar do Poço / Locação', () => {
 
   test('digitar o nome exato e sair do campo também preenche as coordenadas vazias', async () => {
     const { page } = ctx;
-    await openTab(page, 'handover');
+    await openTab(page, 'bdo');
     await page.locator('[data-field=poco]').fill('TST-010');
     await page.locator('[data-field=poco]').press('Tab');
     await expect(page.locator('[data-part=lat]')).toHaveText('-12.370500');
@@ -109,7 +110,7 @@ test.describe('autocompletar do Poço / Locação', () => {
 
   test('coordenadas de GPS já capturadas não são trocadas sem confirmação', async () => {
     const { page } = ctx;
-    await openTab(page, 'visita_tecnica');
+    await openTab(page, 'bdo');
     await page.evaluate(() => {
       navigator.geolocation.getCurrentPosition = (ok) => ok({ coords: { latitude: -12.5, longitude: -38.5, accuracy: 6 } });
     });

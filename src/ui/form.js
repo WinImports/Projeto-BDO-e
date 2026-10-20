@@ -280,6 +280,7 @@ export class FormView {
     const settings = getSettings();
     for (const f of this.fields.values()) {
       if (f.settingsKey && settings[f.settingsKey]) this.draft.data[f.id] ??= settings[f.settingsKey];
+      if (f.defaultValue != null) this.draft.data[f.id] ??= f.defaultValue;
       if (f.type === 'table' && f.defaultRows && this.draft.data[f.id] === undefined) this.draft.data[f.id] = f.defaultRows(settings);
       if (f.type === 'date' && f.defaultDaysAgo) {
         const d = new Date();
@@ -348,6 +349,13 @@ export class FormView {
         </select>`;
 
       case 'textarea':
+        if (f.lockEdit) {
+          // texto padrão protegido contra toques acidentais: só fica editável pelo botão
+          return `<div class="locked-text">
+            <textarea id="f-${id}" data-field="${id}" rows="3" readonly class="is-locked" placeholder="${esc(f.placeholder || '')}">${esc(v)}</textarea>
+            <button type="button" class="btn btn--ghost btn--sm" data-action="toggle-lock" data-target="${id}" aria-pressed="false">${icon('pen', 15)} <span>${esc(f.lockEdit)}</span></button>
+          </div>`;
+        }
         return `<textarea id="f-${id}" data-field="${id}" rows="3" placeholder="${esc(f.placeholder || '')}">${esc(v)}</textarea>`;
 
       case 'checklist':
@@ -633,7 +641,8 @@ export class FormView {
 
   refreshField(id) {
     const wrap = $(`[data-wrap="${CSS.escape(id)}"]`, this.el);
-    if (wrap) wrap.innerHTML = this.fieldInnerHtml(this.fields.get(id));
+    if (!wrap) return; // campo fora do formulário (seção legacy, ex.: coordenadas herdadas do BDO-e)
+    wrap.innerHTML = this.fieldInnerHtml(this.fields.get(id));
     this.paintSignatures(wrap);
   }
 
@@ -797,6 +806,18 @@ export class FormView {
         if (shot) this.addPhoto(photosField, category, shot, fase);
       } catch (err) {
         toast(err.message, 'error', 6000);
+      }
+    } else if (action === 'toggle-lock') {
+      const f = this.fields.get(btn.dataset.target);
+      const input = $(`[data-field="${CSS.escape(f.id)}"]`, this.el);
+      const editing = input.readOnly;
+      input.readOnly = !editing;
+      input.classList.toggle('is-locked', !editing);
+      btn.setAttribute('aria-pressed', String(editing));
+      btn.innerHTML = editing ? `${icon('check', 15)} <span>Concluir edição</span>` : `${icon('pen', 15)} <span>${esc(f.lockEdit)}</span>`;
+      if (editing) {
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
       }
     } else if (action === 'clear-geo') {
       this.draft.data[btn.dataset.target] = {};
@@ -1121,22 +1142,28 @@ export class FormView {
     fields.forEach((f) => this.refreshField(f.id));
   }
 
-  /** Linhas automáticas (module.autoRows), ex.: Quadro de Ações da Visita a partir da inspeção. */
+  /**
+   * Linhas automáticas (module.autoRows: { table, col, label, defaults, rows(data) }), ex.: Quadro de Ações
+   * da Visita a partir da inspeção. Enquanto o diagnóstico não muda, o que o técnico ajustou na linha
+   * (detalhe, prioridade…) é mantido; mudou o diagnóstico, a linha é refeita (_sig).
+   */
   syncAutoRows() {
     const cfg = this.module.autoRows;
     if (!cfg) return;
     const d = this.draft.data;
     const rows = Array.isArray(d[cfg.table]) ? d[cfg.table] : [];
     const atuais = new Map(rows.filter((r) => r._auto).map((r) => [r._auto, r]));
-    const desejadas = cfg.rows(d);
-    const novas = desejadas.map((x) => ({ necessario: true, prioridade: 'Alta', ...atuais.get(x._auto), acao: x.acao, _auto: x._auto }));
-    const antes = JSON.stringify([...atuais.values()].map((r) => [r._auto, r.acao]));
-    const depois = JSON.stringify(novas.map((r) => [r._auto, r.acao]));
-    if (antes === depois) return;
+    const novas = cfg.rows(d).map((x) => {
+      const sig = JSON.stringify(x);
+      const atual = atuais.get(x._auto);
+      return atual?._sig === sig ? atual : { ...cfg.defaults, ...atual, ...x, _sig: sig };
+    });
+    const assinatura = (lista) => JSON.stringify(lista.map((r) => [r._auto, r._sig]));
+    if (assinatura([...atuais.values()]) === assinatura(novas)) return;
     d[cfg.table] = [...rows.filter((r) => !r._auto), ...novas];
     this.refreshField(cfg.table);
     const adicionadas = novas.filter((r) => !atuais.has(r._auto));
-    if (adicionadas.length) toast(`Adicionado ao Quadro de Ações: ${adicionadas.map((r) => r.acao).join('; ')}`, 'info', 5000);
+    if (adicionadas.length) toast(`Adicionado ${cfg.label === 'Pendências' ? 'às Pendências' : `ao ${cfg.label}`}: ${adicionadas.map((r) => r[cfg.col]).join('; ')}`, 'info', 5000);
   }
 
   /** Tabela com chain: ao preencher o fim de uma linha, a próxima começa nesse horário (se estava vazia). */

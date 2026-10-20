@@ -5,7 +5,7 @@ const { execFileSync } = require('child_process');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { launchApp, preencherVisita } = require('./helpers');
+const { launchApp, preencherVisita, entrar } = require('./helpers');
 
 const ROOT = path.join(__dirname, '..');
 const BASE = '/Projeto-BDO-e/';
@@ -72,6 +72,7 @@ test('app como página web (GitHub Pages): abre, funciona offline, importa base 
     ]);
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
+    await entrar(page); // origem http: sessão própria, primeira tela é o login
     await page.locator('#view[data-ready]').waitFor();
     expect(await page.evaluate(() => typeof window.desktop)).toBe('undefined');
     await expect(page.locator('#tabs [data-tab=bdo]')).toBeVisible();
@@ -170,6 +171,7 @@ test('PWA: relatório finalizado fica no Histórico do navegador, reabre na pré
     ]);
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
+    await entrar(page); // origem http: sessão própria, primeira tela é o login
     await page.locator('#view[data-ready]').waitFor();
     const tab = async (id) => { await page.locator(`#tabs [data-tab=${id}]`).click(); await page.locator(`#view[data-ready=${id}]`).waitFor(); };
 

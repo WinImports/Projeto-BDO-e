@@ -931,3 +931,43 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, tex
   .route-prompt { left: 12px; right: 12px; bottom: calc(150px + env(safe-area-inset-bottom)); width: auto; }
   #toasts { top: calc(var(--topbar-h) + 8px); bottom: auto; left: 12px; right: 12px; max-width: none; }
 }
+
+/* ===================== Login / Conta ===================== */
+.login {
+  position: fixed; inset: 0; z-index: 200; overflow-y: auto;
+  display: grid; place-items: center; padding: 24px 16px;
+  background: radial-gradient(circle at 20% 0%, var(--primary-soft), transparent 55%), var(--bg);
+}
+body.is-login { overflow: hidden; }
+.login__card { width: 100%; max-width: 400px; padding: 28px 24px; display: flex; flex-direction: column; gap: 16px; }
+.login__brand { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+.login__brand p { margin: 2px 0 0; }
+.login__title { font-size: 1.3rem; font-weight: 750; letter-spacing: -.01em; }
+.login__error { margin: 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--danger-soft); color: var(--danger); font-size: .9rem; }
+.login__mode { margin: 0; }
+.user-chip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 220px;
+  padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text-2); font-size: .84rem; font-weight: 600;
+}
+.user-chip[hidden] { display: none; }
+.user-chip__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conta { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 18px 22px 22px; }
+.conta__info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+/* Texto padrão protegido (Objetivo): somente leitura até tocar em "Editar Objetivo" */
+.locked-text { display: flex; flex-direction: column; gap: 8px; }
+.locked-text .btn { align-self: flex-start; }
+textarea.is-locked { background: var(--surface-2); color: var(--text-2); cursor: default; }
+textarea.is-locked:hover { border-color: var(--border); }
+
+/* Busca rápida do Histórico */
+.history-search { position: relative; margin-top: 16px; }
+.history-search__icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted); display: flex; pointer-events: none; }
+.history-search .history-search__input { width: 100%; padding-left: 42px; }
+
+@media (max-width: 640px) {
+  .user-chip { max-width: 120px; padding: 5px 10px; }
+  .conta { padding: 14px 16px 16px; }
+  .conta .btn { width: 100%; justify-content: center; }
+}

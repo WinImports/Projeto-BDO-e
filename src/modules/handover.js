@@ -2,12 +2,38 @@
 // serviço executado e o bloco de fotos "Antes (Visita Técnica) x Depois (Execução)": as fotos
 // "Antes" vêm da última Visita Técnica do poço finalizada neste aparelho (ver consolidação).
 import {
-  poco, pressoes, coordenadas, fotosDe, paragrafoAbertura, equipe, PRIORIDADES,
+  pocoHerdado, herancaBdo, pressoes, coordenadas, fotosDe, paragrafoAbertura, equipe, PRIORIDADES,
   FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, FLANGES,
   ESTANQUEIDADE, CORROSAO
 } from './common.js';
 
 const comparar = (id, label, cats) => fotosDe(id, label, cats, { compare: true });
+
+/**
+ * Pendências automáticas: componente entregue sem estanqueidade ou com corrosão moderada/severa
+ * vira linha _auto no Detalhamento das pendências, com a instrução clara do que fazer.
+ */
+export function pendenciasAutomaticas(d) {
+  const out = [];
+  for (const v of VALVULAS_CABECA) {
+    const sit = d[`${v.p}_situacao`];
+    if (sit === 'Sem estanqueidade (vazamento)') {
+      out.push({ _auto: v.p, descricao: `${v.short}: Necessária a substituição da válvula devido à falta de estanqueidade`, recurso: `Válvula para a posição ${v.short}` });
+    } else if (sit === 'Não testada') {
+      out.push({ _auto: v.p, descricao: `${v.short}: Necessário realizar o teste de estanqueidade da válvula`, prioridade: 'Média' });
+    }
+  }
+  for (const fl of FLANGES) {
+    const sit = d[`${fl.p}_situacao`];
+    if (sit === 'Corrosão: moderada' || sit === 'Corrosão: severa') {
+      out.push({ _auto: fl.p, descricao: `${fl.short}: Necessária a substituição dos parafusos / prisioneiros devido à corrosão ${sit.split(': ')[1]}`, recurso: 'Parafusos / prisioneiros e porcas' });
+    }
+  }
+  if (d[`${ANTEPOCO.p}_situacao`] === 'Necessita nova limpeza') {
+    out.push({ _auto: ANTEPOCO.p, descricao: 'Antipoço: Necessária nova limpeza do antipoço', prioridade: 'Média' });
+  }
+  return out;
+}
 
 const componente = ({ p, nome, short, fotos }, n, situacao) => ({
   title: `${n}. ${nome}`,
@@ -33,19 +59,23 @@ export default {
       short: 'Cabeçalho',
       icon: 'clipboard',
       fields: [
-        poco(),
+        pocoHerdado(),
         { id: 'campo', label: 'Locação / Campo', type: 'text', placeholder: 'Ex.: Campo de Buracica' },
         { id: 'data_hora', label: 'Data e hora da passagem', type: 'datetime', required: true },
         { id: 'tipo_passagem', label: 'Tipo', type: 'select', required: true, options: ['Troca de turma (revezamento 14x14)', 'Troca de turno', 'Encerramento do serviço'] },
+        { id: 'cliente', label: 'Cliente / Contratante', type: 'text', settingsKey: 'cliente_padrao' },
+        { id: 'contrato', label: 'Contrato', type: 'text', settingsKey: 'contrato_padrao' },
         { type: 'divider', label: 'Equipe', icon: 'users' },
         equipe(),
-        { id: 'objetivo', label: 'Objetivo / escopo da execução', type: 'textarea', placeholder: 'Ex.: substituir a VA-1 e os parafusos do flange inferior' },
+        {
+          id: 'objetivo', label: 'Objetivo / escopo da execução', type: 'textarea', lockEdit: 'Editar Objetivo',
+          defaultValue: 'Executar a manutenção da cabeça de poço conforme as recomendações da Visita Técnica, com o reparo ou a substituição das válvulas e dos parafusos / prisioneiros indicados, entregando a locação em condição segura',
+          placeholder: 'Ex.: substituir a VA-1 e os parafusos do flange inferior'
+        },
         {
           id: 'introducao', label: 'Texto de abertura', pdfLabel: 'Introdução', type: 'computed', previewButton: true,
           compute: (d) => paragrafoAbertura(d, { verbo: 'executamos os serviços no', data: 'data_hora', equipeLegado: ['turma_entrega', 'acompanhantes'] })
-        },
-        { type: 'divider', label: 'Coordenadas GPS da locação', icon: 'crosshair' },
-        coordenadas()
+        }
       ]
     },
     {
@@ -119,7 +149,7 @@ export default {
         {
           id: 'pendencias', label: 'Detalhamento (opcional)', type: 'table', addLabel: 'Adicionar pendência',
           columns: [
-            { id: 'descricao', label: 'Pendência', width: 'wide', placeholder: 'O que ficou por fazer' },
+            { id: 'descricao', label: 'Pendência / Ação recomendada', width: 'wide', placeholder: 'O que ficou por fazer' },
             { id: 'prioridade', label: 'Prioridade', type: 'select', options: PRIORIDADES, width: 'narrow' },
             { id: 'recurso', label: 'Material / recurso necessário' }
           ]
@@ -148,10 +178,14 @@ export default {
       fields: [
         { id: 'turma_entrega', label: 'Turma / equipe que entrega', type: 'text' },
         { id: 'turma_recebe', label: 'Turma / equipe que recebe', type: 'text' },
-        { id: 'acompanhantes', label: 'Acompanhantes / Operador', type: 'text' }
+        { id: 'acompanhantes', label: 'Acompanhantes / Operador', type: 'text' },
+        // GPS e rotas ficam no BDO-e: as coordenadas vêm dele (herdaDoBdo) e saem só no cabeçalho do PDF
+        coordenadas()
       ]
     }
   ],
+  herdaDoBdo: herancaBdo('data_hora'),
+  autoRows: { table: 'pendencias', col: 'descricao', label: 'Pendências', defaults: { prioridade: 'Alta' }, rows: pendenciasAutomaticas },
   validate(data) {
     if (data.periodo_inicio && data.periodo_fim && data.periodo_inicio > data.periodo_fim) {
       return [{ field: 'periodo_fim', message: 'O fim da quinzena não pode ser antes do início' }];

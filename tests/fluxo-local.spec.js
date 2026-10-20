@@ -16,7 +16,10 @@ test.describe('rascunhos por relatório', () => {
     await openTab(page, 'bdo');
     await fill(page, 'poco', 'FBM-89');
     await openTab(page, 'handover');
-    await expect(page.locator('[data-field=poco]')).toHaveValue('');
+    await expect(page.locator('[data-field=poco]')).toHaveValue('FBM-89'); // herdado do BDO-e
+    await fill(page, 'tipo_passagem', 'Troca de turno');
+    await openTab(page, 'visita_tecnica');
+    await expect(page.locator('[data-field=turno]')).toHaveValue(''); // o rascunho da Execução não vaza para a Visita
     await openTab(page, 'bdo');
     await expect(page.locator('[data-field=poco]')).toHaveValue('FBM-89');
   });

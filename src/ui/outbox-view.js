@@ -21,6 +21,28 @@ function reportDate(module, data) {
   return v && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10).split('-').reverse().join('/') : '';
 }
 
+/** Texto sem acentos e em minúsculas (busca "pocos" acha "Poços"). */
+const normalizar = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+/** Tudo o que a busca rápida enxerga num relatório: tipo, poço, datas, status, cliente, ID. */
+function textoBusca(r) {
+  const mod = getModule(r.module);
+  const date = reportDate(mod, r.data);
+  return normalizar([
+    mod?.shortTitle, mod?.title, r.module, r.data.poco, r.data.campo, r.data.cidade_uf, r.data.cliente,
+    date, date.replace(/\//g, '-'), date.split('/').reverse().join('-'), formatDateTime(r.createdAt),
+    (STATUS[r.status] || STATUS.sent).label, r.uniqueId
+  ].filter(Boolean).join(' '));
+}
+
+/** Todos os termos digitados precisam aparecer (em qualquer ordem). */
+export function matchesQuery(r, query) {
+  const termos = normalizar(query).split(/\s+/).filter(Boolean);
+  if (!termos.length) return true;
+  const alvo = textoBusca(r);
+  return termos.every((t) => alvo.includes(t));
+}
+
 export class OutboxView {
   constructor(root, { onSyncNow, onEdit, onReuse, onSend, onEditLocal }) {
     this.root = root;
@@ -32,7 +54,14 @@ export class OutboxView {
     this.items = [];
     this.filter = getPref('historyFilter', 'all');
     this.sync = { running: false, online: navigator.onLine, configured: false };
+    this.query = '';
     root.addEventListener('click', (e) => this.handleClick(e));
+    // busca rápida: atualiza só a lista a cada tecla (o campo não é redesenhado e não perde o foco)
+    root.addEventListener('input', (e) => {
+      if (!e.target.matches('[data-history-search]')) return;
+      this.query = e.target.value;
+      this.renderResults();
+    });
   }
 
   setSyncState(s) {
@@ -61,9 +90,10 @@ export class OutboxView {
     const pending = this.items.filter((r) => r.outbox).length;
     const locais = this.items.filter((r) => r.status === 'local').length;
     const canSync = s.configured && s.online && !s.running && pending > 0;
-    const shown = this.filter === 'all' ? this.items : this.items.filter((r) => r.module === this.filter);
     const counts = Object.fromEntries(MODULES.map((m) => [m.id, this.items.filter((r) => r.module === m.id).length]));
 
+    const busca = this.root.querySelector('[data-history-search]');
+    const focado = busca && document.activeElement === busca ? [busca.selectionStart, busca.selectionEnd] : null;
     this.root.innerHTML = `
       <div class="page-head">
         <div>
@@ -78,17 +108,39 @@ export class OutboxView {
       </div>
       <div class="notice notice--${status.kind}" role="status">${esc(status.text)}</div>
       ${this.items.length ? `
+        <div class="history-search">
+          <span class="history-search__icon" aria-hidden="true">${icon('search', 18)}</span>
+          <input type="search" class="history-search__input" data-history-search value="${esc(this.query)}"
+            placeholder="Buscar por poço, data ou tipo..." aria-label="Buscar por poço, data ou tipo" autocomplete="off" enterkeyhint="search">
+        </div>
         <div class="history-filter" role="group" aria-label="Filtrar por tipo de relatório">
           <button type="button" class="chip${this.filter === 'all' ? ' is-active' : ''}" data-action="filter" data-filter="all" aria-pressed="${this.filter === 'all'}">Todos <span class="chip__n">${this.items.length}</span></button>
           ${MODULES.map((m) => `<button type="button" class="chip${this.filter === m.id ? ' is-active' : ''}" data-action="filter" data-filter="${m.id}" aria-pressed="${this.filter === m.id}">${esc(m.shortTitle)} <span class="chip__n">${counts[m.id]}</span></button>`).join('')}
         </div>
-        ${shown.length
-          ? `<ul class="outbox-list" data-history>${shown.map((r) => this.itemHtml(r)).join('')}</ul>`
-          : '<p class="muted">Nenhum relatório deste tipo.</p>'}` : `
+        <div data-history-results aria-live="polite"></div>` : `
         <div class="empty">
           <div class="empty__icon" aria-hidden="true">${icon('inbox', 28)}</div>
           <p><strong>Nenhum relatório finalizado ainda.</strong><br>Ao finalizar um BDO-e, Visita Técnica ou Relatório de Execução, ele fica guardado aqui — mesmo depois de enviado — para reabrir, gerar o PDF ou reutilizar.</p>
         </div>`}`;
+    this.renderResults();
+    if (focado) {
+      const novo = this.root.querySelector('[data-history-search]');
+      novo?.focus();
+      novo?.setSelectionRange(...focado);
+    }
+  }
+
+  /** Lista filtrada pelo tipo (chips) e pela busca rápida. */
+  renderResults() {
+    const box = this.root.querySelector('[data-history-results]');
+    if (!box) return;
+    const doTipo = this.filter === 'all' ? this.items : this.items.filter((r) => r.module === this.filter);
+    const shown = doTipo.filter((r) => matchesQuery(r, this.query));
+    const q = this.query.trim();
+    box.innerHTML = shown.length
+      ? `${q ? `<p class="muted small" data-history-count>${shown.length} relatório${shown.length > 1 ? 's' : ''} encontrado${shown.length > 1 ? 's' : ''} para "${esc(q)}"</p>` : ''}
+        <ul class="outbox-list" data-history>${shown.map((r) => this.itemHtml(r)).join('')}</ul>`
+      : `<p class="muted" data-history-empty>${q ? `Nenhum relatório encontrado para "${esc(q)}".` : 'Nenhum relatório deste tipo.'}</p>`;
   }
 
   itemHtml(r) {

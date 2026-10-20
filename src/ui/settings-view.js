@@ -6,6 +6,13 @@ import { toast } from './toast.js';
 import { getSettings, saveSettings, formatCnpj, isValidCnpj, getDeviceId } from '../core/settings.js';
 import { pocosStatus, importPocosFile, clearPocosBase } from '../core/pocos.js';
 import { confirmDialog } from './confirm.js';
+import { currentUser, displayName } from '../core/auth.js';
+
+const MODO_LOGIN = {
+  supabase: 'Conta confirmada no servidor (Supabase)',
+  offline: 'Acesso offline com a última senha confirmada neste aparelho',
+  local: 'Usuário local deste aparelho'
+};
 
 const LOGO_MAX = { w: 480, h: 240 };
 
@@ -88,6 +95,7 @@ export class SettingsView {
           <p class="muted small" id="settings-status">${this.statusText(s)}</p>
         </div>
       </div>
+      ${this.contaSectionHtml()}
       ${this.pocosSectionHtml()}
       <form class="report-form settings-form" novalidate>
         ${GROUPS.map((g) => `
@@ -136,6 +144,30 @@ export class SettingsView {
     this.refreshPocos();
   }
 
+  // ---------- Conta (login) ----------
+
+  contaSectionHtml() {
+    const user = currentUser();
+    if (!user) return '';
+    return `
+      <section class="card form-section conta-section" id="conta-section">
+        <header class="form-section__head">
+          <span class="form-section__icon">${icon('user', 20)}</span>
+          <div class="form-section__titles">
+            <h3 class="form-section__title">Conta</h3>
+            <p class="form-section__hint">A sessão fica salva neste aparelho: não é preciso entrar de novo a cada abertura, mesmo sem sinal.</p>
+          </div>
+        </header>
+        <div class="conta">
+          <div class="conta__info">
+            <strong data-conta-nome>${esc(user.nome || getSettings().tecnico_nome || displayName(user))}</strong>
+            <span class="muted small" data-conta-email>${esc(user.email)} · ${esc(MODO_LOGIN[user.modo] || '')}</span>
+          </div>
+          <button type="button" class="btn btn--ghost btn--danger-text" data-action="logout">${icon('arrowLeft', 16)} Sair / Logout</button>
+        </div>
+      </section>`;
+  }
+
   // ---------- Base de Poços e Locações ----------
 
   pocosSectionHtml() {
@@ -145,7 +177,7 @@ export class SettingsView {
           <span class="form-section__icon">${icon('map', 20)}</span>
           <div class="form-section__titles">
             <h3 class="form-section__title">Base Local de Poços e Locações</h3>
-            <p class="form-section__hint">Alimenta o autocompletar do campo Poço / Locação nos 3 relatórios e preenche as coordenadas. Fica salva neste computador e funciona sem internet. A importação vale na hora (não precisa "Salvar configurações").</p>
+            <p class="form-section__hint">Alimenta o autocompletar do campo Poço / Locação do BDO-e (que repassa o poço à Visita Técnica e ao Relatório de Execução) e preenche as coordenadas. Fica salva neste computador e funciona sem internet. A importação vale na hora (não precisa "Salvar configurações").</p>
           </div>
         </header>
         <div class="pocos-body">
@@ -328,6 +360,7 @@ export class SettingsView {
     }
     if (btn.dataset.action === 'save') this.save();
     if (btn.dataset.action === 'clear-pocos') this.clearPocos();
+    if (btn.dataset.action === 'logout') this.onLogout?.();
   }
 
   save() {

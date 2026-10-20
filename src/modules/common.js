@@ -24,6 +24,9 @@
 // number.kmAuto: KM rodado estimado ao escolher o poço e somado a cada captura de GPS
 // módulo.autoRows: { table, rows(data) } → linhas automáticas (_auto) num quadro (ex.: ações da Visita)
 // Seção legacy: true → não aparece no formulário; só na prévia/PDF de relatórios antigos que tenham esses dados
+// defaultValue: texto inicial do campo em relatórios novos; lockEdit: 'Editar Objetivo' → textarea protegida
+//            (somente leitura) até o técnico tocar no botão de edição
+// módulo.herdaDoBdo: { campoDoRelatorio: 'campoDoBdo' } → copiados do BDO-e ativo (ver core/heranca.js)
 
 // autocomplete 'pocos': sugere poços da base oficial (src/data/pocos-ba.json) e, ao escolher,
 // preenche as Coordenadas GPS do mesmo relatório
@@ -31,6 +34,15 @@ export const poco = () => ({
   id: 'poco', label: 'Poço / Locação', type: 'text', required: true, autocomplete: 'pocos',
   placeholder: 'Digite para buscar (ex.: FBM-89)'
 });
+
+// Visita Técnica e Execução: o poço vem do BDO-e (busca na base, GPS e rotas ficam só no BDO-e)
+export const pocoHerdado = () => ({
+  id: 'poco', label: 'Poço / Locação', type: 'text', required: true,
+  placeholder: 'Ex.: FBM-89', hint: 'Preenchido com o poço do BDO-e. A busca de poços, o GPS e as rotas ficam no BDO-e.'
+});
+
+/** Campos copiados do BDO-e ativo (destino: origem no BDO-e). campoData: data do relatório (data | data_hora). */
+export const herancaBdo = (campoData = 'data') => ({ poco: 'poco', campo: 'cidade_uf', [campoData]: 'data', cliente: 'cliente', contrato: 'contrato', coordenadas: 'coordenadas' });
 
 export const fotos = (categories) => ({
   title: 'Registro fotográfico',

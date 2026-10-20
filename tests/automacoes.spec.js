@@ -107,27 +107,27 @@ test('Visita: diagnóstico do componente preenche o Quadro de Ações automatica
   const acoes = () => page.locator('[data-table=correcoes][data-col=acao]').evaluateAll((els) => els.map((e) => e.value));
 
   await fill(page, 'va1_estanqueidade', 'Sem estanqueidade (vazamento)');
-  expect(await acoes()).not.toContain('VA-1: Necessária substituição da válvula devido à falta de estanqueidade');
+  expect(await acoes()).not.toContain('VA-1: Necessária a substituição da válvula devido à falta de estanqueidade');
   await page.locator('[data-field=va1_intervencao][value=Sim]').check();
-  await expect.poll(acoes).toContain('VA-1: Necessária substituição da válvula devido à falta de estanqueidade');
+  await expect.poll(acoes).toContain('VA-1: Necessária a substituição da válvula devido à falta de estanqueidade');
   await expect(toast(page)).toContainText('Adicionado ao Quadro de Ações');
 
   await fill(page, 'flange_inf_corrosao', 'Severa');
   await page.locator('[data-field=flange_inf_intervencao][value=Sim]').check();
   await page.locator('[data-table=antepoco_checklist][data-row="0"][data-col=situacao]').selectOption('Sim');
   await expect.poll(acoes).toEqual(expect.arrayContaining([
-    'Flange inferior: Necessária substituição dos parafusos / prisioneiros devido à corrosão severa',
-    'Antipoço: Limpeza com carro sugador'
+    'Flange inferior: Necessária a substituição dos parafusos / prisioneiros devido à corrosão severa',
+    'Antipoço: Necessária a limpeza do antipoço com carro sugador'
   ]));
 
   // deixou de precisar de intervenção: a linha automática sai do quadro
   await page.locator('[data-field=va1_intervencao][value=Não]').check();
-  await expect.poll(acoes).not.toContain('VA-1: Necessária substituição da válvula devido à falta de estanqueidade');
+  await expect.poll(acoes).not.toContain('VA-1: Necessária a substituição da válvula devido à falta de estanqueidade');
 
   // vai para a prévia/PDF
   await page.locator('#btn-preview').click();
   await expect(page.locator('dialog.modal[open] [data-wrap], dialog.modal[open] .preview__section', { hasText: 'Recomendações' }).first())
-    .toContainText('Flange inferior: Necessária substituição dos parafusos');
+    .toContainText('Flange inferior: Necessária a substituição dos parafusos');
 });
 
 test('"Salvar e Finalizar": só salvar fica no Histórico; "Enviar" depois vai para o banco e abre o WhatsApp', async () => {
