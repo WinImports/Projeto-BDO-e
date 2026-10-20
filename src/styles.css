@@ -974,3 +974,6 @@ textarea.is-locked:hover { border-color: var(--border); }
 .servidor__acoes { display: flex; flex-wrap: wrap; gap: 8px; }
 .locked-text__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .autotext-status { margin: 0; color: var(--text-muted); }
+/* Relatório recebido de outro técnico do contrato (histórico da equipe) */
+.outbox-item--team { border-left-color: var(--primary); }
+.status--team { background: var(--primary-soft); color: var(--primary); }

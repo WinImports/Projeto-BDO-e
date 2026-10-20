@@ -14,6 +14,7 @@ import { newUniqueId } from './core/ids.js';
 import { bdoAtivo, herdar } from './core/heranca.js';
 import { currentUser, displayName, logout } from './core/auth.js';
 import { showLogin } from './ui/login-view.js';
+import { limparEquipeDeOutroUsuario } from './core/pull.js';
 import { photoMeta } from './core/fotos.js';
 import { FormView, validate, cleanData, requiredProgress, rehydrate } from './ui/form.js';
 import { confirmDialog } from './ui/confirm.js';
@@ -581,8 +582,10 @@ async function signOut() {
   renderUser();
   // a tela de login cobre o app (sem recarregar: o Electron bloqueia navegação na janela)
   await showLogin();
+  await limparEquipeDeOutroUsuario(currentUser()?.email);
   renderUser();
   await showTab(state.tab);
+  syncNow({ pull: true }); // login: baixa o histórico da equipe (últimos 30 dias)
 }
 
 // ---------- Inicialização ----------
@@ -594,6 +597,7 @@ async function init() {
 
   // Login: primeira tela quando não há sessão salva neste aparelho
   if (!currentUser()) await showLogin();
+  await limparEquipeDeOutroUsuario(currentUser()?.email);
   renderUser();
 
   settingsView = new SettingsView();

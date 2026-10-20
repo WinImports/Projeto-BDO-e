@@ -17,8 +17,9 @@ import { getClient } from './supabase.js';
 import * as outbox from './outbox.js';
 import { syncSettings, getDeviceId } from './settings.js';
 import { currentUser } from './auth.js';
+import { pullTeamHistory } from './pull.js';
 
-const state = { running: false, lastRunAt: null, lastError: null };
+const state = { running: false, lastRunAt: null, lastError: null, pullError: null, pullPending: false };
 const listeners = new Set();
 export const onSyncState = (fn) => { listeners.add(fn); fn(snapshot()); return () => listeners.delete(fn); };
 const snapshot = () => ({ ...state, online: navigator.onLine, configured: isSupabaseConfigured() });
@@ -125,8 +126,13 @@ async function deliverBatch(client, batch) {
   return failures;
 }
 
-export async function syncNow({ force = false } = {}) {
-  if (state.running) return;
+/**
+ * Envia a fila, as configurações e baixa o histórico da equipe (pull).
+ * force: reagenda os itens com erro para já; pull: baixa a equipe sem esperar o intervalo
+ * (login, volta da internet, abrir o app, "Sincronizar agora").
+ */
+export async function syncNow({ force = false, pull = false } = {}) {
+  if (state.running) { state.pullPending ||= pull || force; return; }
   if (!navigator.onLine || !isSupabaseConfigured()) { emit(); return; }
 
   state.running = true;
@@ -153,6 +159,14 @@ export async function syncNow({ force = false } = {}) {
     } catch (err) {
       state.lastError = `Configurações: ${err.message || err}`;
     }
+    if (navigator.onLine) {
+      try {
+        await pullTeamHistory({ force: pull || force });
+        state.pullError = null;
+      } catch (err) {
+        state.pullError = err.message || String(err);
+      }
+    }
   } catch (err) {
     state.lastError = err.message || String(err);
     console.error('[sync]', err);
@@ -160,12 +174,14 @@ export async function syncNow({ force = false } = {}) {
     state.running = false;
     state.lastRunAt = new Date().toISOString();
     emit();
+    if (state.pullPending) { state.pullPending = false; syncNow({ pull: true }); }
   }
 }
 
 export function startSyncScheduler() {
-  window.addEventListener('online', () => { emit(); syncNow(); });
+  // ao voltar a internet: envia a fila e baixa o histórico da equipe
+  window.addEventListener('online', () => { emit(); syncNow({ pull: true }); });
   window.addEventListener('offline', emit);
-  setInterval(syncNow, SYNC.heartbeatMs);
-  syncNow();
+  setInterval(() => syncNow(), SYNC.heartbeatMs);
+  syncNow({ pull: true });
 }

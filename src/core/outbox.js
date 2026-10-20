@@ -7,6 +7,8 @@ import { sha256 } from './ids.js';
 
 const listeners = new Set();
 export const onOutboxChange = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
+/** Histórico mudou fora da fila (ex.: relatórios recebidos da equipe — core/pull.js). */
+export const notifyHistory = () => notify();
 const notify = async () => {
   const n = await pendingCount();
   listeners.forEach((fn) => fn(n));
@@ -99,7 +101,8 @@ export async function confirmDelivered(uniqueId) {
 
 /**
  * Todos os relatórios finalizados neste aparelho (histórico + fila), do mais recente ao mais antigo.
- * status: 'pending' | 'error' (ainda na Caixa de Saída) | 'sent' (confirmado pelo servidor).
+ * status: 'pending' | 'error' (ainda na Caixa de Saída) | 'sent' (confirmado pelo servidor) | 'local' |
+ * 'team' (recebido de outro técnico do contrato, core/pull.js).
  * Fotos: as da fila quando ainda pendente; senão as guardadas no histórico.
  */
 export async function reports() {
@@ -108,7 +111,7 @@ export async function reports() {
   const out = hist.map((h) => {
     const q = byId.get(h.uniqueId);
     byId.delete(h.uniqueId);
-    return { ...h, photos: q?.photos || h.photos || [], outbox: q || null, status: q ? q.status : h.localOnly ? 'local' : 'sent' };
+    return { ...h, photos: q?.photos || h.photos || [], outbox: q || null, status: q ? q.status : h.localOnly ? 'local' : h.remote ? 'team' : 'sent' };
   });
   for (const q of byId.values()) out.push({ ...q, outbox: q, status: q.status }); // fila sem cópia no histórico
   return out.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));

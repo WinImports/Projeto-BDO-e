@@ -6,12 +6,14 @@ import { openPreview } from './preview.js';
 import { getModule, MODULES } from '../modules/index.js';
 import * as outbox from '../core/outbox.js';
 import { getPref, setPref } from '../core/prefs.js';
+import { pullInfo, PULL_DIAS } from '../core/pull.js';
 
 const STATUS = {
   local: { cls: 'local', label: 'Salvo no aparelho (não enviado)' },
   pending: { cls: 'pending', label: 'Pendente de Envio' },
   error: { cls: 'error', label: 'Pendente de Envio (reagendado)' },
-  sent: { cls: 'sent', label: 'Sincronizado' }
+  sent: { cls: 'sent', label: 'Sincronizado' },
+  team: { cls: 'team', label: 'Da equipe' }
 };
 
 /** Data do relatório (primeiro campo de data preenchido), em pt-BR. */
@@ -31,7 +33,7 @@ function textoBusca(r) {
   return normalizar([
     mod?.shortTitle, mod?.title, r.module, r.data.poco, r.data.campo, r.data.cidade_uf, r.data.cliente,
     date, date.replace(/\//g, '-'), date.split('/').reverse().join('-'), formatDateTime(r.createdAt),
-    (STATUS[r.status] || STATUS.sent).label, r.uniqueId
+    (STATUS[r.status] || STATUS.sent).label, r.autor, r.contrato, r.data.contrato, r.uniqueId
   ].filter(Boolean).join(' '));
 }
 
@@ -84,12 +86,25 @@ export class OutboxView {
     return { kind: 'info', text: 'Aguardando sincronização.' };
   }
 
+  /** Linha do histórico da equipe (download dos últimos 30 dias por contrato). */
+  equipeLine() {
+    const s = this.sync;
+    if (!s.configured) return null;
+    const info = pullInfo();
+    if (s.pullError || info.erro) return { kind: 'error', text: `Histórico da equipe: falha ao baixar (${s.pullError || info.erro}).` };
+    if (!info.lastAt) return { kind: 'info', text: `Histórico da equipe: entre com a conta do servidor e conecte-se à internet para baixar os relatórios dos últimos ${PULL_DIAS} dias do seu contrato.` };
+    if (!info.contratos?.length) return { kind: 'warn', text: 'Histórico da equipe: sua conta não está cadastrada em nenhum contrato no servidor. Peça ao administrador para incluí-la.' };
+    const recebidos = this.items.filter((r) => r.status === 'team').length;
+    return { kind: 'ok', text: `Histórico da equipe (${info.contratos.join(', ')}): ${recebidos} relatório${recebidos === 1 ? '' : 's'} de outros técnicos neste aparelho · últimos ${PULL_DIAS} dias · atualizado ${formatDateTime(info.lastAt)}.` };
+  }
+
   render() {
     const s = this.sync;
     const status = this.statusLine();
     const pending = this.items.filter((r) => r.outbox).length;
     const locais = this.items.filter((r) => r.status === 'local').length;
-    const canSync = s.configured && s.online && !s.running && pending > 0;
+    const canSync = s.configured && s.online && !s.running; // envia a fila e baixa a equipe
+    const equipe = this.equipeLine();
     const counts = Object.fromEntries(MODULES.map((m) => [m.id, this.items.filter((r) => r.module === m.id).length]));
 
     const busca = this.root.querySelector('[data-history-search]');
@@ -107,6 +122,7 @@ export class OutboxView {
         </button>
       </div>
       <div class="notice notice--${status.kind}" role="status">${esc(status.text)}</div>
+      ${equipe ? `<div class="notice notice--${equipe.kind}" data-equipe-status>${esc(equipe.text)}</div>` : ''}
       ${this.items.length ? `
         <div class="history-search">
           <span class="history-search__icon" aria-hidden="true">${icon('search', 18)}</span>
@@ -162,6 +178,7 @@ export class OutboxView {
             ${date ? `Relatório de ${date} · ` : ''}Finalizado em ${formatDateTime(r.createdAt)}
             · ${nPhotos} foto${nPhotos === 1 ? '' : 's'} · ID <code>${esc(r.uniqueId.slice(0, 8))}</code>
             ${r.status === 'sent' && r.sentAt ? ` · sincronizado em ${formatDateTime(r.sentAt)}` : ''}
+            ${r.status === 'team' ? ` · <span data-autor>por ${esc(r.autor || 'técnico da equipe')}</span>` : ''}
           </span>
           ${r.status === 'error' ? `<span class="outbox-item__error small">
             ${q.attempts} tentativa${q.attempts > 1 ? 's' : ''} sem confirmação · próxima ${formatRelative(q.nextAttemptAt)}
@@ -189,11 +206,13 @@ export class OutboxView {
     const module = getModule(rec.module);
     if (!module) return;
     const st = STATUS[rec.status] || STATUS.sent;
-    const lostPhotos = !rec.photos.length && rec.photosCount > 0;
+    const lostPhotos = !rec.remote && !rec.photos.length && rec.photosCount > 0;
+    const fotosABaixar = rec.remote && rec.fotosPendentes > 0;
     openPreview({
       module, uniqueId: rec.uniqueId, data: rec.data, photos: rec.photos, mode: 'view',
       meta: `Finalizado em ${formatDateTime(rec.createdAt)} · ${st.label}`,
-      notice: lostPhotos ? `Este relatório tinha ${rec.photosCount} foto(s), mas foi finalizado numa versão anterior do app, que não guardava as fotos depois do envio. O PDF sai sem elas.` : '',
+      notice: lostPhotos ? `Este relatório tinha ${rec.photosCount} foto(s), mas foi finalizado numa versão anterior do app, que não guardava as fotos depois do envio. O PDF sai sem elas.`
+        : fotosABaixar ? `${rec.fotosPendentes} foto(s) deste relatório da equipe ainda não foram baixadas; elas vêm na próxima sincronização com internet.` : '',
       onReuse: () => this.onReuse?.(rec)
     });
   }

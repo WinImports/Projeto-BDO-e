@@ -13,14 +13,15 @@ const OVERRIDE_KEY = 'bdoe.supabase';
 export const SYNC = {
   rpcName: 'submit_reports',     // função no banco que grava em lote de forma idempotente (bdo_reports / technical_visits / execution_reports)
   settingsRpc: 'save_company_settings', // configurações da empresa/equipe (company_settings)
-  photoBucket: 'report-photos',  // bucket do Supabase Storage (privado, só INSERT)
+  photoBucket: 'report-photos',  // bucket do Supabase Storage (privado: envio; leitura só pela equipe logada do mesmo contrato)
   shareBucket: 'report-share',   // cópias dos relatórios (PDF/HTML) para o link do WhatsApp (público, caminho = uniqueId)
   batchSize: 10,                 // relatórios por requisição
   immediateRetries: 3,           // tentativas seguidas dentro de uma rodada (1s, 2s, 4s)
   baseDelayMs: 1000,
   backoffBaseMs: 30_000,         // após falhar a rodada: 30s, 1min, 2min, 4min...
   backoffMaxMs: 15 * 60_000,     // ...até no máximo 15 min entre tentativas
-  heartbeatMs: 30_000            // verificação periódica de itens prontos para reenvio
+  heartbeatMs: 30_000,           // verificação periódica de itens prontos para reenvio
+  pullIntervalMs: 15 * 60_000    // histórico da equipe: além de login / volta da internet, no máximo a cada 15 min
 };
 
 function lerOverride() {

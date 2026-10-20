@@ -271,3 +271,115 @@ $$;
 
 revoke all on function public.save_device_settings(uuid, jsonb, timestamptz) from public;
 grant execute on function public.save_device_settings(uuid, jsonb, timestamptz) to anon, authenticated;
+
+-- 6) Equipe por contrato: leitura do histórico (pull) ---------------------
+-- Quem pertence a cada contrato é definido AQUI, pelo administrador (Table Editor ou SQL), nunca pelo
+-- aparelho: o técnico logado (e-mail CONFIRMADO no Supabase Auth) recebe os relatórios de todos os
+-- contratos em que estiver cadastrado. Ex.:
+--   insert into public.contract_members (email, contrato) values ('tecnico@empresa.com', 'OS-Mans');
+-- Recomendado: desligar o cadastro público (Authentication › Providers › Email › "Allow new users to sign up")
+-- e criar os usuários pelo painel.
+create table if not exists public.contract_members (
+  email      text        not null,
+  contrato   text        not null,
+  created_at timestamptz not null default now(),
+  primary key (email, contrato)
+);
+alter table public.contract_members enable row level security; -- sem políticas: só o administrador mexe
+
+-- "os-mans " = "OS-MANS": compara contratos sem diferença de maiúsculas e espaços
+create or replace function public._norm_contrato(t text)
+returns text language sql immutable as $$
+  select upper(regexp_replace(trim(coalesce(t, '')), '\s+', ' ', 'g'));
+$$;
+
+create index if not exists bdo_reports_contrato_idx       on public.bdo_reports (public._norm_contrato(contrato), client_created_at desc);
+create index if not exists technical_visits_contrato_idx  on public.technical_visits (public._norm_contrato(contrato), client_created_at desc);
+create index if not exists execution_reports_contrato_idx on public.execution_reports (public._norm_contrato(contrato), client_created_at desc);
+
+-- Contratos do técnico logado (vazio sem login ou com e-mail não confirmado)
+create or replace function public.my_contracts()
+returns setof text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select distinct m.contrato
+  from public.contract_members m
+  join auth.users u on lower(u.email) = lower(m.email)
+  where u.id = auth.uid() and u.email_confirmed_at is not null;
+$$;
+
+revoke all on function public.my_contracts() from public, anon;
+grant execute on function public.my_contracts() to authenticated;
+
+-- Relatórios da equipe a partir de p_since (no máximo 90 dias e 1000 relatórios por chamada)
+create or replace function public.list_team_reports(p_since timestamptz)
+returns table (unique_id uuid, module text, payload jsonb, photos jsonb, contrato text, user_email text,
+               client_created_at timestamptz, received_at timestamptz)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_since timestamptz := greatest(coalesce(p_since, now() - interval '30 days'), now() - interval '90 days');
+begin
+  if auth.uid() is null then
+    raise exception 'login necessário';
+  end if;
+  return query
+    with meus as (select public._norm_contrato(c) as c from public.my_contracts() c),
+    todos as (
+      select r.unique_id, r.module, r.payload, r.photos, r.contrato, r.user_email, r.client_created_at, r.received_at from public.bdo_reports r
+      union all
+      select r.unique_id, r.module, r.payload, r.photos, r.contrato, r.user_email, r.client_created_at, r.received_at from public.technical_visits r
+      union all
+      select r.unique_id, r.module, r.payload, r.photos, r.contrato, r.user_email, r.client_created_at, r.received_at from public.execution_reports r
+    )
+    select t.unique_id, t.module, t.payload, t.photos, t.contrato, t.user_email, t.client_created_at, t.received_at
+    from todos t
+    where public._norm_contrato(t.contrato) in (select c from meus) and t.client_created_at >= v_since
+    order by t.client_created_at desc
+    limit 1000;
+end;
+$$;
+
+revoke all on function public.list_team_reports(timestamptz) from public, anon;
+grant execute on function public.list_team_reports(timestamptz) to authenticated;
+
+-- O relatório (pelo unique_id) é de um contrato do técnico logado? Usado na leitura das fotos.
+create or replace function public.can_read_report(p_unique_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p_unique_id is not null and exists (
+    select 1 from (
+      select contrato from public.bdo_reports where unique_id = p_unique_id
+      union all select contrato from public.technical_visits where unique_id = p_unique_id
+      union all select contrato from public.execution_reports where unique_id = p_unique_id
+    ) r
+    where public._norm_contrato(r.contrato) in (select public._norm_contrato(c) from public.my_contracts() c)
+  );
+$$;
+
+revoke all on function public.can_read_report(uuid) from public, anon;
+grant execute on function public.can_read_report(uuid) to authenticated;
+
+-- Fotos: caminho <módulo>/<unique_id>/<arquivo>. Leitura só para técnico logado do mesmo contrato
+-- (o bucket continua privado; anon segue só com INSERT).
+create or replace function public._uuid_or_null(t text)
+returns uuid language sql immutable as $$
+  select case when t ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then t::uuid end;
+$$;
+
+drop policy if exists "report-photos: equipe le" on storage.objects;
+create policy "report-photos: equipe le"
+  on storage.objects for select
+  to authenticated
+  using (bucket_id = 'report-photos' and public.can_read_report(public._uuid_or_null((storage.foldername(name))[2])));
