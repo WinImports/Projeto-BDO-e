@@ -56,6 +56,14 @@ test.describe('login', () => {
   });
 });
 
+test('desktop: credenciais do Supabase pelas variáveis de ambiente BDOE_SUPABASE_URL / BDOE_SUPABASE_ANON_KEY', async () => {
+  const ctx = await launchApp({ login: false, env: { BDOE_SUPABASE_URL: 'https://env-teste.supabase.co', BDOE_SUPABASE_ANON_KEY: 'chave-env' } });
+  const cfg = await ctx.page.evaluate(async () => (await import('./src/config.js')).supabaseConfig());
+  expect(cfg).toEqual({ url: 'https://env-teste.supabase.co', anonKey: 'chave-env', origem: 'ambiente' });
+  await expect(ctx.page.locator('[data-login-mode]')).not.toContainText('Servidor não configurado');
+  await ctx.close();
+});
+
 test.describe('BDO-e → Visita Técnica / Relatório de Execução', () => {
   let ctx;
   test.beforeEach(async () => { ctx = await launchApp(); });

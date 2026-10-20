@@ -7,6 +7,23 @@ import { getSettings, saveSettings, formatCnpj, isValidCnpj, getDeviceId } from 
 import { pocosStatus, importPocosFile, clearPocosBase } from '../core/pocos.js';
 import { confirmDialog } from './confirm.js';
 import { currentUser, displayName } from '../core/auth.js';
+import { supabaseConfig, saveSupabaseOverride, urlSupabaseValida } from '../config.js';
+import { resetClient } from '../core/supabase.js';
+
+const ORIGEM_SERVIDOR = {
+  aparelho: 'Configurado neste aparelho',
+  ambiente: 'Configurado pelas variáveis de ambiente do computador (BDOE_SUPABASE_URL / BDOE_SUPABASE_ANON_KEY)',
+  config: 'Configurado no app (src/config.js)'
+};
+
+/** Chave secreta (service_role / sb_secret_) nunca pode ir para o aparelho. */
+function chaveSecreta(chave) {
+  if (/^sb_secret_/i.test(chave)) return true;
+  try {
+    const payload = JSON.parse(atob(chave.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload.role === 'service_role';
+  } catch { return false; }
+}
 
 const MODO_LOGIN = {
   supabase: 'Conta confirmada no servidor (Supabase)',
@@ -96,6 +113,7 @@ export class SettingsView {
         </div>
       </div>
       ${this.contaSectionHtml()}
+      ${this.servidorSectionHtml()}
       ${this.pocosSectionHtml()}
       <form class="report-form settings-form" novalidate>
         ${GROUPS.map((g) => `
@@ -162,10 +180,85 @@ export class SettingsView {
           <div class="conta__info">
             <strong data-conta-nome>${esc(user.nome || getSettings().tecnico_nome || displayName(user))}</strong>
             <span class="muted small" data-conta-email>${esc(user.email)} · ${esc(MODO_LOGIN[user.modo] || '')}</span>
+            ${user.modo !== 'supabase' && supabaseConfig().origem ? '<span class="small" data-conta-vincular>Para vincular os envios à sua conta no servidor, toque em Sair e entre de novo com internet.</span>' : ''}
           </div>
           <button type="button" class="btn btn--ghost btn--danger-text" data-action="logout">${icon('arrowLeft', 16)} Sair / Logout</button>
         </div>
       </section>`;
+  }
+
+  // ---------- Servidor (Supabase) ----------
+
+  servidorSectionHtml() {
+    const cfg = supabaseConfig();
+    const local = cfg.origem === 'aparelho';
+    return `
+      <section class="card form-section" id="servidor-section">
+        <header class="form-section__head">
+          <span class="form-section__icon">${icon('cloud', 20)}</span>
+          <div class="form-section__titles">
+            <h3 class="form-section__title">Servidor (Supabase)</h3>
+            <p class="form-section__hint">Login, envio dos relatórios (BDO-e, Visitas e Execuções), fotos e links do WhatsApp. Supabase › Project Settings › API: copie a Project URL e a chave anon / publishable. Nunca use a chave service_role / secret.</p>
+          </div>
+        </header>
+        <div class="form-grid">
+          <p class="span-12 notice notice--${cfg.origem ? 'ok' : 'warn'}" data-servidor-status>${esc(cfg.origem ? `${ORIGEM_SERVIDOR[cfg.origem]}: ${cfg.url}` : 'Servidor não configurado: os relatórios ficam só neste aparelho e o login é local.')}</p>
+          <div class="field span-6" data-wrap="supabase_url">
+            <label class="field__label-wrap" for="s-supabase_url"><span class="field__label">Project URL</span></label>
+            <input id="s-supabase_url" data-server="url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://xxxxxxxx.supabase.co" value="${esc(local ? cfg.url : '')}">
+            <small class="field__error"></small>
+          </div>
+          <div class="field span-6" data-wrap="supabase_key">
+            <label class="field__label-wrap" for="s-supabase_key"><span class="field__label">Chave anon / publishable</span></label>
+            <input id="s-supabase_key" data-server="key" type="password" autocomplete="off" spellcheck="false" placeholder="eyJhbGciOi… ou sb_publishable_…" value="${esc(local ? cfg.anonKey : '')}">
+            <small class="field__error"></small>
+          </div>
+          <div class="span-12 servidor__acoes">
+            <button type="button" class="btn btn--primary btn--sm" data-action="save-server">${icon('save', 15)} Salvar servidor</button>
+            ${local ? `<button type="button" class="btn btn--ghost btn--sm btn--danger-text" data-action="clear-server">${icon('trash', 15)} Remover deste aparelho</button>` : ''}
+          </div>
+        </div>
+      </section>`;
+  }
+
+  /** Redesenha só esta seção (as outras podem ter alterações ainda não salvas). */
+  refreshServer() {
+    const sec = $('#servidor-section', this.root);
+    if (sec) sec.outerHTML = this.servidorSectionHtml();
+    const conta = $('#conta-section', this.root); // aviso "vincular a conta" depende do servidor
+    if (conta) conta.outerHTML = this.contaSectionHtml();
+  }
+
+  async saveServer() {
+    const url = $('[data-server=url]', this.root).value.trim();
+    const key = $('[data-server=key]', this.root).value.trim();
+    const erro = (campo, msg) => {
+      const wrap = $(`[data-wrap=${campo}]`, this.root);
+      wrap.classList.add('has-error');
+      $('.field__error', wrap).textContent = msg;
+    };
+    $$('#servidor-section .has-error', this.root).forEach((w) => { w.classList.remove('has-error'); $('.field__error', w).textContent = ''; });
+    if (!urlSupabaseValida(url)) return erro('supabase_url', 'Use a Project URL no formato https://<projeto>.supabase.co');
+    if (!key) return erro('supabase_key', 'Informe a chave anon / publishable');
+    if (chaveSecreta(key)) return erro('supabase_key', 'Esta é a chave secreta (service_role). Use a chave anon / publishable.');
+    saveSupabaseOverride(url, key);
+    resetClient();
+    this.refreshServer();
+    toast('Servidor salvo neste aparelho. Os relatórios pendentes serão enviados.', 'success');
+    this.onServerChanged?.();
+  }
+
+  async clearServer() {
+    const ok = await confirmDialog({
+      title: 'Remover o servidor deste aparelho?',
+      message: 'Os relatórios continuam guardados aqui; o envio volta a usar a configuração do app (se houver).',
+      confirmLabel: 'Remover', danger: true
+    });
+    if (!ok) return;
+    saveSupabaseOverride('', '');
+    resetClient();
+    this.refreshServer();
+    this.onServerChanged?.();
   }
 
   // ---------- Base de Poços e Locações ----------
@@ -361,6 +454,8 @@ export class SettingsView {
     if (btn.dataset.action === 'save') this.save();
     if (btn.dataset.action === 'clear-pocos') this.clearPocos();
     if (btn.dataset.action === 'logout') this.onLogout?.();
+    if (btn.dataset.action === 'save-server') this.saveServer();
+    if (btn.dataset.action === 'clear-server') this.clearServer();
   }
 
   save() {

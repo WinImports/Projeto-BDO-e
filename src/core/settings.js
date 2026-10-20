@@ -1,8 +1,9 @@
 // Configurações do sistema (empresa, contrato/cliente e técnico padrão).
-// Fonte local: localStorage (disponível offline). Cópia no Supabase via rpc save_device_settings,
+// Fonte local: localStorage (disponível offline). Cópia no Supabase (tabela company_settings) via rpc save_company_settings,
 // enviada pela mesma rotina de sincronização dos relatórios (sync.js).
 
 import { sanitizarWhatsApp } from './telefone.js';
+import { SYNC } from '../config.js';
 
 const KEY = 'bdoe.settings';
 const DEVICE_KEY = 'bdoe.deviceId';
@@ -71,7 +72,7 @@ export async function syncSettings(client) {
   const s = getSettings();
   if (!s.syncPending) return;
   const settings = Object.fromEntries(SETTINGS_FIELDS.map((k) => [k, s[k]]));
-  const { data, error, status } = await client.rpc('save_device_settings', {
+  const { data, error, status } = await client.rpc(SYNC.settingsRpc, {
     p_device_id: getDeviceId(), p_settings: settings, p_updated_at: s.updatedAt
   });
   if (error) throw error;

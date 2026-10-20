@@ -190,7 +190,7 @@ test('PWA: relatório finalizado fica no Histórico do navegador, reabre na pré
     const item = page.locator('[data-history] .outbox-item');
     await expect(item).toHaveCount(1);
     await expect(item).toContainText('FBM-89');
-    await expect(item.locator('.status')).toHaveText('Aguardando envio');
+    await expect(item.locator('.status')).toHaveText('Pendente de Envio');
 
     await page.evaluate(() => {
       window.print = () => { window.__printed = { text: document.getElementById('print-root')?.textContent || '' }; };

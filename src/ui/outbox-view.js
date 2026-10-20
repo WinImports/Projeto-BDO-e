@@ -9,9 +9,9 @@ import { getPref, setPref } from '../core/prefs.js';
 
 const STATUS = {
   local: { cls: 'local', label: 'Salvo no aparelho (não enviado)' },
-  pending: { cls: 'pending', label: 'Aguardando envio' },
-  error: { cls: 'error', label: 'Reagendado' },
-  sent: { cls: 'sent', label: 'Enviado' }
+  pending: { cls: 'pending', label: 'Pendente de Envio' },
+  error: { cls: 'error', label: 'Pendente de Envio (reagendado)' },
+  sent: { cls: 'sent', label: 'Sincronizado' }
 };
 
 /** Data do relatório (primeiro campo de data preenchido), em pt-BR. */
@@ -76,7 +76,7 @@ export class OutboxView {
 
   statusLine() {
     const s = this.sync;
-    if (!s.configured) return { kind: 'warn', text: 'Supabase não configurado — os relatórios ficam guardados com segurança neste aparelho até a configuração (src/config.js).' };
+    if (!s.configured) return { kind: 'warn', text: 'Supabase não configurado — os relatórios ficam guardados com segurança neste aparelho até a configuração (Configurações › Servidor).' };
     if (!s.online) return { kind: 'warn', text: 'Sem conexão — os relatórios serão enviados automaticamente quando a internet voltar.' };
     if (s.running) return { kind: 'info', text: 'Sincronizando com o servidor…' };
     if (s.lastError) return { kind: 'error', text: `Última tentativa falhou: ${s.lastError}` };
@@ -99,7 +99,7 @@ export class OutboxView {
         <div>
           <h2>Histórico e Caixa de Saída</h2>
           <p class="muted">${this.items.length
-            ? `${this.items.length} relatório${this.items.length > 1 ? 's' : ''} salvo${this.items.length > 1 ? 's' : ''} neste aparelho · ${pending ? `${pending} aguardando envio` : 'nenhum pendente de envio'}${locais ? ` · ${locais} não enviado${locais > 1 ? 's' : ''}` : ''}`
+            ? `${this.items.length} relatório${this.items.length > 1 ? 's' : ''} salvo${this.items.length > 1 ? 's' : ''} neste aparelho · ${pending ? `${pending} pendente${pending > 1 ? 's' : ''} de envio` : 'nenhum pendente de envio'}${locais ? ` · ${locais} não enviado${locais > 1 ? 's' : ''}` : ''}`
             : 'Nenhum relatório finalizado neste aparelho'}</p>
         </div>
         <button type="button" class="btn btn--primary" data-action="sync"${canSync ? '' : ' disabled'}>
@@ -161,7 +161,7 @@ export class OutboxView {
           <span class="outbox-item__meta muted small">
             ${date ? `Relatório de ${date} · ` : ''}Finalizado em ${formatDateTime(r.createdAt)}
             · ${nPhotos} foto${nPhotos === 1 ? '' : 's'} · ID <code>${esc(r.uniqueId.slice(0, 8))}</code>
-            ${r.status === 'sent' && r.sentAt ? ` · enviado em ${formatDateTime(r.sentAt)}` : ''}
+            ${r.status === 'sent' && r.sentAt ? ` · sincronizado em ${formatDateTime(r.sentAt)}` : ''}
           </span>
           ${r.status === 'error' ? `<span class="outbox-item__error small">
             ${q.attempts} tentativa${q.attempts > 1 ? 's' : ''} sem confirmação · próxima ${formatRelative(q.nextAttemptAt)}

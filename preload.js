@@ -1,8 +1,15 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Credenciais do Supabase vindas das variáveis de ambiente (main.js → additionalArguments)
+function supabaseEnv() {
+  const arg = process.argv.find((a) => a.startsWith('--bdoe-supabase='));
+  try { return arg ? JSON.parse(arg.slice('--bdoe-supabase='.length)) : null; } catch { return null; }
+}
+
 // Ponte mínima e segura entre o Electron e a interface.
 contextBridge.exposeInMainWorld('desktop', {
   isElectron: true,
+  supabaseEnv: supabaseEnv(),
   platform: process.platform,
   versions: {
     electron: process.versions.electron,

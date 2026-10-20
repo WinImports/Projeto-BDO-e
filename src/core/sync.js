@@ -7,11 +7,16 @@
 //     (ex.: resposta perdida no caminho) devolve o id já existente, sem duplicar.
 //  3. Exponential backoff — tentativas imediatas 1s/2s/4s; se a rodada falhar, o item é
 //     reagendado em 30s, 1min, 2min... até 15min, com jitter.
+//  4. Fila no IndexedDB (store "outbox" = sync_queue): "Pendente de Envio" até a confirmação; ao voltar
+//     a internet (evento online) a fila é enviada sozinha e o relatório fica "Sincronizado" no Histórico.
+// O servidor separa por tipo (bdo_reports / technical_visits / execution_reports) e registra o técnico
+// pelo token do Supabase Auth; user_email/device_id do aparelho vão como informação complementar.
 
 import { SYNC, isSupabaseConfigured } from '../config.js';
 import { getClient } from './supabase.js';
 import * as outbox from './outbox.js';
-import { syncSettings } from './settings.js';
+import { syncSettings, getDeviceId } from './settings.js';
+import { currentUser } from './auth.js';
 
 const state = { running: false, lastRunAt: null, lastError: null };
 const listeners = new Set();
@@ -72,7 +77,9 @@ const toRow = (rec, photos) => ({
   content_hash: rec.contentHash,
   payload: rec.data,
   photos,
-  client_created_at: rec.createdAt
+  client_created_at: rec.createdAt,
+  device_id: getDeviceId(),
+  user_email: currentUser()?.email || null
 });
 
 async function deliverBatch(client, batch) {

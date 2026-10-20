@@ -971,3 +971,4 @@ textarea.is-locked:hover { border-color: var(--border); }
   .conta { padding: 14px 16px 16px; }
   .conta .btn { width: 100%; justify-content: center; }
 }
+.servidor__acoes { display: flex; flex-wrap: wrap; gap: 8px; }

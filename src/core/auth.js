@@ -1,13 +1,15 @@
 // Login do técnico: Supabase Auth (e-mail + senha) com fallback offline para usuário local.
 //
-// - Online e com Supabase configurado: confere no servidor (signInWithPassword). Deu certo, guarda
-//   neste aparelho um hash da senha (PBKDF2) para entrar depois sem sinal.
+// - Online e com Supabase configurado: confere no servidor (signInWithPassword). Deu certo, a sessão
+//   do Supabase fica salva (core/supabase.js, renovada sozinha) e os envios levam o token do técnico;
+//   também guarda neste aparelho um hash da senha (PBKDF2) para entrar depois sem sinal.
 // - Sem internet (ou sem Supabase configurado): confere com o hash local; e-mail ainda sem conta
 //   neste aparelho vira um usuário local.
 // - A sessão fica no localStorage: o técnico não precisa entrar de novo a cada abertura do app.
 //   "Sair" (Configurações) apaga só a sessão; as credenciais locais continuam para o login offline.
 
-import { SUPABASE_URL, SUPABASE_ANON_KEY, isSupabaseConfigured } from '../config.js';
+import { isSupabaseConfigured } from '../config.js';
+import { getClient } from './supabase.js';
 
 const SESSION_KEY = 'bdoe.auth.session';
 const USERS_KEY = 'bdoe.auth.users';
@@ -63,11 +65,8 @@ function abrirSessao(user) {
 const erroDeRede = (err) => !err?.status || err.status >= 500 || err.name === 'AuthRetryableFetchError';
 
 async function loginSupabase(email, senha) {
-  if (!window.supabase?.createClient) throw Object.assign(new Error('Biblioteca do Supabase não carregada'), { status: 0 });
-  // cliente próprio, sem guardar sessão: os envios de relatórios continuam pela chave anon (core/supabase.js)
-  const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false, storageKey: 'bdoe-login' }
-  });
+  let client;
+  try { client = getClient(); } catch (err) { throw Object.assign(err, { status: 0 }); }
   const { data, error } = await client.auth.signInWithPassword({ email, password: senha });
   if (error) throw error;
   const meta = data.user?.user_metadata || {};
@@ -116,5 +115,7 @@ export async function login(emailBruto, senha) {
 /** Sair: apaga só a sessão (as credenciais locais continuam para o próximo login offline). */
 export function logout() {
   localStorage.removeItem(SESSION_KEY);
+  // encerra a sessão do Supabase só neste aparelho (funciona offline: apaga o token guardado)
+  try { getClient()?.auth.signOut({ scope: 'local' }).catch(() => {}); } catch { /* sem Supabase */ }
   avisar();
 }

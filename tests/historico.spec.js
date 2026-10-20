@@ -50,12 +50,12 @@ test('relatório finalizado fica no Histórico mesmo depois de enviado, com tipo
   await expect(item).toContainText('FBM-89');
   await expect(item).toContainText(`Relatório de ${hojeBR()}`);
   await expect(item).toContainText('1 foto');
-  await expect(item.locator('.status')).toHaveText('Aguardando envio');
+  await expect(item.locator('.status')).toHaveText('Pendente de Envio');
 
-  // servidor confirmou: sai da fila, continua no histórico como "Enviado"
+  // servidor confirmou: sai da fila, continua no histórico como "Sincronizado"
   await confirmarEnvio(page);
   await expect(page.locator('#outbox-badge')).toBeHidden();
-  await expect(item.locator('.status')).toHaveText('Enviado');
+  await expect(item.locator('.status')).toHaveText('Sincronizado');
   await expect(item.locator('[data-action=edit]')).toHaveCount(0);
 
   // persiste ao reabrir o app
@@ -63,7 +63,7 @@ test('relatório finalizado fica no Histórico mesmo depois de enviado, com tipo
   ctx = await launchApp({ userData });
   await openTab(ctx.page, 'outbox');
   await expect(ctx.page.locator('[data-history] .outbox-item')).toContainText('FBM-89');
-  await expect(ctx.page.locator('[data-history] .status')).toHaveText('Enviado');
+  await expect(ctx.page.locator('[data-history] .status')).toHaveText('Sincronizado');
 });
 
 test('tocar no relatório salvo abre a prévia completa (com fotos) e gera o PDF', async () => {

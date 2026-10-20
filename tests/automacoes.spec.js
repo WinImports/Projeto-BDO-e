@@ -153,7 +153,7 @@ test('"Salvar e Finalizar": só salvar fica no Histórico; "Enviar" depois vai p
   await expect(item.locator('.status')).toHaveText('Salvo no aparelho (não enviado)');
   await item.locator('[data-action=send]').click();
   await expect(page.locator('#outbox-badge')).toHaveText('1');
-  await expect(item.locator('.status')).toHaveText('Aguardando envio');
+  await expect(item.locator('.status')).toHaveText('Pendente de Envio');
 
   const share = page.locator('[data-share-prompt]');
   const href = await share.locator('[data-share-whatsapp]').getAttribute('href');

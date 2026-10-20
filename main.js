@@ -25,6 +25,8 @@ function createWindow() {
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      // credenciais do Supabase por variável de ambiente (opcional; ver src/config.js)
+      additionalArguments: [`--bdoe-supabase=${JSON.stringify({ url: process.env.BDOE_SUPABASE_URL || '', anonKey: process.env.BDOE_SUPABASE_ANON_KEY || '' })}`],
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true

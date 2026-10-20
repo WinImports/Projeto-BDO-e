@@ -22,7 +22,7 @@ manifest.json, sw.js, icons/, .nojekyll   PWA (sw.js gerado por scripts/gerar-pw
 src/vendor/      supabase.js (UMD copiado de node_modules: `npm run vendor`)
 src/shared/      pocos-parser.js — UMD usado pelo Electron, navegador, script e testes
 src/app.js       orquestração: base/abas, layout do formulário, índice de seções, ações, Ctrl+S
-src/config.js    SUPABASE_URL / SUPABASE_ANON_KEY e parâmetros de sync (vazio = "Somente local")
+src/config.js    credenciais do Supabase (supabaseConfig(): Configurações › Servidor > env BDOE_SUPABASE_URL/_ANON_KEY no desktop > constantes) e parâmetros de sync (vazio = "Somente local")
 src/core/        db (IndexedDB), drafts, outbox, sync, supabase, settings, ids, prefs, auth (login), heranca (BDO → relatórios)
 src/modules/     definições DECLARATIVAS dos formulários (visita-tecnica, bdo, handover, common)
 src/ui/          form (renderizador), preview, report-pdf, outbox-view, settings-view, login-view, camera, icons, toast
@@ -30,14 +30,14 @@ supabase/schema.sql  tabelas, RPCs e Storage (rodar no SQL Editor do Supabase)
 _legado/         versão antiga — não editar
 ```
 
-Supabase JS é carregado do **build UMD local** (`src/vendor/supabase.js`, cópia de node_modules) e usado via `window.supabase` em `src/core/supabase.js`. Não importar de CDN.
+Supabase JS é carregado do **build UMD local** (`src/vendor/supabase.js`, cópia de node_modules) e usado via `window.supabase` em `src/core/supabase.js`. Não importar de CDN. O cliente guarda a sessão do Supabase Auth no localStorage (`bdoe.supabase.auth`, `persistSession` + `autoRefreshToken`): RPC e Storage vão com o token do técnico logado (o servidor grava `user_id`/`user_email`); sem sessão, pela chave anon. Credenciais trocadas em Configurações › Servidor chamam `resetClient()`. Testes simulam o Supabase trocando `window.supabase.createClient` (`tests/supabase.spec.js`).
 
 **Publicação**: repositório público `WinImports/Projeto-BDO-e` com GitHub Pages. A base REAL de poços (`src/data/pocos-ba.json`, CSV/KML) **nunca vai para o Git** (.gitignore) — dados operacionais; no celular a base é importada em Configurações.
 
 ## Regras de negócio
 
 - Menu com exatamente 3 relatórios, nesta ordem (`src/modules/index.js`): **BDO-e** (`bdo`), **Relatório de Visita Técnica** (`visita_tecnica`), **Relatório de Execução** (`handover`). Não existe mais seleção de base BA/SE; rascunhos são um por relatório (chave = id do módulo; chaves antigas `BA:x`/`SE:x` são migradas em `core/drafts.js`). A coluna `base` no banco ficou só como legado (nula).
-- **Login** (`core/auth.js` + `ui/login-view.js`): primeira tela sem sessão (`#login-form`, antes de montar as abas). E-mail + senha: com Supabase configurado e internet → `signInWithPassword` (cliente próprio, sem guardar sessão; os envios seguem pela chave anon) e guarda hash PBKDF2 da senha para o login offline; sem internet/servidor → confere o hash local ou cria o usuário local. Sessão em localStorage (`bdoe.auth.session`); nome no topo (`#user-chip`); "Sair / Logout" em Configurações › Conta (apaga só a sessão e recarrega). Testes: `launchApp()` entra sozinho com usuário local (`login: false` para parar na tela), `tests/fluxo-bdo-relatorios.spec.js`.
+- **Login** (`core/auth.js` + `ui/login-view.js`): primeira tela sem sessão (`#login-form`, antes de montar as abas). E-mail + senha: com Supabase configurado e internet → `signInWithPassword` no cliente compartilhado (sessão do Supabase salva) e guarda hash PBKDF2 da senha para o login offline; usuário local que configurou o servidor depois vê "Sair e entrar de novo" em Conta para vincular; sem internet/servidor → confere o hash local ou cria o usuário local. Sessão em localStorage (`bdoe.auth.session`); nome no topo (`#user-chip`); "Sair / Logout" em Configurações › Conta (apaga só a sessão e recarrega). Testes: `launchApp()` entra sozinho com usuário local (`login: false` para parar na tela), `tests/fluxo-bdo-relatorios.spec.js`.
 - **Poço só no BDO-e**: busca na base, GPS e rotas existem só no BDO-e. Visita e Execução usam `pocoHerdado()` (texto simples) e `module.herdaDoBdo` (`herancaBdo()`): ao abrir, `core/heranca.js` copia do BDO-e ativo (rascunho com poço; senão o último BDO finalizado) Poço, Locação/Campo (← cidade_uf), Data, Cliente, Contrato e coordenadas. Novo relatório recebe tudo; rascunho só nos campos vazios ou ainda iguais ao último valor herdado (`data._bdo`). Aviso `[data-heranca]` no topo. As coordenadas ficam na seção `legacy` (fora do formulário) e saem no cabeçalho do PDF.
 - **Objetivo protegido**: `defaultValue` (texto padrão) + `lockEdit: 'Editar Objetivo'` → textarea `readonly` até o botão `toggle-lock` ("Concluir edição" trava de novo).
 - **Busca no Histórico**: `[data-history-search]` filtra ao digitar (sem acento, todos os termos) por tipo, poço, data (dd/mm/aaaa), status, cliente, ID; só `renderResults()` é refeito (o campo não perde o foco).
@@ -71,7 +71,7 @@ Supabase JS é carregado do **build UMD local** (`src/vendor/supabase.js`, cópi
 1. **Outbox**: todo relatório finalizado é gravado no IndexedDB **antes** de qualquer rede (`core/outbox.js`). Rascunhos também ficam no IndexedDB (fotos são Blobs).
 2. **Trava de confirmação**: item só sai da fila com HTTP 200/201 **e** `id` devolvido para o `unique_id` (`core/sync.js`).
 3. **Idempotência**: `uniqueId` (UUID) nasce com o rascunho e é a chave única no banco; reenviar nunca duplica.
-4. **Escrita só por RPC** `security definer` (`submit_reports`, `save_device_settings`). RLS ligado e sem políticas para `anon` nas tabelas. Storage: bucket privado `report-photos`, só INSERT.
+4. **Escrita só por RPC** `security definer` (`submit_reports` → `bdo_reports` / `technical_visits` / `execution_reports` pelo `module`; `save_company_settings` → `company_settings`; `save_device_settings` é só compatibilidade). RLS ligado e sem políticas nas tabelas (a tabela única `reports` e `device_settings` ficaram como legado, copiadas pelo schema). Storage: bucket privado `report-photos` (fotos), só INSERT; bucket público `report-share` só para a cópia PDF/HTML do link do WhatsApp (caminho = uniqueId).
 5. Backoff: 3 tentativas imediatas, depois 30s → 15min com jitter. Fotos já enviadas não são reenviadas.
 6. Mudou o esquema? Atualize `supabase/schema.sql` de forma idempotente (`if not exists`, `create or replace`).
 
@@ -82,6 +82,7 @@ Supabase JS é carregado do **build UMD local** (`src/vendor/supabase.js`, cópi
 - Sempre escapar texto dinâmico com `esc()` (`src/ui/dom.js`). Sem `style=""` inline (CSP); use classes ou `el.style` via JS.
 - Ícones: `icon(nome)` de `src/ui/icons.js` (SVG). Não usar emoji na interface.
 - Nunca usar `alert/confirm/prompt` nativos: use `confirmDialog()` (`src/ui/confirm.js`) e `toast(msg, 'success'|'error'|'info'|'warn')`.
+- Status na interface: "Pendente de Envio" (fila `outbox` do IndexedDB = sync_queue; reagendado = "Pendente de Envio (reagendado)"), "Sincronizado" (confirmado pelo servidor), "Salvo no aparelho" (só local). O evento `online` dispara o envio (`startSyncScheduler`).
 - Editar item da Caixa de Saída só se `canEdit(rec)` (nunca houve tentativa de envio); `rehydrate()` reconstrói tabelas com linhas fixas.
 - Em scripts de edição com `String.replace`, cuidado: `$$` na string de substituição vira `$` (use `split/join`).
 - Testes E2E em `tests/` (Playwright + Electron real). Rode `npm test` antes de concluir mudanças de interface. Use `openTab(page, id)` (espera `#view[data-ready=id]`) em vez de clicar na aba direto.

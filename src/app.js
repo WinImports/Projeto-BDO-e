@@ -539,7 +539,7 @@ function updateConnection(s) {
     : ['online', 'Online'];
   el.className = `conn conn--${kind}`;
   el.innerHTML = `<span class="conn__dot" aria-hidden="true"></span>${text}`;
-  el.title = !s.configured ? 'Configure o Supabase em src/config.js para habilitar o envio' : '';
+  el.title = !s.configured ? 'Configure o Supabase em Configurações › Servidor (ou em src/config.js) para habilitar o envio' : '';
 }
 
 // ---------- PWA (navegador / celular) ----------
@@ -599,6 +599,7 @@ async function init() {
   settingsView = new SettingsView();
   settingsView.onSaved = () => syncNow();
   settingsView.onLogout = signOut;
+  settingsView.onServerChanged = () => syncNow({ force: true });
   onSettingsChange(() => { settingsView.refreshStatus(); renderUser(); });
   outboxView = new OutboxView(document.createElement('div'), { onSyncNow: () => syncNow({ force: true }), onEdit: editFromOutbox, onReuse: reuseReport, onSend: sendSaved, onEditLocal: editLocal });
 
