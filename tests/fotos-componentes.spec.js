@@ -170,6 +170,7 @@ test('relatório no formato anterior continua completo na prévia (tabelas antig
 test('BDO não foi alterado: mesmas seções e sem fotos', async () => {
   const { page } = ctx;
   await openTab(page, 'bdo');
-  await expect(page.locator('#section-nav .section-nav__label')).toHaveText(['Cabeçalho', 'Apropriação', 'Paradas', 'Materiais', 'SMS & Segurança', 'Observações']);
+  // única seção acrescentada: Resumo das Atividades (gerado da apropriação); os blocos originais seguem iguais
+  await expect(page.locator('#section-nav .section-nav__label')).toHaveText(['Cabeçalho', 'Apropriação', 'Paradas', 'Materiais', 'SMS & Segurança', 'Resumo', 'Observações']);
   await expect(page.locator('input[data-kind=photos]')).toHaveCount(0);
 });

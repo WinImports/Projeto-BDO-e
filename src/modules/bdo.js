@@ -1,4 +1,5 @@
 import { poco, coordenadas, duracao, duracaoEntreDatas, equipe, TURNOS } from './common.js';
+import { resumoBdo } from './resumo-bdo.js';
 
 // BDO = apropriação diária de horas, paradas, materiais e segurança. Sem fotos
 // (anexos fotográficos ficam no Relatório de Visita & Inspeção Técnica).
@@ -94,6 +95,16 @@ export default {
         { id: 'ocorrencia_sms', label: 'Ocorrência de SMS?', type: 'yesno', required: true },
         { id: 'descricao_sms', label: 'Descrição de SMS', type: 'textarea', placeholder: 'Obrigatório se houve ocorrência de SMS' }
       ]
+    },
+    {
+      title: 'Resumo das Atividades Executadas',
+      short: 'Resumo',
+      icon: 'fileText',
+      hint: 'Montado automaticamente a partir da Apropriação da operação e das paradas: jornada, poços / locações atendidos, atividades e paradas. Toque em "Editar Resumo" para ajustar ou acrescentar.',
+      fields: [{
+        id: 'resumo_atividades', label: 'Resumo das Atividades Executadas', type: 'textarea',
+        autoText: resumoBdo, lockEdit: 'Editar Resumo', placeholder: 'Preencha a Apropriação da operação para gerar o resumo.'
+      }]
     },
     {
       title: 'Observações gerais e programação do próximo turno',

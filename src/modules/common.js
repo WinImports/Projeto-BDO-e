@@ -26,6 +26,8 @@
 // Seção legacy: true → não aparece no formulário; só na prévia/PDF de relatórios antigos que tenham esses dados
 // defaultValue: texto inicial do campo em relatórios novos; lockEdit: 'Editar Objetivo' → textarea protegida
 //            (somente leitura) até o técnico tocar no botão de edição
+// textarea.autoText(data): texto gerado e refeito a cada alteração do relatório enquanto o técnico não o
+//            editar à mão (data._autoTexto guarda a última versão gerada); editado, aparece "Gerar de novo"
 // módulo.herdaDoBdo: { campoDoRelatorio: 'campoDoBdo' } → copiados do BDO-e ativo (ver core/heranca.js)
 
 // autocomplete 'pocos': sugere poços da base oficial (src/data/pocos-ba.json) e, ao escolher,

@@ -209,6 +209,7 @@ export class FormView {
     // Também em rascunhos antigos: preenche só campos que nunca existiram neles (undefined);
     // o que o técnico apagou fica '' e não é tocado (applyDefaults usa ??=).
     this.applyDefaults();
+    this.updateAutoTexts();
 
     this.el = document.createElement('form');
     this.el.className = 'report-form';
@@ -352,8 +353,12 @@ export class FormView {
         if (f.lockEdit) {
           // texto padrão protegido contra toques acidentais: só fica editável pelo botão
           return `<div class="locked-text">
-            <textarea id="f-${id}" data-field="${id}" rows="3" readonly class="is-locked" placeholder="${esc(f.placeholder || '')}">${esc(v)}</textarea>
-            <button type="button" class="btn btn--ghost btn--sm" data-action="toggle-lock" data-target="${id}" aria-pressed="false">${icon('pen', 15)} <span>${esc(f.lockEdit)}</span></button>
+            <textarea id="f-${id}" data-field="${id}" rows="${f.autoText ? 6 : 3}" readonly class="is-locked" placeholder="${esc(f.placeholder || '')}">${esc(v)}</textarea>
+            ${f.autoText ? `<p class="autotext-status small" data-autotext-status="${id}">${this.autoTextStatus(f)}</p>` : ''}
+            <div class="locked-text__actions">
+              <button type="button" class="btn btn--ghost btn--sm" data-action="toggle-lock" data-target="${id}" aria-pressed="false">${icon('pen', 15)} <span>${esc(f.lockEdit)}</span></button>
+              ${f.autoText ? `<button type="button" class="btn btn--text btn--sm" data-action="regen-text" data-target="${id}"${this.autoTextManual(f) ? '' : ' hidden'}>${icon('refresh', 15)} Gerar de novo pela apropriação</button>` : ''}
+            </div>
           </div>`;
         }
         return `<textarea id="f-${id}" data-field="${id}" rows="3" placeholder="${esc(f.placeholder || '')}">${esc(v)}</textarea>`;
@@ -819,6 +824,13 @@ export class FormView {
         input.focus();
         input.setSelectionRange(input.value.length, input.value.length);
       }
+    } else if (action === 'regen-text') {
+      const f = this.fields.get(btn.dataset.target);
+      this.draft.data[f.id] = f.autoText(this.draft.data) || '';
+      const input = $(`[data-field="${CSS.escape(f.id)}"]`, this.el);
+      if (input) input.value = this.draft.data[f.id];
+      this.changed(f.id);
+      toast('Resumo gerado de novo a partir da apropriação.', 'info', 3000);
     } else if (action === 'clear-geo') {
       this.draft.data[btn.dataset.target] = {};
       this.refreshField(btn.dataset.target);
@@ -1231,7 +1243,45 @@ export class FormView {
     toast(`+${trecho.toLocaleString('pt-BR')} km somados ao KM rodado.`, 'info', 3500);
   }
 
+  // ---------- Textos gerados (textarea.autoText, ex.: Resumo das Atividades do BDO-e) ----------
+
+  /** Técnico alterou o texto gerado? (deixa de ser atualizado sozinho) */
+  autoTextManual(f) {
+    const d = this.draft.data;
+    return !isBlank(d[f.id]) && d[f.id] !== d._autoTexto?.[f.id];
+  }
+
+  autoTextStatus(f) {
+    if (this.autoTextManual(f)) return 'Editado manualmente: não é mais atualizado sozinho.';
+    return this.draft.data[f.id] ? 'Atualizado automaticamente com a apropriação.' : 'Será montado automaticamente ao preencher a apropriação.';
+  }
+
+  /**
+   * Refaz os textos gerados. Só substitui o que ainda é a versão gerada anterior (ou vazio);
+   * texto editado pelo técnico fica como está. `skip`: campo que o técnico está editando agora.
+   */
+  updateAutoTexts(skip) {
+    const d = this.draft.data;
+    for (const f of this.fields.values()) {
+      if (!f.autoText) continue;
+      const gerado = f.autoText(d) || '';
+      const sincronizado = isBlank(d[f.id]) || d[f.id] === d._autoTexto?.[f.id];
+      d._autoTexto = { ...d._autoTexto, [f.id]: gerado };
+      if (f.id !== skip && sincronizado && d[f.id] !== gerado) {
+        d[f.id] = gerado;
+        const input = this.el && $(`[data-field="${CSS.escape(f.id)}"]`, this.el);
+        if (input) input.value = gerado;
+      }
+      if (!this.el) continue;
+      const st = $(`[data-autotext-status="${CSS.escape(f.id)}"]`, this.el);
+      if (st) st.textContent = this.autoTextStatus(f);
+      const regen = $(`[data-action=regen-text][data-target="${CSS.escape(f.id)}"]`, this.el);
+      if (regen) regen.hidden = !this.autoTextManual(f);
+    }
+  }
+
   changed(fieldId) {
+    this.updateAutoTexts(fieldId);
     if (fieldId !== this.module.autoRows?.table) this.syncAutoRows();
     if (['poco', 'periodo_inicio', 'periodo_fim'].includes(fieldId) && this.consolField()) this.scheduleConsolidation();
     if (fieldId === 'poco') { clearTimeout(this.routeRefreshTimer); this.routeRefreshTimer = setTimeout(() => this.refreshGeo(), 300); }

@@ -972,3 +972,5 @@ textarea.is-locked:hover { border-color: var(--border); }
   .conta .btn { width: 100%; justify-content: center; }
 }
 .servidor__acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.locked-text__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.autotext-status { margin: 0; color: var(--text-muted); }
