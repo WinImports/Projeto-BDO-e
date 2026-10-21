@@ -226,6 +226,10 @@ test('build do Cloudflare Pages (npm run build): dist/ na raiz do domínio já v
   expect(fs.existsSync(path.join(dist, 'src', 'data'))).toBe(false); // base real de poços nunca vai para o site
   expect(fs.readFileSync(path.join(dist, '_headers'), 'utf8')).toMatch(/\/sw\.js\s+Cache-Control: no-cache/);
   expect(fs.readFileSync(path.join(dist, 'sw.js'), 'utf8')).toMatch(/const VERSION = '[0-9a-f]{12}-[0-9a-f]{6}';/);
+  // painel de licenças publicado em /licencas/, fora do índice de buscadores e sem moldura (iframe)
+  expect(fs.existsSync(path.join(dist, 'licencas', 'index.html'))).toBe(true);
+  expect(fs.existsSync(path.join(dist, 'licencas', 'app.js'))).toBe(true);
+  expect(fs.readFileSync(path.join(dist, '_headers'), 'utf8')).toMatch(/\/licencas\/\*\s+Cache-Control: no-cache\s+X-Robots-Tag: noindex/);
   // chave secreta é recusada no build
   const secreta = `x.${Buffer.from(JSON.stringify({ role: 'service_role' })).toString('base64url')}.y`;
   expect(() => execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'build-web.js')], { env: { ...env, NEXT_PUBLIC_SUPABASE_ANON_KEY: secreta }, stdio: 'pipe' })).toThrow();

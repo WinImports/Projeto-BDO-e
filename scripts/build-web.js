@@ -46,7 +46,8 @@ const check = require('child_process').spawnSync(process.execPath, [path.join(__
 if (check.status !== 0) falha('sw.js desatualizado — rode `npm run pwa:sw` e faça o commit.');
 
 fs.rmSync(DIST, { recursive: true, force: true });
-const arquivos = ['index.html', 'manifest.json', 'sw.js', ...walk('icons'), ...walk('src')].filter((f) => !EXCLUDE.some((re) => re.test(f)));
+// licencas/: painel administrativo de licenças (fora do PWA; ver _headers)
+const arquivos = ['index.html', 'manifest.json', 'sw.js', ...walk('icons'), ...walk('src'), ...walk('licencas')].filter((f) => !EXCLUDE.some((re) => re.test(f)));
 for (const f of arquivos) {
   const destino = path.join(DIST, f);
   fs.mkdirSync(path.dirname(destino), { recursive: true });
@@ -82,6 +83,12 @@ fs.writeFileSync(path.join(DIST, '_headers'), `/*
 
 /src/env.js
   Cache-Control: no-cache
+
+/licencas/*
+  Cache-Control: no-cache
+  X-Robots-Tag: noindex, nofollow
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
 `);
 
 if (fs.existsSync(path.join(DIST, 'src/data'))) falha('src/data foi copiado para dist (base real de poços).');

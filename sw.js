@@ -73,6 +73,7 @@ const PRECACHE = [
 // </precache>
 
 const CACHE = `bdoe-${VERSION}`;
+const LICENCAS = new URL('./licencas/', self.registration.scope).pathname;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
@@ -91,6 +92,8 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  // Painel de licenças (/licencas/): fora do PWA — sem cache e nunca gravado como a página do app
+  if (`${url.pathname}/`.startsWith(LICENCAS)) return;
 
   if (req.mode === 'navigate') {
     event.respondWith(

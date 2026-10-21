@@ -28,6 +28,11 @@ src/core/        db (IndexedDB), drafts, outbox, sync, supabase, settings, ids, 
 src/modules/     definições DECLARATIVAS dos formulários (visita-tecnica, bdo, handover, common)
 src/ui/          form (renderizador), preview, cabecalho, report-pdf, pdf-doc (jsPDF), bdo-pdf (BDO-e em 1 página), docx-doc (Word), outbox-view, settings-view, login-view, camera, icons, toast
 supabase/schema.sql  tabelas, RPCs e Storage (rodar no SQL Editor do Supabase)
+licencas/        Painel de Licenças Multi-App (index.html + app.js), rota /licencas/: fala SÓ com o Supabase central
+                 winappos-licensing (apps, clients, licenses, license_devices, license_logs; RPCs create_license,
+                 renew_license, set_license_status — assinaturas no objeto RPC do app.js). Login obrigatório (sessão em
+                 `winappos.licencas.auth`), Tailwind v4 browser + Font Awesome por CDN com SRI, supabase do src/vendor.
+                 Fora do PWA: o sw.js ignora /licencas/; o build copia a pasta e manda noindex/no-frame. Teste: tests/licencas.spec.js
 _legado/         versão antiga — não editar
 ```
 

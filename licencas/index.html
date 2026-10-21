@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Painel administrativo: só fala com o projeto central de licenciamento (winappos-licensing).
+       Tailwind (build de navegador) e Font Awesome vêm de CDN com versão fixa e SRI; o Supabase JS é o
+       mesmo build UMD local do app (../src/vendor/supabase.js). -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11/; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src https://cdnjs.cloudflare.com; img-src 'self' data:; connect-src https://gdqkontotzaexknuprac.supabase.co wss://gdqkontotzaexknuprac.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Licenças WinAppOS</title>
+  <link rel="icon" href="../icons/icon-192.png" type="image/png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+        integrity="sha384-PPIZEGYM1v8zp5Py7UjFb79S58UeqCL9pYVnVPURKEqvioPROaVAJKKLzvH2rDnI" crossorigin="anonymous">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11/dist/index.global.js"
+          integrity="sha384-XXN6/S6yXj8EpXnBTw3JGR9ZM+hixGxFCLYn0FHtg9cWh0ziKmAgTPEhecbCDOmj" crossorigin="anonymous"></script>
+  <style>
+    /* Base mínima sem o Tailwind (CDN fora do ar): a página continua utilizável */
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #f1f5f9; color: #0f172a; }
+    @media (prefers-color-scheme: dark) { body { background: #020617; color: #e2e8f0; } }
+    [hidden] { display: none !important; }
+    dialog::backdrop { background: rgb(15 23 42 / .6); backdrop-filter: blur(2px); }
+    @media (pointer: coarse), (max-width: 640px) { input, select, textarea { font-size: 16px !important; } }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+
+  <!-- ===================== LOGIN ===================== -->
+  <main id="tela-login" class="flex min-h-screen items-center justify-center px-4 py-10" hidden>
+    <form id="form-login" class="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-7 shadow-xl shadow-slate-900/5 dark:border-slate-800 dark:bg-slate-900" novalidate>
+      <div class="mb-6 flex items-center gap-3">
+        <span class="grid h-11 w-11 place-items-center rounded-xl bg-indigo-600 text-white"><i class="fa-solid fa-key"></i></span>
+        <div>
+          <h1 class="text-lg font-semibold leading-tight">Licenças WinAppOS</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400">Painel administrativo</p>
+        </div>
+      </div>
+      <label class="mb-1 block text-sm font-medium" for="login-email">E-mail</label>
+      <input id="login-email" name="email" type="email" autocomplete="username" required
+             class="mb-4 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-950">
+      <label class="mb-1 block text-sm font-medium" for="login-senha">Senha</label>
+      <input id="login-senha" name="senha" type="password" autocomplete="current-password" required
+             class="mb-4 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-950">
+      <p id="login-erro" class="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300" role="alert" hidden></p>
+      <button type="submit" class="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-medium text-white hover:bg-indigo-700 disabled:opacity-60">
+        <i class="fa-solid fa-right-to-bracket"></i> Entrar
+      </button>
+      <p class="mt-5 text-center text-xs text-slate-500 dark:text-slate-400">Acesso restrito a administradores do licenciamento.</p>
+    </form>
+  </main>
+
+  <!-- ===================== PAINEL ===================== -->
+  <div id="tela-painel" hidden>
+    <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
+      <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
+        <div class="flex items-center gap-3">
+          <span class="grid h-10 w-10 place-items-center rounded-xl bg-indigo-600 text-white"><i class="fa-solid fa-key"></i></span>
+          <div class="leading-tight">
+            <p class="font-semibold">Licenças WinAppOS</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">winappos-licensing</p>
+          </div>
+        </div>
+        <div class="ml-auto flex flex-wrap items-center gap-2">
+          <label class="sr-only" for="filtro-app">Aplicativo</label>
+          <div class="relative">
+            <i class="fa-solid fa-layer-group pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <select id="filtro-app" class="min-h-10 appearance-none rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-950">
+              <option value="all">Todos os Aplicativos</option>
+            </select>
+            <i class="fa-solid fa-chevron-down pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
+          </div>
+          <button type="button" data-acao="recarregar" title="Atualizar dados" aria-label="Atualizar dados"
+                  class="grid h-10 w-10 place-items-center rounded-xl border border-slate-300 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+            <i class="fa-solid fa-rotate"></i>
+          </button>
+          <div class="flex items-center gap-2 rounded-xl border border-slate-200 py-1 pl-3 pr-1 dark:border-slate-800">
+            <i class="fa-solid fa-circle-user text-slate-400"></i>
+            <span id="usuario" class="max-w-40 truncate text-sm"></span>
+            <button type="button" data-acao="sair" title="Sair" aria-label="Sair"
+                    class="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-rose-600 dark:hover:bg-slate-800">
+              <i class="fa-solid fa-right-from-bracket"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-7xl px-4 py-6">
+      <div id="aviso-permissao" class="mb-5 flex gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200" hidden>
+        <i class="fa-solid fa-triangle-exclamation mt-0.5"></i>
+        <p>Nenhum dado visível para este usuário. Confira se a conta tem permissão de administrador (RLS) no projeto <b>winappos-licensing</b>.</p>
+      </div>
+
+      <!-- Métricas -->
+      <section id="metricas" class="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Métricas"></section>
+
+      <!-- Abas -->
+      <nav class="mt-6 flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900" role="tablist" aria-label="Seções">
+        <button type="button" role="tab" data-aba="licencas" class="aba flex min-h-10 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-medium"><i class="fa-solid fa-id-card"></i> Licenças</button>
+        <button type="button" role="tab" data-aba="clientes" class="aba flex min-h-10 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-medium"><i class="fa-solid fa-users"></i> Clientes</button>
+        <button type="button" role="tab" data-aba="logs" class="aba flex min-h-10 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-medium"><i class="fa-solid fa-clock-rotate-left"></i> Auditoria</button>
+      </nav>
+
+      <!-- Licenças -->
+      <section id="aba-licencas" class="mt-4" role="tabpanel">
+        <div class="mb-3 flex flex-wrap items-center gap-2">
+          <div class="relative min-w-56 flex-1">
+            <i class="fa-solid fa-magnifying-glass pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input type="search" data-busca="licencas" placeholder="Buscar por chave, cliente ou status"
+                   class="min-h-10 w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-900">
+          </div>
+          <button type="button" data-acao="nova-licenca" class="flex min-h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-medium text-white hover:bg-indigo-700">
+            <i class="fa-solid fa-plus"></i> Nova Licença
+          </button>
+        </div>
+        <div id="lista-licencas" class="relative overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"></div>
+      </section>
+
+      <!-- Clientes -->
+      <section id="aba-clientes" class="mt-4" role="tabpanel" hidden>
+        <div class="mb-3 flex flex-wrap items-center gap-2">
+          <div class="relative min-w-56 flex-1">
+            <i class="fa-solid fa-magnifying-glass pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input type="search" data-busca="clientes" placeholder="Buscar por nome, e-mail ou documento"
+                   class="min-h-10 w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-900">
+          </div>
+          <button type="button" data-acao="novo-cliente" class="flex min-h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-medium text-white hover:bg-indigo-700">
+            <i class="fa-solid fa-user-plus"></i> Novo Cliente
+          </button>
+        </div>
+        <div id="lista-clientes" class="relative overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"></div>
+      </section>
+
+      <!-- Auditoria -->
+      <section id="aba-logs" class="mt-4" role="tabpanel" hidden>
+        <div class="mb-3 flex flex-wrap items-center gap-2">
+          <div class="relative min-w-56 flex-1">
+            <i class="fa-solid fa-magnifying-glass pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input type="search" data-busca="logs" placeholder="Buscar nos eventos"
+                   class="min-h-10 w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-900">
+          </div>
+          <label class="sr-only" for="filtro-evento">Tipo de evento</label>
+          <select id="filtro-evento" class="min-h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900">
+            <option value="">Todos os eventos</option>
+          </select>
+        </div>
+        <div id="lista-logs" class="relative overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"></div>
+        <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Últimos 300 eventos.</p>
+      </section>
+    </main>
+  </div>
+
+  <!-- ===================== MODAIS ===================== -->
+  <dialog id="modal-licenca" class="m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100">
+    <form id="form-licenca" class="p-6" novalidate>
+      <div class="mb-5 flex items-start justify-between gap-4">
+        <h2 class="flex items-center gap-2 text-lg font-semibold"><i class="fa-solid fa-id-card text-indigo-600"></i> Nova Licença</h2>
+        <button type="button" data-fechar class="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="grid gap-4">
+        <label class="grid gap-1 text-sm font-medium">Aplicativo
+          <select name="app" required class="min-h-11 rounded-xl border border-slate-300 bg-white px-3 font-normal outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-950"></select>
+        </label>
+        <label class="grid gap-1 text-sm font-medium">Cliente
+          <select name="cliente" required class="min-h-11 rounded-xl border border-slate-300 bg-white px-3 font-normal outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-950"></select>
+        </label>
+        <p data-sem-clientes class="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200" hidden>
+          Nenhum cliente cadastrado. <button type="button" data-acao="novo-cliente" class="font-semibold underline">Cadastrar cliente</button>
+        </p>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="grid gap-1 text-sm font-medium">Limite de dispositivos
+            <input name="max_devices" type="number" min="1" max="1000" step="1" value="1" required inputmode="numeric"
+                   class="min-h-11 rounded-xl border border-slate-300 bg-white px-3 font-normal outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-950">
+          </label>
+          <label class="grid gap-1 text-sm font-medium">Validade (dias)
+            <input name="dias" type="number" min="1" max="3650" step="1" value="365" required inputmode="numeric"
+                   class="min-h-11 rounded-xl border border-slate-300 bg-white px-3 font-normal outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-950">
+          </label>
+        </div>
+        <div class="flex flex-wrap gap-2" aria-label="Atalhos de validade">
+          <button type="button" data-dias="30" class="rounded-full border border-slate-300 px-3 py-1 text-xs hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">30 dias</button>
+          <button type="button" data-dias="90" class="rounded-full border border-slate-300 px-3 py-1 text-xs hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">90 dias</button>
+          <button type="button" data-dias="180" class="rounded-full border border-slate-300 px-3 py-1 text-xs hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">6 meses</button>
+          <button type="button" data-dias="365" class="rounded-full border border-slate-300 px-3 py-1 text-xs hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">1 ano</button>
+          <button type="button" data-dias="730" class="rounded-full border border-slate-300 px-3 py-1 text-xs hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">2 anos</button>
+        </div>
+        <p data-erro class="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300" role="alert" hidden></p>
+      </div>
+      <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" data-fechar class="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">Cancelar</button>
+        <button type="submit" class="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"><i class="fa-solid fa-check"></i> Gerar licença</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="modal-cliente" class="m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100">
+    <form id="form-cliente" class="p-6" novalidate>
+      <div class="mb-5 flex items-start justify-between gap-4">
+        <h2 class="flex items-center gap-2 text-lg font-semibold"><i class="fa-solid fa-user-plus text-indigo-600"></i> Novo Cliente</h2>
+        <button type="button" data-fechar class="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="grid gap-4">
+        <label class="grid gap-1 text-sm font-medium">Nome / Razão social
+          <input name="name" required maxlength="200" autocomplete="organization"
+                 class="min-h-11 rounded-xl border border-slate-300 bg-white px-3 font-normal outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-950">
+        </label>
+        <label class="grid gap-1 text-sm font-medium">E-mail
+          <input name="email" type="email" maxlength="200" autocomplete="email"
+                 class="min-h-11 rounded-xl border border-slate-300 bg-white px-3 font-normal outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-950">
+        </label>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="grid gap-1 text-sm font-medium">Telefone
+            <input name="phone" type="tel" maxlength="20" autocomplete="tel" inputmode="tel" placeholder="(71) 99999-9999"
+                   class="min-h-11 rounded-xl border border-slate-300 bg-white px-3 font-normal outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-950">
+          </label>
+          <label class="grid gap-1 text-sm font-medium">CPF / CNPJ
+            <input name="document" maxlength="18" inputmode="numeric" placeholder="000.000.000-00"
+                   class="min-h-11 rounded-xl border border-slate-300 bg-white px-3 font-normal outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-950">
+          </label>
+        </div>
+        <p data-erro class="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300" role="alert" hidden></p>
+      </div>
+      <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" data-fechar class="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">Cancelar</button>
+        <button type="submit" class="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"><i class="fa-solid fa-floppy-disk"></i> Salvar cliente</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="modal-dispositivos" class="m-auto w-[calc(100%-2rem)] max-w-2xl rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100">
+    <div class="p-6">
+      <div class="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h2 class="flex items-center gap-2 text-lg font-semibold"><i class="fa-solid fa-desktop text-indigo-600"></i> Dispositivos</h2>
+          <p data-subtitulo class="mt-0.5 break-all font-mono text-xs text-slate-500 dark:text-slate-400"></p>
+        </div>
+        <button type="button" data-fechar class="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div data-lista class="max-h-[60vh] overflow-y-auto"></div>
+    </div>
+  </dialog>
+
+  <dialog id="modal-confirmar" class="m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100">
+    <div class="p-6">
+      <h2 data-titulo class="text-lg font-semibold"></h2>
+      <p data-texto class="mt-2 text-sm text-slate-600 dark:text-slate-300"></p>
+      <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" data-resposta="nao" class="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">Cancelar</button>
+        <button type="button" data-resposta="sim" data-confirmar class="min-h-11 rounded-xl px-4 text-sm font-medium text-white"></button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toasts" class="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4" aria-live="polite"></div>
+
+  <script src="../src/vendor/supabase.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
