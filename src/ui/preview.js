@@ -3,8 +3,9 @@
 
 import { icon } from './icons.js';
 import { esc, $ } from './dom.js';
-import { displayValue, displayCell, parseCoords, mapLinks, hasContent, emptyOptionalSections } from './form.js';
-import { savePdf } from './report-pdf.js';
+import { displayValue, displayCell, hasContent, emptyOptionalSections } from './form.js';
+import { savePdf, saveDocx } from './report-pdf.js';
+import { cabecalhoItens, CAMPOS_CABECALHO } from './cabecalho.js';
 import { toast } from './toast.js';
 import { companyInfo } from '../core/settings.js';
 import { consolidationHtml } from './consolidacao-view.js';
@@ -29,14 +30,6 @@ function fieldHtml(f, data) {
     return `<div class="${cls}"><dt>${esc(f.label)}</dt>
       <dd>${sig ? `<img class="preview__signature" src="${esc(sig)}" alt="Assinatura">` : '<span class="muted">—</span>'}</dd></div>`;
   }
-  if (f.type === 'geo') {
-    const c = parseCoords(data[f.id]);
-    const links = c && mapLinks(c);
-    return `<div class="${cls}"><dt>${esc(f.label)}</dt>
-      <dd>${c ? `<a href="${links.google}" target="_blank" rel="noopener" title="Abrir no Google Maps">${esc(displayValue(f, data[f.id]))}</a>
-        <span class="geo-links">Rota até a locação: <a href="${links.google}" target="_blank" rel="noopener">Google Maps</a> · <a href="${links.waze}" target="_blank" rel="noopener">Waze</a> · <a href="${links.osm}" target="_blank" rel="noopener">OpenStreetMap</a></span>` : '<span class="muted">—</span>'}</dd></div>`;
-  }
-
   const v = displayValue(f, data[f.id]);
   const full = f.full || f.type === 'textarea' || f.type === 'checklist';
   const itemCls = ['preview__item', full && 'preview__item--full', f.highlight && 'preview__item--highlight'].filter(Boolean).join(' ');
@@ -44,27 +37,12 @@ function fieldHtml(f, data) {
 }
 
 /**
- * Coordenadas GPS para o cabeçalho (prévia e PDF): texto clicável + links de mapa.
- * Devolve '' se o relatório não tiver coordenadas válidas.
- */
-export function geoHeaderHtml(module, data) {
-  const f = module.sections.flatMap((s) => s.fields).find((x) => x.type === 'geo');
-  const c = f && parseCoords(data[f.id]);
-  if (!c) return '';
-  const links = mapLinks(c); // navegação com a locação como DESTINO
-  return `<span class="geo-head"><strong>Coordenadas GPS:</strong>
-    <a href="${links.google}" target="_blank" rel="noopener" title="Rota até a locação no Google Maps">${esc(displayValue(f, data[f.id]))}</a>
-    · Rota até a locação: <a href="${links.google}" target="_blank" rel="noopener">Google Maps</a>
-    · <a href="${links.waze}" target="_blank" rel="noopener">Waze</a>
-    · <a href="${links.osm}" target="_blank" rel="noopener">OpenStreetMap</a></span>`;
-}
-
-/**
  * Corpo do relatório. photoSrcs: URLs das fotos na mesma ordem de `photos`.
  * Só entram campos e seções com conteúdo — nada de tabelas vazias ou "—" no PDF.
  * As fotos ficam no bloco do próprio componente (logo abaixo dos dados dele), numeradas como
  * "Figura N" na ordem do relatório. Blocos compare: colunas "Antes (Visita)" x "Depois (Execução)".
- * As coordenadas GPS ficam no cabeçalho (geoHeaderHtml), não se repetem no corpo.
+ * Abre com o quadro de identificação (cabecalho.js); esses campos não se repetem nas seções.
+ * Coordenadas GPS não entram no relatório.
  */
 export function reportBodyHtml(module, data, photos, photoSrcs) {
   assignPhotoFields(module, photos);
@@ -91,8 +69,12 @@ export function reportBodyHtml(module, data, photos, photoSrcs) {
     return list.length ? `<div class="preview__photos" data-photos="${esc(f.id)}"><h5 class="preview__photos-title">${esc(f.label)}</h5>${grid(list)}</div>` : '';
   };
 
-  return module.sections.map((s) => {
-    const items = s.fields.filter((f) => !['geo', 'consolidation', 'photos'].includes(f.type) && hasContent(f, data))
+  const ident = cabecalhoItens(module, data)
+    .map((it) => `<div class="preview__item${it.full ? ' preview__item--full' : ''}"><dt>${esc(it.label)}</dt><dd>${esc(it.value)}</dd></div>`).join('');
+  const identHtml = ident ? `<section class="preview__section preview__ident" data-ident><dl class="preview__grid">${ident}</dl></section>` : '';
+
+  return identHtml + module.sections.map((s) => {
+    const items = s.fields.filter((f) => !['geo', 'consolidation', 'photos'].includes(f.type) && !CAMPOS_CABECALHO.has(f.id) && hasContent(f, data))
       .map((f) => fieldHtml(f, data)).join('');
     // O resumo consolidado fica FORA da grade de campos: blocos de grade não quebram bem entre páginas no PDF
     const consol = s.fields.filter((f) => f.type === 'consolidation' && hasContent(f, data))
@@ -138,7 +120,6 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
           ${company ? `<div class="company-chip">${company.logo ? `<img src="${esc(company.logo)}" alt="">` : ''}<span>${esc(company.nome || '')}${company.cnpj ? ` · CNPJ ${esc(company.cnpj)}` : ''}</span></div>` : ''}
           <h2>${esc(module.title)}</h2>
           <p class="muted small">${data.poco ? `Poço / Locação: <strong>${esc(data.poco)}</strong> · ` : ''}ID <code>${esc(uniqueId)}</code>${meta ? ` · ${esc(meta)}` : ''}</p>
-          ${geoHeaderHtml(module, data) ? `<p class="small">${geoHeaderHtml(module, data)}</p>` : ''}
         </div>
         <button type="button" class="icon-btn" data-close aria-label="Fechar">${icon('x', 18)}</button>
       </div>
@@ -156,7 +137,10 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
       </div>
       ${mode === 'confirm' ? `
       <div class="modal__footer modal__footer--finalize">
-        <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Baixar / Compartilhar PDF</button>
+        <div class="finalize-files">
+          <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Baixar / Compartilhar PDF</button>
+          <button type="button" class="btn btn--ghost" data-docx>${icon('fileText', 17)} Baixar Word (.docx)</button>
+        </div>
         <div class="finalize-ask">
           <strong>Deseja enviar este relatório?</strong>
           <span class="muted small">Ao salvar, o relatório fica na memória local do app (IndexedDB). Para guardar o arquivo na pasta de Arquivos do celular, use "Baixar / Compartilhar PDF". Ao enviar, ele vai para o banco de dados e o WhatsApp abre com o link.</span>
@@ -168,6 +152,7 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
       </div>` : `
       <div class="modal__footer">
         <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Baixar / Compartilhar PDF</button>
+        <button type="button" class="btn btn--ghost" data-docx>${icon('fileText', 17)} Baixar Word (.docx)</button>
         <span class="modal__spacer"></span>
         <button type="button" class="btn btn--primary" data-close>Fechar</button>
       </div>`}`;
@@ -180,6 +165,24 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
       if (e.target.closest('[data-local]')) { confirmed = 'local'; return dialog.close(); }
       if (e.target.closest('[data-new]')) { after = onNewReport; return dialog.close(); }
       if (e.target.closest('[data-reuse]')) { after = onReuse; return dialog.close(); }
+      const docxBtn = e.target.closest('[data-docx]');
+      if (docxBtn && !docxBtn.disabled) {
+        const label = docxBtn.innerHTML;
+        docxBtn.disabled = true;
+        docxBtn.innerHTML = '<span class="spinner" aria-hidden="true"></span> Gerando Word…';
+        try {
+          const res = await saveDocx({ module, uniqueId, data, photos, company, draft: mode === 'draft' });
+          if (res?.sheet) { /* painel "Word pronto" já mostrou as opções */ } else if (res?.saved) toast(`Word salvo e aberto: ${res.filePath}`, 'success', 6000);
+          else toast('Geração do Word cancelada.', 'info', 2500);
+        } catch (err) {
+          console.error('[docx]', err);
+          toast(`Não foi possível gerar o Word: ${err.message}`, 'error', 7000);
+        } finally {
+          docxBtn.disabled = false;
+          docxBtn.innerHTML = label;
+        }
+        return;
+      }
       const pdfBtn = e.target.closest('[data-pdf]');
       if (pdfBtn && !pdfBtn.disabled) {
         const label = pdfBtn.innerHTML;

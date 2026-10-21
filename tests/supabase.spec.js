@@ -143,7 +143,7 @@ test('sem internet o relatório fica "Pendente de Envio"; ao voltar a conexão s
   expect(sb.rpc.find((c) => c.name === 'save_company_settings').args.p_settings).toMatchObject({ empresa_nome: 'WIN IMPORTS' });
 });
 
-test('com internet: PDF no report-share e o link vai na mensagem do WhatsApp', async () => {
+test('com internet: PDF e Word no report-share e os links vão na mensagem do WhatsApp', async () => {
   const { page } = ctx;
   await configurarServidor(page);
   await openTab(page, 'visita_tecnica');
@@ -157,8 +157,13 @@ test('com internet: PDF no report-share e o link vai na mensagem do WhatsApp', a
   const link = await shareLink.innerText();
   const id = link.split('/').pop().replace('.pdf', '');
   const wa = await page.locator('[data-share-whatsapp]').getAttribute('href');
-  expect(decodeURIComponent(wa)).toContain(`Relatório completo: ${link}`);
-  expect(await page.evaluate(() => window.__sb.uploads)).toContainEqual({ bucket: 'report-share', path: `visita_tecnica/${id}.pdf` });
+  expect(decodeURIComponent(wa)).toContain(`Relatório completo (PDF): ${link}`);
+  expect(decodeURIComponent(wa)).toContain(`Versão Word (.docx): ${link.replace(/.pdf$/, '.docx')}`);
+  const uploads = await page.evaluate(() => window.__sb.uploads);
+  expect(uploads).toContainEqual({ bucket: 'report-share', path: `visita_tecnica/${id}.pdf` });
+  expect(uploads).toContainEqual({ bucket: 'report-share', path: `visita_tecnica/${id}.docx` });
+  // envio e WhatsApp compartilham a mesma geração: cada arquivo sobe uma vez só
+  expect(uploads.filter((u) => u.path === `visita_tecnica/${id}.docx`)).toHaveLength(1);
 });
 
 test('histórico da equipe: login baixa os relatórios do contrato (30 dias) com fotos; outro usuário não vê', async () => {

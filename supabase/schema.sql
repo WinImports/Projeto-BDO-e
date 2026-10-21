@@ -187,7 +187,7 @@ create policy "report-photos: upload"
   with check (bucket_id = 'report-photos');
 
 -- 4b) Links de relatório para o WhatsApp ---------------------------------
--- Bucket PÚBLICO só para leitura por URL direta: o caminho é <módulo>/<uniqueId>.pdf|html (UUID, não
+-- Bucket PÚBLICO só para leitura por URL direta: o caminho é <módulo>/<uniqueId>.pdf|docx (UUID, não
 -- adivinhável). Sem política de SELECT → ninguém lista o bucket; anon só envia (INSERT).
 insert into storage.buckets (id, name, public)
 values ('report-share', 'report-share', true)

@@ -1,9 +1,10 @@
 // PDF gerado no próprio aparelho (navegador / PWA, inclusive iPhone) com jsPDF + AutoTable
 // (cópias locais em src/vendor, carregadas só quando necessário). Mesmo conteúdo da prévia:
 // PDF compacto (sem campos/blocos vazios), fotos no bloco do componente como "Figura N",
-// "Antes x Depois" na Execução e coordenadas com links de rota no cabeçalho.
-import { displayValue, displayCell, hasContent, parseCoords, mapLinks } from './form.js';
+// "Antes x Depois" na Execução, fotos em 2 colunas e cabeçalho só com a identificação (sem GPS).
+import { displayValue, displayCell, hasContent } from './form.js';
 import { assignPhotoFields, photosOf } from '../core/fotos.js';
+import { cabecalhoItens, CAMPOS_CABECALHO } from './cabecalho.js';
 
 const A4 = { w: 210, h: 297 };
 const M = 12; // margem
@@ -139,28 +140,55 @@ class Doc {
     });
   }
 
-  async photoGrid(list, srcOf, { x = M, width = CW, cols = 3 } = {}) {
-    const gap = 3;
-    const w = (width - gap * (cols - 1)) / cols;
+  /** Foto centralizada na caixa (px, y, w, h) com "Figura N — legenda" embaixo. */
+  async photoCell(p, srcOf, px, w, h, n) {
+    const src = srcOf.get(p);
+    const { w: iw, h: ih } = await imageSize(src);
+    const s = Math.min(w / iw, h / ih);
+    const dw = iw * s;
+    const dh = ih * s;
+    this.pdf.setDrawColor(...LINHA);
+    this.pdf.setFillColor(248, 250, 252);
+    this.pdf.rect(px, this.y, w, h, 'FD');
+    try { this.pdf.addImage(src, formatOf(src), px + (w - dw) / 2, this.y + (h - dh) / 2, dw, dh, undefined, 'FAST'); } catch { /* imagem inválida */ }
+    this.text(`Figura ${n} — ${p.legenda || p.category || p.name}`, px, this.y + h + 3.2, { size: 6.8, color: CINZA, maxWidth: w });
+  }
+
+  /** Fotos lado a lado em 2 colunas (~48% da largura cada). */
+  async photoGrid(list, srcOf) {
+    const gap = CW * 0.04;
+    const w = (CW - gap) / 2;
     const h = w * 0.75;
     const capH = 7;
-    for (let i = 0; i < list.length; i += cols) {
+    for (let i = 0; i < list.length; i += 2) {
       this.ensure(h + capH + 2);
-      const row = list.slice(i, i + cols);
-      for (const [j, p] of row.entries()) {
-        const src = srcOf.get(p);
-        const px = x + j * (w + gap);
-        const { w: iw, h: ih } = await imageSize(src);
-        const s = Math.min(w / iw, h / ih);
-        const dw = iw * s;
-        const dh = ih * s;
-        this.pdf.setDrawColor(...LINHA);
-        this.pdf.setFillColor(248, 250, 252);
-        this.pdf.rect(px, this.y, w, h, 'FD');
-        try { this.pdf.addImage(src, formatOf(src), px + (w - dw) / 2, this.y + (h - dh) / 2, dw, dh, undefined, 'FAST'); } catch { /* imagem inválida */ }
+      for (const [j, p] of list.slice(i, i + 2).entries()) {
         this.fig += 1;
-        const cap = `Figura ${this.fig} — ${p.legenda || p.category || p.name}`;
-        this.text(cap, px, this.y + h + 3.2, { size: 6.8, color: CINZA, maxWidth: w });
+        await this.photoCell(p, srcOf, M + j * (w + gap), w, h, this.fig);
+      }
+      this.y += h + capH + 2;
+    }
+  }
+
+  /** Antes (esquerda) x Depois (direita). Numeração igual à prévia: primeiro as de "Antes", depois as de "Depois". */
+  async photoCompare(antes, depois, srcOf, tituloAntes) {
+    const gap = CW * 0.04;
+    const w = (CW - gap) / 2;
+    const h = w * 0.75;
+    const capH = 7;
+    const base = this.fig;
+    this.fig += antes.length + depois.length;
+    this.ensure(5 + h + capH);
+    this.text(tituloAntes, M, this.y + 2.5, { size: 7.5, bold: true, maxWidth: w });
+    this.text('Depois — Execução', M + w + gap, this.y + 2.5, { size: 7.5, bold: true, color: [21, 128, 61], maxWidth: w });
+    this.y += 4;
+    const linhas = Math.max(antes.length, depois.length);
+    for (let i = 0; i < linhas; i++) {
+      this.ensure(h + capH + 2);
+      for (const [j, lista, n0] of [[0, antes, base], [1, depois, base + antes.length]]) {
+        const px = M + j * (w + gap);
+        if (lista[i]) await this.photoCell(lista[i], srcOf, px, w, h, n0 + i + 1);
+        else if (i === 0) this.text('Sem fotos.', px, this.y + 2.5, { size: 7.5, color: CINZA });
       }
       this.y += h + capH + 2;
     }
@@ -177,23 +205,6 @@ function header(doc, { module, uniqueId, data, company, draft, logo }) {
   let y = M + 3;
   if (company?.nome) { doc.text(`${company.nome}${company.cnpj ? `  ·  CNPJ ${company.cnpj}` : ''}`, x, y, { size: 8.5, bold: true }); y += 5; }
   doc.text(module.title, x, y + 1, { size: 14, bold: true }); y += 6;
-  doc.text(`Poço / Locação: ${data.poco || '—'}`, x, y, { size: 9, color: CINZA }); y += 4.5;
-
-  const geo = module.sections.flatMap((s) => s.fields).find((f) => f.type === 'geo');
-  const c = geo && parseCoords(data[geo.id]);
-  if (c) {
-    const links = mapLinks(c);
-    p.setFont('helvetica', 'normal'); p.setFontSize(8); p.setTextColor(...AZUL);
-    const coords = `Coordenadas GPS: ${displayValue(geo, data[geo.id])}`;
-    p.textWithLink(txt(coords), x, y, { url: links.google });
-    y += 4;
-    let lx = x;
-    p.setTextColor(...CINZA); p.text('Rota até a locação:', lx, y); lx += p.getTextWidth('Rota até a locação: ');
-    for (const [nome, url] of [['Google Maps', links.google], ['Waze', links.waze], ['OpenStreetMap', links.osm]]) {
-      p.setTextColor(...AZUL); p.textWithLink(nome, lx, y, { url }); lx += p.getTextWidth(`${nome}   `);
-    }
-    y += 2;
-  }
   const generated = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   if (draft) doc.text('RASCUNHO — NÃO FINALIZADO', A4.w - M, M + 3, { size: 9, bold: true, color: [180, 35, 24], align: 'right' });
   doc.text(`Gerado em ${generated}`, A4.w - M, M + 8, { size: 7.5, color: CINZA, align: 'right' });
@@ -201,6 +212,9 @@ function header(doc, { module, uniqueId, data, company, draft, logo }) {
   doc.y = Math.max(y, M + 16) + 2;
   p.setDrawColor(...AZUL); p.setLineWidth(0.8); p.line(M, doc.y, A4.w - M, doc.y); p.setLineWidth(0.2);
   doc.y += 3;
+  // identificação: poço, cidade/campo, data, turno, cliente, contrato e equipe (sem coordenadas GPS)
+  const ident = cabecalhoItens(module, data);
+  if (ident.length) doc.fieldsGrid(ident);
 }
 
 function consolidation(doc, c) {
@@ -228,6 +242,8 @@ function consolidation(doc, c) {
   }
 }
 
+export { imageSize, blobToDataUrl, formatOf };
+
 /** Gera o PDF do relatório e devolve um Blob (application/pdf). */
 export async function buildPdfBlob({ module, uniqueId, data, photos = [], company, draft = false }) {
   const { jsPDF, autoTable } = await libs();
@@ -240,7 +256,7 @@ export async function buildPdfBlob({ module, uniqueId, data, photos = [], compan
   header(doc, { module, uniqueId, data, company, draft, logo });
 
   const SIMPLES = (f) => !['geo', 'consolidation', 'photos', 'table', 'signature', 'divider'].includes(f.type);
-  const temConteudo = (f) => (f.type === 'photos' ? photos.some((p) => p.field === f.id)
+  const temConteudo = (f) => (CAMPOS_CABECALHO.has(f.id) ? false : f.type === 'photos' ? photos.some((p) => p.field === f.id)
     : f.type === 'signature' ? Boolean(data[f.id])
       : f.type === 'divider' || f.type === 'geo' ? false
         : hasContent(f, data));
@@ -280,17 +296,10 @@ export async function buildPdfBlob({ module, uniqueId, data, photos = [], compan
       } else if (f.type === 'photos') {
         doc.subTitle(f.label);
         if (f.compare) {
-          const antes = photosOf(f, photos, 'antes');
-          const depois = photosOf(f, photos, 'depois');
-          doc.text(`Antes — Visita Técnica${data._visita_data ? ` de ${data._visita_data}` : ''}`, M, doc.y + 2.5, { size: 7.5, bold: true });
-          doc.y += 4;
-          if (antes.length) await doc.photoGrid(antes, srcOf, { cols: 3 }); else { doc.text('Sem fotos.', M, doc.y + 2.5, { size: 7.5, color: CINZA }); doc.y += 5; }
-          doc.ensure(10);
-          doc.text('Depois — Execução', M, doc.y + 2.5, { size: 7.5, bold: true, color: [21, 128, 61] });
-          doc.y += 4;
-          if (depois.length) await doc.photoGrid(depois, srcOf, { cols: 3 }); else { doc.text('Sem fotos.', M, doc.y + 2.5, { size: 7.5, color: CINZA }); doc.y += 5; }
+          await doc.photoCompare(photosOf(f, photos, 'antes'), photosOf(f, photos, 'depois'), srcOf,
+            `Antes — Visita Técnica${data._visita_data ? ` de ${data._visita_data}` : ''}`);
         } else {
-          await doc.photoGrid(photosOf(f, photos), srcOf, { cols: 3 });
+          await doc.photoGrid(photosOf(f, photos), srcOf);
         }
       }
     }

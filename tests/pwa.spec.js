@@ -127,7 +127,7 @@ test('app como página web (GitHub Pages): abre, funciona offline, importa base 
     expect(shared.type).toBe('application/pdf');
     expect(shared.head).toBe('%PDF-');
     expect(shared.name).toMatch(/^BDO-e_TST-010_.*\.pdf$/);
-    expect(shared.uris).toContain('https://www.google.com/maps/dir/?api=1&destination=-12.370500,-38.401200&travelmode=driving');
+    expect(shared.uris).toEqual([]); // coordenadas e links de rota não saem no relatório
     expect(await page.evaluate(() => window.__popup || false)).toBe(false);
 
     // "Imprimir" continua disponível no painel (impressão dentro da própria página)

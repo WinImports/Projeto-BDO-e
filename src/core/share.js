@@ -1,4 +1,4 @@
-// Envio do relatório: link público (cópia do relatório no Storage) + mensagem no WhatsApp.
+// Envio do relatório: cópias PDF e Word (.docx) no Storage (link público) + mensagem no WhatsApp.
 // O link só é gerado com o Supabase configurado e com internet; sem isso, a mensagem vai sem link
 // (o relatório continua na Caixa de Saída e é enviado ao banco quando houver conexão).
 
@@ -17,20 +17,21 @@ export function waUrl(numero, texto) {
   return `https://api.whatsapp.com/send?${n ? `phone=${n}&` : ''}text=${encodeURIComponent(texto)}`;
 }
 
-export function shareMessage(module, data, uniqueId, link) {
+export function shareMessage(module, data, uniqueId, link, wordLink = null) {
   const linhas = [
     `*${module.title}*`,
     data.poco ? `Poço / Locação: ${data.poco}` : '',
     brData(data.data || data.data_hora) ? `Data: ${brData(data.data || data.data_hora)}` : '',
     `ID: ${uniqueId.slice(0, 8)}`,
     '',
-    link ? `Relatório completo: ${link}` : 'Relatório salvo no aparelho; o envio ao banco de dados é feito automaticamente quando houver conexão.'
+    link ? `Relatório completo (PDF): ${link}` : 'Relatório salvo no aparelho; o envio ao banco de dados é feito automaticamente quando houver conexão.',
+    link && wordLink ? `Versão Word (.docx): ${wordLink}` : ''
   ];
   return linhas.filter((l, i) => l || i === 4).join('\n');
 }
 
 /**
- * Sobe a cópia do relatório (PDF no desktop / HTML no navegador) para o bucket público de links.
+ * Sobe uma cópia do relatório (PDF ou Word .docx) para o bucket público de links.
  * Caminho fixo pelo uniqueId (não adivinhável) → reenviar não duplica. Devolve a URL pública ou null.
  */
 export async function uploadShareCopy(module, uniqueId, file) {
@@ -44,3 +45,25 @@ export async function uploadShareCopy(module, uniqueId, file) {
 }
 
 export const whatsappConfigurado = () => Boolean(waNumber(getSettings().whatsapp_padrao));
+
+// Cópias PDF + Word por relatório: o envio (sync) e o WhatsApp pedem os mesmos arquivos ao mesmo tempo —
+// a geração e o upload acontecem uma vez só por uniqueId (se falhar, a próxima chamada tenta de novo).
+const publicando = new Map();
+
+/**
+ * Gera (makeFiles → [{ blob, ext }]) e sobe as cópias do relatório para o report-share, nos caminhos
+ * fixos <módulo>/<uniqueId>.pdf e .docx. Devolve { pdf, docx } com as URLs públicas (null sem servidor/internet).
+ */
+export function publishReportDocuments(module, uniqueId, makeFiles) {
+  if (!isSupabaseConfigured() || !navigator.onLine) return Promise.resolve(null);
+  if (!publicando.has(uniqueId)) {
+    const job = (async () => {
+      const urls = {};
+      for (const file of await makeFiles()) urls[file.ext] = await uploadShareCopy(module, uniqueId, file);
+      return urls;
+    })();
+    publicando.set(uniqueId, job);
+    job.catch(() => publicando.delete(uniqueId));
+  }
+  return publicando.get(uniqueId);
+}

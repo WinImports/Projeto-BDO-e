@@ -11,6 +11,8 @@
 //     a internet (evento online) a fila é enviada sozinha e o relatório fica "Sincronizado" no Histórico.
 // O servidor separa por tipo (bdo_reports / technical_visits / execution_reports) e registra o técnico
 // pelo token do Supabase Auth; user_email/device_id do aparelho vão como informação complementar.
+// Junto com as fotos sobem as cópias do relatório em PDF e Word (.docx) para o bucket report-share
+// (<módulo>/<uniqueId>.pdf|.docx). Falha nas cópias não segura o relatório na fila: os dados vêm primeiro.
 
 import { SYNC, isSupabaseConfigured } from '../config.js';
 import { getClient } from './supabase.js';
@@ -83,13 +85,30 @@ const toRow = (rec, photos) => ({
   user_email: currentUser()?.email || null
 });
 
+// Gerador das cópias PDF + Word (registrado pelo app: a montagem dos arquivos fica na interface)
+let documentPublisher = null;
+export const setDocumentPublisher = (fn) => { documentPublisher = fn; };
+
+async function uploadDocuments(rec) {
+  if (!documentPublisher || rec.docsAt) return;
+  try {
+    await documentPublisher(rec);
+    rec.docsAt = new Date().toISOString();
+    await outbox.updateRecord(rec);
+  } catch (err) {
+    console.warn('[sync] cópias PDF/Word não enviadas', err);
+  }
+}
+
 async function deliverBatch(client, batch) {
   const failures = new Map();
   const rows = [];
 
   for (const rec of batch) {
     try {
-      rows.push(toRow(rec, await uploadPhotos(client, rec)));
+      const photos = await uploadPhotos(client, rec);
+      await uploadDocuments(rec);
+      rows.push(toRow(rec, photos));
     } catch (err) {
       failures.set(rec.uniqueId, new Error(`Falha no envio de fotos: ${err.message || err}`));
     }

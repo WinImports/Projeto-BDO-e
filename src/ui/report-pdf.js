@@ -2,8 +2,9 @@
 // principal do Electron para gerar o PDF.
 
 import { esc } from './dom.js';
-import { reportBodyHtml, geoHeaderHtml } from './preview.js';
+import { reportBodyHtml } from './preview.js';
 import { buildPdfBlob } from './pdf-doc.js';
+import { buildDocxBlob } from './docx-doc.js';
 import { showPdfSheet } from './pdf-sheet.js';
 
 const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
@@ -26,14 +27,11 @@ const PDF_CSS = `
   .logo { max-height: 52px; max-width: 150px; object-fit: contain; }
   .company { margin: 0 0 1px; font-size: 10pt; font-weight: 700; }
   .company span { font-weight: 400; color: #5b6676; font-size: 8.5pt; }
-  .geo-links { display: block; font-size: 8.5pt; margin-top: 2px; }
-  .geo-line { margin-top: 2px; }
   .preview__consol { margin-top: 6px; padding: 6px 8px 8px; border: 1px solid #c3ccd7; border-radius: 4px; }
   .consol__summary { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
   .consol__chip { font-size: 8pt; padding: 1px 7px; border-radius: 10px; background: #e8f1fb; color: #0b5cad; font-weight: 600; }
   .consol__block { margin-top: 6px; }
   .consol__title { break-after: avoid; margin: 0 0 3px; font-size: 8pt; text-transform: uppercase; letter-spacing: .04em; color: #334155; }
-  .geo-line a { color: #0b5cad; }
   .sub { color: #5b6676; font-size: 9pt; margin: 2px 0 0; }
   .meta { text-align: right; font-size: 8.5pt; color: #5b6676; line-height: 1.5; }
   .draft { color: #b42318; font-weight: 700; font-size: 10pt; }
@@ -53,19 +51,22 @@ const PDF_CSS = `
   td { padding: 4px 6px; border-bottom: 1px solid #e6eaf0; vertical-align: top; }
   tr { break-inside: avoid; }
   .preview__signature { max-width: 240px; border: 1px solid #c3ccd7; border-radius: 4px; }
-  .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .preview__ident { padding-top: 4px; }
+  .preview__ident .preview__grid { grid-template-columns: repeat(3, 1fr); }
+  /* fotos lado a lado: 2 colunas de ~48% */
+  .photo-grid { display: grid; grid-template-columns: 48% 48%; justify-content: space-between; row-gap: 8px; }
   .photo { margin: 0; border: 1px solid #c3ccd7; border-radius: 4px; overflow: hidden; break-inside: avoid; }
   .photo img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
   .photo figcaption { padding: 3px 6px; font-size: 7.5pt; color: #5b6676; }
   .photo figcaption strong { color: #0f172a; }
   .preview__photos { margin-top: 6px; }
   .preview__photos-title { margin: 0 0 4px; font-size: 8pt; text-transform: uppercase; letter-spacing: .04em; color: #334155; break-after: avoid; }
-  .photo-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .photo-compare { display: grid; grid-template-columns: 48% 48%; justify-content: space-between; }
   .photo-compare__col { border: 1px solid #c3ccd7; border-radius: 4px; padding: 5px; break-inside: avoid; }
   .photo-compare__col--antes { border-top: 3px solid #94a3b8; }
   .photo-compare__col--depois { border-top: 3px solid #15803d; }
   .photo-compare__title { font-size: 8pt; font-weight: 700; margin-bottom: 4px; }
-  .photo-compare .photo-grid { grid-template-columns: repeat(2, 1fr); gap: 5px; }
+  .photo-compare .photo-grid { grid-template-columns: 100%; }
   footer { margin-top: 14px; padding-top: 6px; border-top: 1px solid #dde3ea; font-size: 7.5pt; color: #5b6676; }
 `;
 
@@ -90,8 +91,6 @@ function reportDocHtml({ module, uniqueId, data, photos, photoSrcs, company, dra
       <div>
         ${company?.nome ? `<p class="company">${esc(company.nome)}${company.cnpj ? ` <span>· CNPJ ${esc(company.cnpj)}</span>` : ''}</p>` : ''}
         <h1>${esc(module.title)}</h1>
-        <p class="sub">Poço / Locação: <strong>${esc(data.poco || '—')}</strong></p>
-        ${geoHeaderHtml(module, data) ? `<p class="sub geo-line">${geoHeaderHtml(module, data)}</p>` : ''}
       </div>
     </div>
     <div class="meta">
@@ -173,11 +172,11 @@ async function printInPage(opts, title) {
   return { saved: true, printed: true };
 }
 
-const fileNameOf = (module, data) => {
+const fileNameOf = (module, data, ext = 'pdf') => {
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const day = String(data.data || data.data_hora || today).slice(0, 10); // data do relatório; senão, data local (não UTC)
-  return `${[module.shortTitle, data.poco, day].map(fileSafe).filter(Boolean).join('_')}.pdf`;
+  return `${[module.shortTitle, data.poco, day].map(fileSafe).filter(Boolean).join('_')}.${ext}`;
 };
 
 async function docOpts({ module, uniqueId, data, photos, company, draft }) {
@@ -202,15 +201,30 @@ export async function savePdf(args) {
 }
 
 /**
- * Arquivo do relatório para o link compartilhado: PDF (Electron no desktop; jsPDF no navegador).
+ * Word (.docx) do relatório. Desktop: "Salvar como" (IPC docx:save). Navegador / iPhone: painel
+ * "Word pronto" (Compartilhar / Salvar em Arquivos, Baixar).
  */
-export async function reportFile(args) {
+export async function saveDocx(args) {
+  const fileName = fileNameOf(args.module, args.data, 'docx');
+  const blob = await buildDocxBlob(args);
+  if (window.desktop?.saveDocx) return window.desktop.saveDocx(new Uint8Array(await blob.arrayBuffer()), fileName);
+  await showPdfSheet({ blob, fileName, kind: 'Word' });
+  return { saved: true, sheet: true };
+}
+
+/**
+ * Arquivos do relatório finalizado para o Storage (link do WhatsApp e cópia do envio):
+ * PDF (Electron no desktop; jsPDF no navegador) e Word (.docx).
+ */
+export async function reportFiles(args) {
   const opts = await docOpts({ ...args, draft: false });
-  const html = buildReportHtml(opts);
-  const base = fileNameOf(args.module, args.data).replace(/\.pdf$/, '');
-  if (window.desktop?.renderPdf) {
-    const bytes = await window.desktop.renderPdf(html);
-    return { blob: new Blob([bytes], { type: 'application/pdf' }), ext: 'pdf', name: `${base}.pdf` };
-  }
-  return { blob: await buildPdfBlob({ ...args, draft: false }), ext: 'pdf', name: `${base}.pdf` };
+  const base = fileNameOf(args.module, args.data).replace(/.pdf$/, '');
+  const pdf = window.desktop?.renderPdf
+    ? new Blob([await window.desktop.renderPdf(buildReportHtml(opts))], { type: 'application/pdf' })
+    : await buildPdfBlob({ ...args, draft: false });
+  const docx = await buildDocxBlob({ ...args, draft: false });
+  return [
+    { blob: pdf, ext: 'pdf', name: `${base}.pdf` },
+    { blob: docx, ext: 'docx', name: `${base}.docx` }
+  ];
 }

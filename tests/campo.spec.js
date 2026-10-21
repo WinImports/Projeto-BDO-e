@@ -168,7 +168,7 @@ test('câmera: controles fixos na base da tela, alternar câmera e zoom quando o
   await expect(page.locator('[data-wrap=fotos_vc] .photo img')).toHaveCount(1);
 });
 
-test('PDF gerado no aparelho (jsPDF): arquivo válido, com fotos, tabelas e links de rota', async () => {
+test('PDF gerado no aparelho (jsPDF): arquivo válido, com fotos e tabelas, sem coordenadas nem links de rota', async () => {
   const { page } = ctx;
   await openTab(page, 'visita_tecnica');
   const info = await page.evaluate(async () => {
@@ -191,13 +191,14 @@ test('PDF gerado no aparelho (jsPDF): arquivo válido, com fotos, tabelas e link
       type: pdf.type, head: raw.slice(0, 5), size: pdf.size,
       pages: (raw.match(/\/Type\s*\/Page[^s]/g) || []).length,
       images: (raw.match(/\/Subtype\s*\/Image/g) || []).length,
-      uris: [...raw.matchAll(/\/URI\s*\(([^)]*)\)/g)].map((m) => m[1])
+      uris: [...raw.matchAll(/\/URI\s*\(([^)]*)\)/g)].map((m) => m[1]),
+      coords: raw.includes('-12.352400')
     };
   });
   expect(info.type).toBe('application/pdf');
   expect(info.head).toBe('%PDF-');
   expect(info.pages).toBeGreaterThanOrEqual(1);
   expect(info.images).toBeGreaterThanOrEqual(1); // a mesma imagem pode ser reaproveitada
-  expect(info.uris).toContain('https://www.google.com/maps/dir/?api=1&destination=-12.352400,-38.379100&travelmode=driving');
-  expect(info.uris).toContain('https://waze.com/ul?ll=-12.352400,-38.379100&navigate=yes');
+  expect(info.uris).toEqual([]);
+  expect(info.coords).toBe(false);
 });

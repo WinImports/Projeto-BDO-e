@@ -407,7 +407,11 @@ export class FormView {
           <div class="signature">
             <canvas class="signature__pad" data-signature="${id}" width="720" height="200" aria-label="Área de assinatura"></canvas>
             <div class="signature__bar">
-              <span class="muted small">Assine com o mouse, caneta ou dedo</span>
+              <span class="muted small">Assine com o mouse, caneta ou dedo — ou use a imagem da assinatura</span>
+              <label class="btn btn--ghost btn--sm">
+                <input type="file" accept="image/png,image/jpeg" class="sr-only" data-kind="signature-file" data-target="${id}">
+                ${icon('image', 15)} Carregar imagem
+              </label>
               <button type="button" class="btn btn--ghost btn--sm" data-action="clear-signature" data-target="${id}">${icon('eraser', 15)} Limpar assinatura</button>
             </div>
           </div>`;
@@ -674,6 +678,31 @@ export class FormView {
     });
   }
 
+  /** Arquivo de imagem da assinatura (PNG/JPEG): centralizado no quadro, fundo branco, salvo como PNG. */
+  loadSignatureImage(id, file) {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      canvas.width = 720;
+      canvas.height = 200;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const s = Math.min(canvas.width / img.naturalWidth, canvas.height / img.naturalHeight);
+      const w = img.naturalWidth * s;
+      const h = img.naturalHeight * s;
+      ctx.drawImage(img, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+      this.draft.data[id] = canvas.toDataURL('image/png');
+      if (!this.el.isConnected) return;
+      this.refreshField(id);
+      this.changed(id);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); toast('Não foi possível ler a imagem da assinatura.', 'error'); };
+    img.src = url;
+  }
+
   handlePointer(e) {
     const point = (canvas) => {
       const r = canvas.getBoundingClientRect();
@@ -724,6 +753,14 @@ export class FormView {
     if (t.dataset.kind === 'photo-caption') {
       const photo = this.draft.photos.find((p) => p.id === t.dataset.photo);
       if (photo && photo.legenda !== t.value) { photo.legenda = t.value; this.changed(photo.field); }
+      return;
+    }
+
+    if (t.dataset.kind === 'signature-file') {
+      if (e.type !== 'change') return;
+      const file = t.files?.[0];
+      t.value = '';
+      if (file?.type.startsWith('image/')) this.loadSignatureImage(t.dataset.target, file);
       return;
     }
 

@@ -1,4 +1,4 @@
-// Coordenadas GPS: presença nos cabeçalhos, botão "Obter Localização Atual" (somente leitura, sem digitação) e PDF.
+// Coordenadas GPS: campo no BDO-e (fora do relatório impresso), botão "Obter Localização Atual" (somente leitura, sem digitação) e PDF.
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
@@ -73,7 +73,7 @@ test('sem sinal: avisa o erro sem oferecer digitação; "Limpar" apaga a captura
   await expect(page.locator('.geo__route')).toHaveCount(0);
 });
 
-test('coordenadas aparecem no cabeçalho da prévia e viram links clicáveis no PDF', async () => {
+test('coordenadas e links de rota não saem na prévia nem no PDF; o cabeçalho traz só a identificação', async () => {
   const { app, page, userData } = ctx;
   const pdfPath = path.join(userData, 'gps.pdf');
   await app.evaluate(({ dialog, shell }, p) => {
@@ -89,16 +89,17 @@ test('coordenadas aparecem no cabeçalho da prévia e viram links clicáveis no 
 
   await page.locator('#btn-preview').click();
   const preview = page.locator('dialog.modal[open]');
-  await expect(preview.locator('.modal__header .geo-head')).toContainText('-12.352400, -38.379100');
-  // no corpo não se repete (PDF compacto)
+  await expect(preview.locator('.geo-head')).toHaveCount(0);
+  await expect(preview).not.toContainText('-12.352400');
   await expect(preview.locator('.modal__body dt', { hasText: 'Coordenadas GPS' })).toHaveCount(0);
+  await expect(preview.locator('[data-ident] dt').first()).toHaveText('Poço / Locação');
+  await expect(preview.locator('[data-ident] dd').first()).toHaveText('LOCACAO SEM CADASTRO');
 
   await preview.locator('[data-pdf]').click();
   await expect(toast(page)).toContainText('PDF salvo', { timeout: 15_000 });
   const raw = fs.readFileSync(pdfPath).toString('latin1');
   const uris = [...raw.matchAll(/\/URI\s*\(([^)]*)\)/g)].map((m) => m[1]);
-  expect(uris).toContain('https://www.google.com/maps/dir/?api=1&destination=-12.352400,-38.379100&travelmode=driving');
-  expect(uris).toContain('https://waze.com/ul?ll=-12.352400,-38.379100&navigate=yes');
+  expect(uris.filter((u) => /maps|waze|openstreetmap/.test(u))).toEqual([]);
 });
 
 test('coordenadas ficam salvas no rascunho ao reabrir o app', async () => {

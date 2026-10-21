@@ -99,6 +99,20 @@ ipcMain.handle('pdf:save', async (event, { html, fileName }) => {
   return { saved: true, filePath };
 });
 
+// Word (.docx) gerado na interface: só grava os bytes no arquivo escolhido
+ipcMain.handle('docx:save', async (event, { bytes, fileName }) => {
+  const parent = BrowserWindow.fromWebContents(event.sender);
+  const { canceled, filePath } = await dialog.showSaveDialog(parent, {
+    title: 'Salvar relatório em Word',
+    defaultPath: path.join(app.getPath('documents'), fileName),
+    filters: [{ name: 'Documento do Word', extensions: ['docx'] }]
+  });
+  if (canceled || !filePath) return { saved: false };
+  await fs.writeFile(filePath, Buffer.from(bytes));
+  shell.openPath(filePath);
+  return { saved: true, filePath };
+});
+
 // PDF em memória (arquivo do link compartilhado no WhatsApp)
 ipcMain.handle('pdf:render', async (_event, { html }) => renderPdf(html));
 

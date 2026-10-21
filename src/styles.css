@@ -432,7 +432,8 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .
   background-image: linear-gradient(to right, transparent 24px, #cbd5e1 24px, #cbd5e1 calc(100% - 24px), transparent calc(100% - 24px));
   background-size: 100% 1px; background-repeat: no-repeat; background-position: 0 76%;
 }
-.signature__bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.signature__bar { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
+.signature__bar > .muted { flex: 1 1 200px; min-width: 0; }
 .preview__signature { max-width: 360px; width: 100%; background: #fff; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 
 /* ===================== Geolocalização ===================== */
@@ -794,6 +795,9 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .
 .preview__photos { margin-top: 10px; }
 .preview__photos-title { margin: 0 0 6px; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
 .preview__photos .photo figcaption { white-space: normal; }
+/* relatório (prévia, PDF e Word): fotos lado a lado em 2 colunas; no Antes x Depois, uma por coluna */
+.preview__photos .photo-grid--read { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.photo-compare .photo-grid--read { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 760px) {
   .photo-compare { grid-template-columns: 1fr; }
 }
@@ -814,10 +818,14 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .
 .modal__footer--finalize { flex-wrap: wrap; align-items: center; }
 .finalize-ask { flex: 1 1 260px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .finalize-ask__buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.finalize-files { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 640px) {
   /* celular: rodapé compacto para a prévia do relatório continuar visível */
   .modal__footer--finalize { gap: 8px; padding: 10px 12px; }
   .modal__footer--finalize > .btn { width: 100%; justify-content: center; min-height: 40px; }
+  .modal__footer { flex-wrap: wrap; }
+  .finalize-files { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+  .finalize-files .btn { justify-content: center; white-space: normal; line-height: 1.2; min-height: 40px; }
   .finalize-ask { flex-basis: 100%; }
   .finalize-ask .muted { display: none; }
   .finalize-ask__buttons { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }

@@ -4,11 +4,10 @@ import { MODULES, getModule } from './modules/index.js';
 import { openDb, requestPersistence } from './core/db.js';
 import { loadDraft, saveDraft, discardDraft, hasDraft, restoreDraft } from './core/drafts.js';
 import { enqueue, pendingCount, onOutboxChange, takeBack, saveLocalOnly, sendFromHistory, takeBackLocal } from './core/outbox.js';
-import { shareMessage, waUrl, uploadShareCopy, whatsappConfigurado } from './core/share.js';
-import { reportFile } from './ui/report-pdf.js';
-import { isSupabaseConfigured } from './config.js';
+import { shareMessage, waUrl, publishReportDocuments, whatsappConfigurado } from './core/share.js';
+import { reportFiles } from './ui/report-pdf.js';
 import { showSharePrompt } from './ui/share-prompt.js';
-import { syncNow, startSyncScheduler, onSyncState } from './core/sync.js';
+import { syncNow, startSyncScheduler, onSyncState, setDocumentPublisher } from './core/sync.js';
 import { getPref, setPref } from './core/prefs.js';
 import { newUniqueId } from './core/ids.js';
 import { bdoAtivo, herdar } from './core/heranca.js';
@@ -382,23 +381,30 @@ async function finalize(module) {
   await shareReport(module, report);
 }
 
+/** Cópias PDF + Word do relatório finalizado no Storage (uma vez por relatório; ver core/share.js). */
+function publicarDocumentos(module, report) {
+  return publishReportDocuments(module, report.uniqueId, () => reportFiles({
+    module, uniqueId: report.uniqueId, data: report.data, photos: report.photos, company: report.data._empresa
+  }));
+}
+
 /**
  * Depois do envio: gera o link do relatório (Supabase Storage) e abre o WhatsApp para o número
  * das Configurações. Sem número, mostra o botão "Abrir WhatsApp" (o técnico escolhe o contato).
  */
 async function shareReport(module, report) {
   let link = null;
+  let wordLink = null;
   let aviso = '';
   try {
-    if (isSupabaseConfigured() && navigator.onLine) {
-      const file = await reportFile({ module, uniqueId: report.uniqueId, data: report.data, photos: report.photos, company: report.data._empresa });
-      link = await uploadShareCopy(module, report.uniqueId, file);
-    }
+    const urls = await publicarDocumentos(module, report);
+    link = urls?.pdf || null;
+    wordLink = urls?.docx || null;
   } catch (err) {
     console.error('[share]', err);
     aviso = 'Não foi possível gerar o link agora.';
   }
-  const url = waUrl(getSettings().whatsapp_padrao, shareMessage(module, report.data, report.uniqueId, link));
+  const url = waUrl(getSettings().whatsapp_padrao, shareMessage(module, report.data, report.uniqueId, link, wordLink));
   showSharePrompt({ url, link, titulo: 'Enviar pelo WhatsApp', aviso });
   // com número configurado, abre direto (no iPhone a janela pode ser bloqueada: o botão do painel resolve)
   if (whatsappConfigurado()) window.open(url, '_blank', 'noopener');
@@ -640,6 +646,10 @@ async function init() {
   });
 
   await showTab(state.tab);
+  setDocumentPublisher(async (rec) => {
+    const module = getModule(rec.module);
+    if (module) await publicarDocumentos(module, rec);
+  });
   startSyncScheduler();
   registerServiceWorker();
 

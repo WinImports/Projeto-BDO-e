@@ -132,22 +132,65 @@ const juntar = (lista) => (lista.length > 1 ? `${lista.slice(0, -1).join(', ')} 
 /** Integrante da equipe como texto: "João (Técnico)". */
 const integrante = (r) => (r.funcao ? `${r.nome.trim()} (${r.funcao})` : r.nome.trim());
 
+/** Integrantes do quadro "equipe", sem nomes repetidos: ["João (Técnico)", …]. */
+const integrantes = (d) => {
+  const vistos = new Set();
+  return (Array.isArray(d.equipe) ? d.equipe : []).filter((r) => {
+    const chave = String(r.nome || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!chave || vistos.has(chave)) return false;
+    vistos.add(chave);
+    return true;
+  }).map(integrante);
+};
+
+/** Equipe em uma linha (cabeçalho do PDF/Word): "João (Técnico), Carlos (Operador)". */
+export const equipeTexto = (d) => integrantes(d).join(', ');
+
+const semPrefixoPoco = (s) => String(s || '').trim().replace(/^po[çc]o\s*[:\-–]?\s+/i, '');
+
+/**
+ * Objetivo sem repetir o que o parágrafo já diz ("Objetivo:", "com o objetivo de", "realizar visita
+ * técnica ao poço X para…") e sem o ponto final. Só a 1ª letra de palavra comum vira minúscula (VC fica VC).
+ */
+function objetivoLimpo(texto) {
+  let t = String(texto || '').trim().replace(/\s+/g, ' ');
+  const prefixos = [
+    /^objetivo( da visita| da execução)?\s*[:\-–]\s*/i,
+    /^(com )?o objetivo (de |é |foi |era )(o de |de )?/i,
+    /^(realizar|fazer|efetuar) (uma )?visita t[ée]cnica( (ao|no) po[çc]o [^\s,]+)?( (para|a fim de|com o objetivo de|visando))?\s*/i,
+    /^(para|a fim de|visando)\s+/i
+  ];
+  for (let mudou = true; mudou;) {
+    mudou = false;
+    for (const re of prefixos) {
+      const n = t.replace(re, '');
+      if (n !== t && n) { t = n; mudou = true; }
+    }
+  }
+  return t.replace(/^[A-ZÀ-Ú](?=[a-zà-ú])/, (c) => c.toLowerCase()).replace(/[.;,\s]+$/, '');
+}
+
 /**
  * Parágrafo de abertura (gerado em segundo plano: só aparece na prévia/PDF).
  * verbo: 'fizemos uma visita técnica ao' | 'executamos os serviços no'
+ * → "No dia [DATA] fizemos uma visita técnica ao poço [POÇO], localizado em [LOCALIZAÇÃO], com a equipe
+ *   formada por [EQUIPE], com o objetivo de [OBJETIVO]." — trechos sem dado são omitidos.
  * Equipe: quadro "equipe" (nome + função); relatórios antigos usavam campos de texto.
  */
 export function paragrafoAbertura(d, { verbo, data, equipeLegado = [] }) {
   const dia = brData(d[data]);
-  if (!d.poco || !dia) return '';
-  let nomes = (Array.isArray(d.equipe) ? d.equipe : []).filter((r) => String(r.nome || '').trim()).map(integrante);
+  const poco = semPrefixoPoco(d.poco);
+  if (!poco || !dia) return '';
+  let nomes = integrantes(d);
   if (!nomes.length) {
-    nomes = equipeLegado.flatMap((k) => String(d[k] || '').split(/\s*[,;]\s*/)).filter(Boolean);
+    nomes = [...new Set(equipeLegado.flatMap((k) => String(d[k] || '').split(/\s*[,;]\s*/)).map((x) => x.trim()).filter(Boolean))];
   }
-  let texto = `No dia ${dia} ${verbo} poço ${String(d.poco).trim()}`;
-  if (d.campo) texto += `, localizado em ${String(d.campo).trim()}`;
+  const local = String(d.campo || '').trim().replace(/^localizad[oa] (em|no|na)\s+/i, '');
+  const objetivo = objetivoLimpo(d.objetivo);
+  let texto = `No dia ${dia} ${verbo} poço ${poco}`;
+  if (local && local.toLowerCase() !== poco.toLowerCase()) texto += `, localizado em ${local}`;
   if (nomes.length) texto += `, com a equipe formada por ${juntar(nomes)}`;
-  if (d.objetivo) texto += `, com o objetivo de ${String(d.objetivo).trim().replace(/^[A-ZÀ-Ú]/, (c) => c.toLowerCase()).replace(/[.\s]+$/, '')}`;
+  if (objetivo) texto += `, com o objetivo de ${objetivo}`;
   return `${texto}.`;
 }
 

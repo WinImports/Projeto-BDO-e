@@ -1,16 +1,16 @@
-// Painel "PDF pronto" (navegador / PWA). O iPhone só permite compartilhar arquivos a partir de um toque
+// Painel "PDF pronto" / "Word pronto" (navegador / PWA). O iPhone só permite compartilhar arquivos a partir de um toque
 // direto do usuário — por isso o PDF é gerado antes e o compartilhamento acontece no toque do botão.
 import { icon } from './icons.js';
 import { esc, $ } from './dom.js';
 import { toast } from './toast.js';
 
 /**
- * @param {{ blob: Blob, fileName: string, onPrint?: () => void }} o
+ * @param {{ blob: Blob, fileName: string, onPrint?: () => void, kind?: 'PDF'|'Word' }} o
  * @returns {Promise<void>} quando o painel fecha
  */
-export function showPdfSheet({ blob, fileName, onPrint }) {
+export function showPdfSheet({ blob, fileName, onPrint, kind = 'PDF' }) {
   return new Promise((resolve) => {
-    const file = new File([blob], fileName, { type: 'application/pdf' });
+    const file = new File([blob], fileName, { type: blob.type || 'application/pdf' });
     const url = URL.createObjectURL(blob);
     let canShare = false;
     try { canShare = Boolean(navigator.canShare?.({ files: [file] })); } catch { canShare = false; }
@@ -22,14 +22,14 @@ export function showPdfSheet({ blob, fileName, onPrint }) {
       <div class="confirm">
         <span class="confirm__icon confirm__icon--info">${icon('fileText', 22)}</span>
         <div class="confirm__text">
-          <h2 class="confirm__title">PDF pronto</h2>
+          <h2 class="confirm__title">${kind} pronto</h2>
           <p class="confirm__message"><strong>${esc(fileName)}</strong> · ${Math.max(1, Math.round(blob.size / 1024))} KB</p>
-          <p class="muted small">No iPhone: <strong>Compartilhar › Salvar em Arquivos</strong> (ou envie por e-mail / WhatsApp). No Android e no computador: <strong>Baixar PDF</strong>.</p>
+          <p class="muted small">No iPhone: <strong>Compartilhar › Salvar em Arquivos</strong> (ou envie por e-mail / WhatsApp). No Android e no computador: <strong>Baixar ${kind}</strong>.</p>
         </div>
       </div>
       <div class="sheet__actions">
         ${canShare ? `<button type="button" class="btn btn--primary btn--block" data-share>${icon('send', 17)} Compartilhar / Salvar em Arquivos</button>` : ''}
-        <a class="btn ${canShare ? 'btn--ghost' : 'btn--primary'} btn--block" data-download href="${url}" download="${esc(fileName)}">${icon('download', 17)} Baixar PDF</a>
+        <a class="btn ${canShare ? 'btn--ghost' : 'btn--primary'} btn--block" data-download href="${url}" download="${esc(fileName)}">${icon('download', 17)} Baixar ${kind}</a>
         ${onPrint ? `<button type="button" class="btn btn--ghost btn--block" data-print>${icon('fileText', 17)} Imprimir</button>` : ''}
         <button type="button" class="btn btn--text btn--block" data-close>Fechar</button>
       </div>`;
@@ -39,10 +39,10 @@ export function showPdfSheet({ blob, fileName, onPrint }) {
       if (e.target.closest('[data-print]')) { dialog.close(); onPrint?.(); return; }
       if (e.target.closest('[data-share]')) {
         try {
-          await navigator.share({ title: fileName.replace(/\.pdf$/i, ''), files: [file] });
+          await navigator.share({ title: fileName.replace(/\.(pdf|docx)$/i, ''), files: [file] });
           dialog.close();
         } catch (err) {
-          if (err?.name !== 'AbortError') toast(`Não foi possível compartilhar: ${err.message}. Use "Baixar PDF".`, 'warn', 6000);
+          if (err?.name !== 'AbortError') toast(`Não foi possível compartilhar: ${err.message}. Use "Baixar ${kind}".`, 'warn', 6000);
         }
       }
     });
