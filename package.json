@@ -3,9 +3,12 @@
   "version": "2.0.0",
   "description": "BDO-e & Inspeção Técnica — Boletim Diário de Operações Eletrônico (desktop, offline-first)",
   "main": "main.js",
+  "author": "WIN IMPORTS",
   "private": true,
   "scripts": {
     "start": "electron .",
+    "electron:start": "electron .",
+    "electron:build": "electron-builder --win nsis",
     "build": "node scripts/build-web.js",
     "test": "playwright test",
     "pocos": "node scripts/gerar-pocos.js",
@@ -22,9 +25,46 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
-    "electron": "^44.7.2"
+    "electron": "^44.7.2",
+    "electron-builder": "^26.15.3"
   },
   "engines": {
     "node": ">=20"
+  },
+  "build": {
+    "appId": "br.com.winappdigital.bdoe",
+    "productName": "BDO-e",
+    "electronDist": "node_modules/electron/dist",
+    "directories": {
+      "output": "release",
+      "buildResources": "icons"
+    },
+    "files": [
+      "package.json",
+      "main.js",
+      "preload.js",
+      "electron/**",
+      "index.html",
+      "manifest.json",
+      "icons/**",
+      "src/**",
+      "!tests/**",
+      "!_legado/**",
+      "!licencas/**",
+      "!node_modules/**"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icons/icon-512.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "BDO-e",
+      "artifactName": "BDO-e-Setup-${version}.${ext}"
+    }
   }
 }

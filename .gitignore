@@ -11,3 +11,6 @@ src/data/pocos-ba.json
 /pocos_*.csv
 /*.kml
 /*.kmz
+
+# Instalador do app desktop (npm run electron:build)
+release/
