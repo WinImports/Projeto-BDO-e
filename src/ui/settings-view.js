@@ -13,6 +13,7 @@ import { resetClient } from '../core/supabase.js';
 const ORIGEM_SERVIDOR = {
   aparelho: 'Configurado neste aparelho',
   ambiente: 'Configurado pelas variáveis de ambiente do computador (BDOE_SUPABASE_URL / BDOE_SUPABASE_ANON_KEY)',
+  publicacao: 'Configurado na publicação do site',
   config: 'Configurado no app (src/config.js)'
 };
 

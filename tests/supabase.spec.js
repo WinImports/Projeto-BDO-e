@@ -23,6 +23,7 @@ async function supabaseFalso(page) {
           if (name === 'submit_reports') return { status: 200, error: null, data: args.reports.map((r, i) => ({ unique_id: r.unique_id, id: i + 1 })) };
           if (name === 'my_contracts') return { status: 200, error: null, data: window.__sb.contratos };
           if (name === 'list_team_reports') return { status: 200, error: null, data: window.__sb.equipe };
+          if (name === 'my_company_settings') return { status: 200, error: null, data: window.__sb.empresa || null };
           return { status: 200, error: null, data: args.p_device_id };
         },
         storage: {
@@ -218,4 +219,21 @@ test('histórico da equipe: login baixa os relatórios do contrato (30 dias) com
   await openTab(page, 'outbox');
   await expect(page.locator('[data-history] .outbox-item--team')).toHaveCount(0);
   await expect(page.locator('[data-equipe-status]')).toContainText('não está cadastrada em nenhum contrato');
+});
+
+test('empresa do cabeçalho vem do servidor (company_settings) para o técnico logado num aparelho novo', async () => {
+  const { page } = ctx;
+  const atualizado = new Date(Date.now() - 3600e3).toISOString();
+  await page.evaluate((u) => {
+    window.__sb.empresa = { updated_at: u, settings: { empresa_nome: 'WIN IMPORTS', empresa_cnpj: '12.345.678/0001-90', cliente_padrao: 'PETROBRAS', contrato_padrao: 'OS-Mans' } };
+  }, atualizado);
+  await configurarServidor(page);
+  await reentrar(page);
+
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('bdoe.settings') || '{}').empresa_nome), { timeout: 15_000 }).toBe('WIN IMPORTS');
+  const s = await page.evaluate(() => JSON.parse(localStorage.getItem('bdoe.settings')));
+  expect(s).toMatchObject({ empresa_cnpj: '12.345.678/0001-90', contrato_padrao: 'OS-Mans', syncPending: false });
+  await openTab(page, 'bdo');
+  await page.locator('#btn-preview').click();
+  await expect(page.locator('dialog.modal[open] [data-empresa]')).toContainText('WIN IMPORTS');
 });

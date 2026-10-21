@@ -6,6 +6,7 @@
 import { displayValue, displayCell, hasContent } from './form.js';
 import { assignPhotoFields, photosOf } from '../core/fotos.js';
 import { cabecalhoItens, CAMPOS_CABECALHO } from './cabecalho.js';
+import { empresaDoRelatorio } from '../core/settings.js';
 
 export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -328,7 +329,8 @@ const STYLES = `${XML_DECL}<w:styles xmlns:w="http://schemas.openxmlformats.org/
 </w:styles>`;
 
 /** Gera o .docx do relatório (Blob). Mesmos argumentos de buildPdfBlob. */
-export async function buildDocxBlob({ module, uniqueId, data, photos = [], company, draft = false }) {
+export async function buildDocxBlob({ module, uniqueId, data, photos = [], company: empresa, draft = false }) {
+  const company = empresaDoRelatorio(empresa); // sem empresa configurada: "Empresa Prestadora"
   assignPhotoFields(module, photos);
   const doc = new DocxBuilder();
 

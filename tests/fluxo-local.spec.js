@@ -117,7 +117,10 @@ test.describe('prévia, PDF, finalizar e editar', () => {
 
     await preview.locator('[data-pdf]').click();
     await expect(toast(page)).toContainText('PDF salvo', { timeout: 15_000 });
-    expect(fs.statSync(pdfPath).size).toBeGreaterThan(10_000);
+    // BDO-e: PDF de página única (jsPDF, fontes padrão → arquivo pequeno)
+    const raw = fs.readFileSync(pdfPath).toString('latin1');
+    expect(raw.slice(0, 5)).toBe('%PDF-');
+    expect((raw.match(/\/Type\s*\/Page[^s]/g) || []).length).toBe(1);
   });
 
   test('finalizar envia para a Caixa de Saída; Editar devolve ao formulário com tudo preenchido', async () => {

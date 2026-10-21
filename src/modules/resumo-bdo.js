@@ -13,6 +13,8 @@ const limpar = (s) => String(s || '').replace(/\s+/g, ' ').trim().replace(/[.;\s
 
 // Código de poço escrito na atividade: FBM-89, RCB-0034, TQ-12A
 const CODIGO_POCO = /\b[A-Z]{2,5}-\d{1,4}[A-Z]?\b/g;
+// ...mas não códigos de válvula da cabeça de poço (VA-1, VB-2, VC-1, VM-1…)
+const CODIGO_VALVULA = /^V[A-Z]?-\d$/;
 
 /** Intervalo da linha: "das 07:00 às 08:30" (só o que estiver preenchido). */
 function intervalo(ini, fim) {
@@ -40,7 +42,7 @@ function locais(d, linhas) {
     const [tipo, nome] = String(r._desloc?.key || '').split(/:(.*)/s);
     if (tipo === 'poco') add(pocos, nome);
     if (tipo === 'cidade') add(cidades, nome);
-    for (const m of String(r.atividade).toUpperCase().matchAll(CODIGO_POCO)) add(pocos, m[0]);
+    for (const m of String(r.atividade).toUpperCase().matchAll(CODIGO_POCO)) if (!CODIGO_VALVULA.test(m[0])) add(pocos, m[0]);
   }
   add(cidades, d.cidade_uf);
   return { pocos, cidades };
@@ -112,5 +114,47 @@ export function resumoBdo(d) {
     partes.push(`${paradas.length > 1 ? 'Paradas operacionais' : 'Parada operacional'}: ${desc.join('; ')}${parado ? ` — total de ${fmtMin(parado)} parado` : ''}.`);
   }
 
+  return partes.join(' ');
+}
+
+/**
+ * Versão executiva para o PDF de página única: jornada, locais, atividades SEM os horários (já estão no
+ * quadro da apropriação), sem repetições e no máximo `max` itens, e paradas só pelo total.
+ */
+export function resumoExecutivo(d, { max = 6 } = {}) {
+  const linhas = atividades(d);
+  if (!linhas.length) return '';
+  const partes = [];
+  const primeira = linhas.find((r) => hora(r.hora_inicio)) || linhas[0];
+  const ultima = linhas.filter((r) => hora(r.hora_fim))
+    .sort((a, b) => `${a.data_fim || a.data_inicio || ''}T${a.hora_fim}`.localeCompare(`${b.data_fim || b.data_inicio || ''}T${b.hora_fim}`)).pop();
+  const total = linhas.reduce((acc, r) => acc + minutos(duracaoEntreDatas(r.data_inicio, r.hora_inicio, r.data_fim, r.hora_fim)), 0);
+  const ini = hora(primeira.hora_inicio);
+  const fim = hora(ultima?.hora_fim);
+  let jornada = ini && fim ? `Jornada das ${ini} às ${fim}` : ini ? `Jornada iniciada às ${ini}` : 'Jornada registrada';
+  if (total) jornada += ` (${fmtMin(total)} apropriadas)`;
+  const { pocos, cidades } = locais(d, linhas);
+  if (pocos.length) jornada += `, ${pocos.length > 1 ? 'nos poços / locações' : 'no poço / locação'} ${juntar(pocos)}`;
+  if (cidades.length) jornada += `, em ${juntar(cidades)}`;
+  partes.push(`${jornada}.`);
+
+  const vistos = new Set();
+  const itens = [];
+  for (const r of linhas) {
+    const t = minuscula(limpar(r.atividade));
+    const k = t.toLowerCase();
+    if (!vistos.has(k)) { vistos.add(k); itens.push(t); }
+  }
+  const mostrados = itens.slice(0, max);
+  const resto = itens.length - mostrados.length;
+  partes.push(`Principais atividades: ${mostrados.join('; ')}${resto > 0 ? `; e mais ${resto} atividade${resto > 1 ? 's' : ''} (ver quadro)` : ''}.`);
+
+  const paradas = (Array.isArray(d.paradas) ? d.paradas : []).filter((p) => limpar(p.motivo) || hora(p.inicio) || hora(p.fim));
+  if (paradas.length) {
+    const parado = paradas.reduce((acc, p) => acc + minutos(p.duracao || duracao(p.inicio, p.fim)), 0);
+    partes.push(`${paradas.length} parada${paradas.length > 1 ? 's' : ''} operaciona${paradas.length > 1 ? 'is' : 'l'}${parado ? `, total de ${fmtMin(parado)}` : ''}.`);
+  } else {
+    partes.push('Sem paradas operacionais.');
+  }
   return partes.join(' ');
 }

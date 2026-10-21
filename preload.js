@@ -18,8 +18,8 @@ contextBridge.exposeInMainWorld('desktop', {
   /** Abre "Salvar como" e grava o HTML do relatório em PDF. → { saved, filePath } */
   savePdf: (html, fileName) => ipcRenderer.invoke('pdf:save', { html, fileName }),
   renderPdf: (html) => ipcRenderer.invoke('pdf:render', { html }),
-  /** "Salvar como" do relatório em Word (bytes do .docx gerado na interface). → { saved, filePath } */
-  saveDocx: (bytes, fileName) => ipcRenderer.invoke('docx:save', { bytes, fileName }),
+  /** "Salvar como" de um arquivo gerado na interface (.docx ou .pdf). → { saved, filePath } */
+  saveFile: (bytes, fileName) => ipcRenderer.invoke('file:save', { bytes, fileName }),
   /** Base de poços: { origem, fonte, importadoEm, total, pocos: [[nome, lat, lng], ...] } */
   getPocos: () => ipcRenderer.invoke('pocos:list'),
   pocosStatus: () => ipcRenderer.invoke('pocos:status'),

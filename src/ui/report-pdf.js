@@ -3,9 +3,10 @@
 
 import { esc } from './dom.js';
 import { reportBodyHtml } from './preview.js';
-import { buildPdfBlob } from './pdf-doc.js';
+import { buildPdfBlob, temLayoutProprio } from './pdf-doc.js';
 import { buildDocxBlob } from './docx-doc.js';
 import { showPdfSheet } from './pdf-sheet.js';
+import { empresaDoRelatorio } from '../core/settings.js';
 
 const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
   const r = new FileReader();
@@ -181,7 +182,7 @@ const fileNameOf = (module, data, ext = 'pdf') => {
 
 async function docOpts({ module, uniqueId, data, photos, company, draft }) {
   const photoSrcs = await Promise.all(photos.map((p) => blobToDataUrl(p.blob)));
-  return { module, uniqueId, data, photos, photoSrcs, company, draft };
+  return { module, uniqueId, data, photos, photoSrcs, company: empresaDoRelatorio(company), draft };
 }
 
 /**
@@ -191,6 +192,10 @@ async function docOpts({ module, uniqueId, data, photos, company, draft }) {
  */
 export async function savePdf(args) {
   const fileName = fileNameOf(args.module, args.data);
+  if (window.desktop?.saveFile && temLayoutProprio(args.module)) {
+    // BDO-e: PDF de página única (jsPDF), o mesmo do celular e do link do WhatsApp
+    return window.desktop.saveFile(new Uint8Array(await (await buildPdfBlob(args)).arrayBuffer()), fileName);
+  }
   if (window.desktop?.savePdf) return window.desktop.savePdf(buildReportHtml(await docOpts(args)), fileName);
   const blob = await buildPdfBlob(args);
   await showPdfSheet({
@@ -201,13 +206,13 @@ export async function savePdf(args) {
 }
 
 /**
- * Word (.docx) do relatório. Desktop: "Salvar como" (IPC docx:save). Navegador / iPhone: painel
+ * Word (.docx) do relatório. Desktop: "Salvar como" (IPC file:save). Navegador / iPhone: painel
  * "Word pronto" (Compartilhar / Salvar em Arquivos, Baixar).
  */
 export async function saveDocx(args) {
   const fileName = fileNameOf(args.module, args.data, 'docx');
   const blob = await buildDocxBlob(args);
-  if (window.desktop?.saveDocx) return window.desktop.saveDocx(new Uint8Array(await blob.arrayBuffer()), fileName);
+  if (window.desktop?.saveFile) return window.desktop.saveFile(new Uint8Array(await blob.arrayBuffer()), fileName);
   await showPdfSheet({ blob, fileName, kind: 'Word' });
   return { saved: true, sheet: true };
 }
@@ -219,7 +224,7 @@ export async function saveDocx(args) {
 export async function reportFiles(args) {
   const opts = await docOpts({ ...args, draft: false });
   const base = fileNameOf(args.module, args.data).replace(/.pdf$/, '');
-  const pdf = window.desktop?.renderPdf
+  const pdf = window.desktop?.renderPdf && !temLayoutProprio(args.module)
     ? new Blob([await window.desktop.renderPdf(buildReportHtml(opts))], { type: 'application/pdf' })
     : await buildPdfBlob({ ...args, draft: false });
   const docx = await buildDocxBlob({ ...args, draft: false });

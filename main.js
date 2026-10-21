@@ -99,13 +99,16 @@ ipcMain.handle('pdf:save', async (event, { html, fileName }) => {
   return { saved: true, filePath };
 });
 
-// Word (.docx) gerado na interface: só grava os bytes no arquivo escolhido
-ipcMain.handle('docx:save', async (event, { bytes, fileName }) => {
+// Arquivo gerado na interface (Word .docx, PDF de página única do BDO-e): só grava os bytes no arquivo escolhido
+const FILTROS = { docx: { name: 'Documento do Word', extensions: ['docx'] }, pdf: { name: 'PDF', extensions: ['pdf'] } };
+ipcMain.handle('file:save', async (event, { bytes, fileName }) => {
+  const ext = path.extname(String(fileName)).slice(1).toLowerCase();
+  if (!FILTROS[ext]) throw new Error('Tipo de arquivo não permitido');
   const parent = BrowserWindow.fromWebContents(event.sender);
   const { canceled, filePath } = await dialog.showSaveDialog(parent, {
-    title: 'Salvar relatório em Word',
-    defaultPath: path.join(app.getPath('documents'), fileName),
-    filters: [{ name: 'Documento do Word', extensions: ['docx'] }]
+    title: ext === 'docx' ? 'Salvar relatório em Word' : 'Salvar relatório em PDF',
+    defaultPath: path.join(app.getPath('documents'), path.basename(String(fileName))),
+    filters: [FILTROS[ext]]
   });
   if (canceled || !filePath) return { saved: false };
   await fs.writeFile(filePath, Buffer.from(bytes));

@@ -7,7 +7,7 @@ import { displayValue, displayCell, hasContent, emptyOptionalSections } from './
 import { savePdf, saveDocx } from './report-pdf.js';
 import { cabecalhoItens, CAMPOS_CABECALHO } from './cabecalho.js';
 import { toast } from './toast.js';
-import { companyInfo } from '../core/settings.js';
+import { companyInfo, empresaDoRelatorio } from '../core/settings.js';
 import { consolidationHtml } from './consolidacao-view.js';
 import { assignPhotoFields, photosOf } from '../core/fotos.js';
 
@@ -117,7 +117,7 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
       <div class="modal__header">
         <div>
           <p class="eyebrow">${EYEBROW[mode]}</p>
-          ${company ? `<div class="company-chip">${company.logo ? `<img src="${esc(company.logo)}" alt="">` : ''}<span>${esc(company.nome || '')}${company.cnpj ? ` · CNPJ ${esc(company.cnpj)}` : ''}</span></div>` : ''}
+          ${(() => { const e = empresaDoRelatorio(company); return `<div class="company-chip" data-empresa>${e.logo ? `<img src="${esc(e.logo)}" alt="">` : ''}<span>${esc(e.nome)}${e.cnpj ? ` · CNPJ ${esc(e.cnpj)}` : ''}</span></div>`; })()}
           <h2>${esc(module.title)}</h2>
           <p class="muted small">${data.poco ? `Poço / Locação: <strong>${esc(data.poco)}</strong> · ` : ''}ID <code>${esc(uniqueId)}</code>${meta ? ` · ${esc(meta)}` : ''}</p>
         </div>

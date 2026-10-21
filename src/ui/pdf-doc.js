@@ -5,6 +5,11 @@
 import { displayValue, displayCell, hasContent } from './form.js';
 import { assignPhotoFields, photosOf } from '../core/fotos.js';
 import { cabecalhoItens, CAMPOS_CABECALHO } from './cabecalho.js';
+import { empresaDoRelatorio } from '../core/settings.js';
+import { buildBdoPdf } from './bdo-pdf.js';
+
+/** Relatórios com layout próprio de página única (desktop e navegador usam este mesmo gerador). */
+export const temLayoutProprio = (module) => module.id === 'bdo';
 
 const A4 = { w: 210, h: 297 };
 const M = 12; // margem
@@ -245,8 +250,10 @@ function consolidation(doc, c) {
 export { imageSize, blobToDataUrl, formatOf };
 
 /** Gera o PDF do relatório e devolve um Blob (application/pdf). */
-export async function buildPdfBlob({ module, uniqueId, data, photos = [], company, draft = false }) {
+export async function buildPdfBlob({ module, uniqueId, data, photos = [], company: empresa, draft = false }) {
   const { jsPDF, autoTable } = await libs();
+  const company = empresaDoRelatorio(empresa); // sem empresa configurada: "Empresa Prestadora"
+  if (temLayoutProprio(module)) return buildBdoPdf({ jsPDF, autoTable, txt, formatOf, imageSize }, { uniqueId, data, company, draft });
   const doc = new Doc(jsPDF, autoTable);
   assignPhotoFields(module, photos);
   const srcOf = new Map();

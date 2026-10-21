@@ -13,7 +13,7 @@ const CSV = path.join(__dirname, 'fixtures', 'pocos-teste.csv');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png' };
 
 /** Servidor estático no estilo GitHub Pages: só o que é publicado (sem src/data, sem node_modules). */
-function startPagesServer() {
+function startPagesServer(ROOT = path.join(__dirname, '..'), BASE = '/Projeto-BDO-e/') {
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
       const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
@@ -212,5 +212,46 @@ test('PWA: relatório finalizado fica no Histórico do navegador, reabre na pré
   } finally {
     server.close();
     await ctx.close();
+  }
+});
+
+test('build do Cloudflare Pages (npm run build): dist/ na raiz do domínio já vem com o Supabase da publicação', async () => {
+  const os = require('os');
+  const dist = fs.mkdtempSync(path.join(os.tmpdir(), 'bdoe-dist-'));
+  const env = {
+    ...process.env, BDOE_DIST: dist, NEXT_PUBLIC_SUPABASE_URL: 'https://projeto-publicado.supabase.co',
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_teste', NEXT_PUBLIC_APP_URL: 'https://bdo.winappdigital.com.br'
+  };
+  execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'build-web.js')], { env });
+  expect(fs.existsSync(path.join(dist, 'src', 'data'))).toBe(false); // base real de poços nunca vai para o site
+  expect(fs.readFileSync(path.join(dist, '_headers'), 'utf8')).toMatch(/\/sw\.js\s+Cache-Control: no-cache/);
+  expect(fs.readFileSync(path.join(dist, 'sw.js'), 'utf8')).toMatch(/const VERSION = '[0-9a-f]{12}-[0-9a-f]{6}';/);
+  // chave secreta é recusada no build
+  const secreta = `x.${Buffer.from(JSON.stringify({ role: 'service_role' })).toString('base64url')}.y`;
+  expect(() => execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'build-web.js')], { env: { ...env, NEXT_PUBLIC_SUPABASE_ANON_KEY: secreta }, stdio: 'pipe' })).toThrow();
+
+  const server = await startPagesServer(dist, '/');
+  const ctx = await launchApp();
+  try {
+    const [page] = await Promise.all([
+      ctx.app.waitForEvent('window'),
+      ctx.app.evaluate(({ BrowserWindow }, u) => {
+        const w = new BrowserWindow({ show: false, width: 1280, height: 860, webPreferences: { sandbox: true, contextIsolation: true } });
+        w.loadURL(u);
+      }, `http://127.0.0.1:${server.address().port}/`)
+    ]);
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.waitForSelector('#login-form');
+    const cfg = await page.evaluate(async () => {
+      const c = await import('./src/config.js');
+      return { ...c.supabaseConfig(), app: c.appUrl() };
+    });
+    expect(cfg).toMatchObject({ url: 'https://projeto-publicado.supabase.co', anonKey: 'sb_publishable_teste', origem: 'publicacao', app: 'https://bdo.winappdigital.com.br' });
+    expect(errors).toEqual([]);
+  } finally {
+    await ctx.close();
+    server.close();
+    fs.rmSync(dist, { recursive: true, force: true });
   }
 });

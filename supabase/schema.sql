@@ -119,6 +119,17 @@ insert into public.execution_reports (unique_id, content_hash, payload, photos, 
 -- Recebe um array JSON de relatórios e grava cada um na tabela do seu tipo. Ignora unique_id já
 -- existentes e devolve (unique_id, id) de TODOS os itens do lote — inclusive os já gravados antes —
 -- que é a confirmação explícita usada pelo app para liberar a fila de envio.
+-- Empresa prestadora do cabeçalho (congelada no relatório ao finalizar: payload._empresa)
+alter table public.bdo_reports       add column if not exists empresa_nome text;
+alter table public.bdo_reports       add column if not exists empresa_cnpj text;
+alter table public.technical_visits  add column if not exists empresa_nome text;
+alter table public.technical_visits  add column if not exists empresa_cnpj text;
+alter table public.execution_reports add column if not exists empresa_nome text;
+alter table public.execution_reports add column if not exists empresa_cnpj text;
+update public.bdo_reports       set empresa_nome = payload->'_empresa'->>'nome', empresa_cnpj = payload->'_empresa'->>'cnpj' where empresa_nome is null and payload->'_empresa'->>'nome' is not null;
+update public.technical_visits  set empresa_nome = payload->'_empresa'->>'nome', empresa_cnpj = payload->'_empresa'->>'cnpj' where empresa_nome is null and payload->'_empresa'->>'nome' is not null;
+update public.execution_reports set empresa_nome = payload->'_empresa'->>'nome', empresa_cnpj = payload->'_empresa'->>'cnpj' where empresa_nome is null and payload->'_empresa'->>'nome' is not null;
+
 create or replace function public.submit_reports(reports jsonb)
 returns table (unique_id uuid, id bigint)
 language plpgsql
@@ -140,23 +151,26 @@ begin
     raise exception 'tipo de relatório desconhecido';
   end if;
 
-  insert into public.bdo_reports (unique_id, content_hash, payload, photos, poco, report_date, cliente, contrato, user_id, user_email, device_id, client_created_at)
+  insert into public.bdo_reports (unique_id, content_hash, payload, photos, poco, report_date, cliente, contrato, empresa_nome, empresa_cnpj, user_id, user_email, device_id, client_created_at)
   select (x->>'unique_id')::uuid, x->>'content_hash', x->'payload', coalesce(x->'photos', '[]'::jsonb),
          x->'payload'->>'poco', public._report_date(x->'payload'), x->'payload'->>'cliente', x->'payload'->>'contrato',
+         x->'payload'->'_empresa'->>'nome', x->'payload'->'_empresa'->>'cnpj',
          v_uid, coalesce(v_email, x->>'user_email'), nullif(x->>'device_id', '')::uuid, (x->>'client_created_at')::timestamptz
   from jsonb_array_elements(reports) as x where x->>'module' = 'bdo'
   on conflict (unique_id) do nothing;
 
-  insert into public.technical_visits (unique_id, content_hash, payload, photos, poco, report_date, cliente, contrato, user_id, user_email, device_id, client_created_at)
+  insert into public.technical_visits (unique_id, content_hash, payload, photos, poco, report_date, cliente, contrato, empresa_nome, empresa_cnpj, user_id, user_email, device_id, client_created_at)
   select (x->>'unique_id')::uuid, x->>'content_hash', x->'payload', coalesce(x->'photos', '[]'::jsonb),
          x->'payload'->>'poco', public._report_date(x->'payload'), x->'payload'->>'cliente', x->'payload'->>'contrato',
+         x->'payload'->'_empresa'->>'nome', x->'payload'->'_empresa'->>'cnpj',
          v_uid, coalesce(v_email, x->>'user_email'), nullif(x->>'device_id', '')::uuid, (x->>'client_created_at')::timestamptz
   from jsonb_array_elements(reports) as x where x->>'module' = 'visita_tecnica'
   on conflict (unique_id) do nothing;
 
-  insert into public.execution_reports (unique_id, content_hash, payload, photos, poco, report_date, cliente, contrato, user_id, user_email, device_id, client_created_at)
+  insert into public.execution_reports (unique_id, content_hash, payload, photos, poco, report_date, cliente, contrato, empresa_nome, empresa_cnpj, user_id, user_email, device_id, client_created_at)
   select (x->>'unique_id')::uuid, x->>'content_hash', x->'payload', coalesce(x->'photos', '[]'::jsonb),
          x->'payload'->>'poco', public._report_date(x->'payload'), x->'payload'->>'cliente', x->'payload'->>'contrato',
+         x->'payload'->'_empresa'->>'nome', x->'payload'->'_empresa'->>'cnpj',
          v_uid, coalesce(v_email, x->>'user_email'), nullif(x->>'device_id', '')::uuid, (x->>'client_created_at')::timestamptz
   from jsonb_array_elements(reports) as x where x->>'module' = 'handover'
   on conflict (unique_id) do nothing;
@@ -271,6 +285,27 @@ $$;
 
 revoke all on function public.save_device_settings(uuid, jsonb, timestamptz) from public;
 grant execute on function public.save_device_settings(uuid, jsonb, timestamptz) to anon, authenticated;
+
+-- Leitura: configurações mais recentes do técnico logado (qualquer aparelho dele), para o cabeçalho
+-- dos relatórios (empresa, CNPJ, logo) num aparelho novo. Só para authenticated; nunca de outro usuário.
+create or replace function public.my_company_settings()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object('settings', c.settings, 'updated_at', c.updated_at)
+  from public.company_settings c
+  where auth.uid() is not null
+    and (c.user_id = auth.uid()
+         or (c.user_email is not null and lower(c.user_email) = lower(nullif(auth.jwt()->>'email', ''))))
+  order by c.updated_at desc
+  limit 1;
+$$;
+
+revoke all on function public.my_company_settings() from public, anon;
+grant execute on function public.my_company_settings() to authenticated;
 
 -- 6) Equipe por contrato: leitura do histórico (pull) ---------------------
 -- Quem pertence a cada contrato é definido AQUI, pelo administrador (Table Editor ou SQL), nunca pelo

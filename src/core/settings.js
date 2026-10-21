@@ -1,6 +1,8 @@
 // Configurações do sistema (empresa, contrato/cliente e técnico padrão).
 // Fonte local: localStorage (disponível offline). Cópia no Supabase (tabela company_settings) via rpc save_company_settings,
-// enviada pela mesma rotina de sincronização dos relatórios (sync.js).
+// enviada pela mesma rotina de sincronização dos relatórios (sync.js). Com o técnico logado no Supabase, a versão
+// mais recente dele no servidor (rpc my_company_settings) volta para o aparelho — ex.: celular novo já sai com a
+// empresa/logo no cabeçalho dos relatórios.
 
 import { sanitizarWhatsApp } from './telefone.js';
 import { SYNC } from '../config.js';
@@ -64,6 +66,22 @@ export function companyInfo() {
   return { nome: s.empresa_nome, cnpj: s.empresa_cnpj, logo: s.empresa_logo };
 }
 
+/** Nome usado no cabeçalho quando a empresa prestadora não foi configurada. */
+export const EMPRESA_PADRAO = 'Empresa Prestadora';
+
+/**
+ * Empresa prestadora para o cabeçalho de PDF/Word: a congelada no relatório (data._empresa) ou a das
+ * Configurações; sem nome configurado, "Empresa Prestadora". Nunca há nome de empresa fixo no código.
+ */
+export function empresaDoRelatorio(company) {
+  const c = company || {};
+  return {
+    nome: String(c.nome || '').trim() || EMPRESA_PADRAO,
+    cnpj: String(c.cnpj || '').trim(),
+    logo: /^data:image\/(png|jpe?g)/i.test(c.logo || '') ? c.logo : ''
+  };
+}
+
 /**
  * Envia as configurações pendentes. Só marca como sincronizado com HTTP 200/201
  * e o device_id devolvido pela função.
@@ -78,6 +96,30 @@ export async function syncSettings(client) {
   if (error) throw error;
   if ((status === 200 || status === 201) && data === getDeviceId()) markSynced(s.updatedAt);
   else throw new Error(`Servidor não confirmou as configurações (HTTP ${status})`);
+}
+
+/**
+ * Traz do servidor as configurações mais recentes do técnico logado (rpc my_company_settings, lida de
+ * public.company_settings). Só substitui as locais se forem mais novas e não houver alteração local pendente.
+ * Devolve true se atualizou.
+ */
+export async function pullSettings(client) {
+  const { data, error } = await client.rpc(SYNC.settingsPullRpc);
+  if (error) throw error;
+  const remoto = data && typeof data === 'object' ? data : null;
+  if (!remoto?.settings || !remoto.updated_at) return false;
+  const cur = read();
+  if (cur.syncPending) return false; // a alteração deste aparelho vai primeiro
+  if (cur.updatedAt && new Date(cur.updatedAt) >= new Date(remoto.updated_at)) return false;
+  const next = { ...cur };
+  for (const k of SETTINGS_FIELDS) next[k] = (remoto.settings[k] ?? '').toString();
+  next.whatsapp_padrao = sanitizarWhatsApp(next.whatsapp_padrao);
+  next.updatedAt = new Date(remoto.updated_at).toISOString();
+  next.syncPending = false;
+  next.syncedAt = new Date().toISOString();
+  localStorage.setItem(KEY, JSON.stringify(next));
+  listeners.forEach((fn) => fn(getSettings()));
+  return true;
 }
 
 // ---------- CNPJ ----------

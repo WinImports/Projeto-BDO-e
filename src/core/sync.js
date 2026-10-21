@@ -17,7 +17,7 @@
 import { SYNC, isSupabaseConfigured } from '../config.js';
 import { getClient } from './supabase.js';
 import * as outbox from './outbox.js';
-import { syncSettings, getDeviceId } from './settings.js';
+import { syncSettings, pullSettings, getDeviceId } from './settings.js';
 import { currentUser } from './auth.js';
 import { pullTeamHistory } from './pull.js';
 
@@ -177,6 +177,14 @@ export async function syncNow({ force = false, pull = false } = {}) {
       await syncSettings(client);
     } catch (err) {
       state.lastError = `Configurações: ${err.message || err}`;
+    }
+    // empresa/logo do cabeçalho: traz a versão mais recente do técnico logado (company_settings)
+    if ((pull || force) && currentUser() && currentUser().modo !== 'local') {
+      try {
+        await pullSettings(client);
+      } catch (err) {
+        console.warn('[sync] configurações do servidor não lidas', err);
+      }
     }
     if (navigator.onLine) {
       try {
