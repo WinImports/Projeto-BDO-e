@@ -20,7 +20,7 @@ import * as outbox from './outbox.js';
 import { syncSettings, pullSettings, getDeviceId } from './settings.js';
 import { currentUser } from './auth.js';
 import { pullTeamHistory } from './pull.js';
-import { atualizarContratos } from './contratos.js';
+import { atualizarContratos, contratoDaLista, meusContratos } from './contratos.js';
 
 const state = { running: false, lastRunAt: null, lastError: null, pullError: null, pullPending: false };
 const listeners = new Set();
@@ -101,6 +101,27 @@ async function uploadDocuments(rec) {
   }
 }
 
+/**
+ * Por que o servidor não confirmou um relatório (submit_reports só aceita usuário logado e relatórios sem
+ * contrato ou de um contrato do próprio usuário). Mensagem para o Histórico.
+ */
+export function motivoNaoConfirmado(payload, status) {
+  const contrato = String(payload?.contrato || '').trim();
+  if (contrato && meusContratos().length && !contratoDaLista(contrato)) {
+    return `O servidor não aceitou este relatório: o contrato "${contrato}" não está vinculado à sua conta. Peça ao gestor do contrato para vincular você.`;
+  }
+  if (contrato && !meusContratos().length) {
+    return `O servidor não aceitou este relatório: sua conta não está vinculada ao contrato "${contrato}". Peça ao gestor do contrato para vincular você.`;
+  }
+  return `Servidor não confirmou a gravação (HTTP ${status})`;
+}
+
+/** Erro da chamada de envio → mensagem clara (sem login no servidor, o envio é recusado). */
+const semLogin = (err) => /login necess|permission denied|row-level security|JWT|not authorized|Unauthorized/i.test(err?.message || '');
+const mensagemDeEnvio = (err) => (semLogin(err)
+  ? Object.assign(new Error('Entre com a sua conta do servidor para enviar (Configurações › Conta › Sair e entrar de novo com internet). O relatório continua guardado no aparelho.'), { cause: err })
+  : err);
+
 async function deliverBatch(client, batch) {
   const failures = new Map();
   const rows = [];
@@ -111,7 +132,7 @@ async function deliverBatch(client, batch) {
       await uploadDocuments(rec);
       rows.push(toRow(rec, photos));
     } catch (err) {
-      failures.set(rec.uniqueId, new Error(`Falha no envio de fotos: ${err.message || err}`));
+      failures.set(rec.uniqueId, semLogin(err) ? mensagemDeEnvio(err) : new Error(`Falha no envio de fotos: ${err.message || err}`));
     }
   }
 
@@ -124,7 +145,8 @@ async function deliverBatch(client, batch) {
         return res;
       });
     } catch (err) {
-      rows.forEach((r) => failures.set(r.unique_id, err));
+      const e = mensagemDeEnvio(err);
+      rows.forEach((r) => failures.set(r.unique_id, e));
       return failures;
     }
 
@@ -139,7 +161,7 @@ async function deliverBatch(client, batch) {
       if (okStatus && confirmed.has(row.unique_id)) {
         await outbox.confirmDelivered(row.unique_id);
       } else {
-        failures.set(row.unique_id, new Error(`Servidor não confirmou a gravação (HTTP ${response.status})`));
+        failures.set(row.unique_id, new Error(motivoNaoConfirmado(row.payload, response.status)));
       }
     }
   }
@@ -161,6 +183,14 @@ export async function syncNow({ force = false, pull = false } = {}) {
   try {
     if (force) await outbox.resetSchedule();
     const client = getClient();
+    // contratos e papel do técnico (my_access) ANTES de enviar: o campo Contrato, a aba de Equipe e a
+    // mensagem de envio recusado usam a lista mais nova. Ao entrar / abrir / voltar a internet e, nas
+    // verificações periódicas, no máximo a cada 5 min; sem rede fica a lista guardada no aparelho.
+    try {
+      await atualizarContratos(client, { force: pull || force });
+    } catch (err) {
+      console.warn('[sync] contratos não atualizados', err);
+    }
     const items = await outbox.due();
     for (let i = 0; i < items.length; i += SYNC.batchSize) {
       const batch = items.slice(i, i + SYNC.batchSize);
@@ -185,15 +215,6 @@ export async function syncNow({ force = false, pull = false } = {}) {
         await pullSettings(client);
       } catch (err) {
         console.warn('[sync] configurações do servidor não lidas', err);
-      }
-    }
-    // contratos do técnico (my_contracts) para o campo Contrato: ao entrar / abrir / voltar a internet e,
-    // nas verificações periódicas, no máximo a cada 5 min; sem rede fica a lista guardada no aparelho
-    if (navigator.onLine) {
-      try {
-        await atualizarContratos(client, { force: pull || force });
-      } catch (err) {
-        console.warn('[sync] contratos não atualizados', err);
       }
     }
     if (navigator.onLine) {

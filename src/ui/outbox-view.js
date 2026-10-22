@@ -7,13 +7,16 @@ import { getModule, MODULES } from '../modules/index.js';
 import * as outbox from '../core/outbox.js';
 import { getPref, setPref } from '../core/prefs.js';
 import { pullInfo, PULL_DIAS } from '../core/pull.js';
+import { podeBuscarNoServidor, buscarNoServidor, baixarFotosDoServidor } from '../core/busca.js';
+import { toast } from './toast.js';
 
 const STATUS = {
   local: { cls: 'local', label: 'Salvo no aparelho (não enviado)' },
   pending: { cls: 'pending', label: 'Pendente de Envio' },
   error: { cls: 'error', label: 'Pendente de Envio (reagendado)' },
   sent: { cls: 'sent', label: 'Sincronizado' },
-  team: { cls: 'team', label: 'Da equipe' }
+  team: { cls: 'team', label: 'Da equipe' },
+  server: { cls: 'team', label: 'No servidor' }
 };
 
 /** Data do relatório (primeiro campo de data preenchido), em pt-BR. */
@@ -57,12 +60,15 @@ export class OutboxView {
     this.filter = getPref('historyFilter', 'all');
     this.sync = { running: false, online: navigator.onLine, configured: false };
     this.query = '';
+    this.limparServidor();
     root.addEventListener('click', (e) => this.handleClick(e));
     // busca rápida: atualiza só a lista a cada tecla (o campo não é redesenhado e não perde o foco)
     root.addEventListener('input', (e) => {
       if (!e.target.matches('[data-history-search]')) return;
       this.query = e.target.value;
+      this.limparServidor();
       this.renderResults();
+      this.renderServidor();
     });
   }
 
@@ -123,7 +129,7 @@ export class OutboxView {
       </div>
       <div class="notice notice--${status.kind}" role="status">${esc(status.text)}</div>
       ${equipe ? `<div class="notice notice--${equipe.kind}" data-equipe-status>${esc(equipe.text)}</div>` : ''}
-      ${this.items.length ? `
+      ${this.items.length || podeBuscarNoServidor() ? `
         <div class="history-search">
           <span class="history-search__icon" aria-hidden="true">${icon('search', 18)}</span>
           <input type="search" class="history-search__input" data-history-search value="${esc(this.query)}"
@@ -133,12 +139,14 @@ export class OutboxView {
           <button type="button" class="chip${this.filter === 'all' ? ' is-active' : ''}" data-action="filter" data-filter="all" aria-pressed="${this.filter === 'all'}">Todos <span class="chip__n">${this.items.length}</span></button>
           ${MODULES.map((m) => `<button type="button" class="chip${this.filter === m.id ? ' is-active' : ''}" data-action="filter" data-filter="${m.id}" aria-pressed="${this.filter === m.id}">${esc(m.shortTitle)} <span class="chip__n">${counts[m.id]}</span></button>`).join('')}
         </div>
-        <div data-history-results aria-live="polite"></div>` : `
+        <div data-history-results aria-live="polite"></div>
+        <div data-history-server-box></div>` : `
         <div class="empty">
           <div class="empty__icon" aria-hidden="true">${icon('inbox', 28)}</div>
           <p><strong>Nenhum relatório finalizado ainda.</strong><br>Ao finalizar um BDO-e, Visita Técnica ou Relatório de Execução, ele fica guardado aqui — mesmo depois de enviado — para reabrir, gerar o PDF ou reutilizar.</p>
         </div>`}`;
     this.renderResults();
+    this.renderServidor();
     if (focado) {
       const novo = this.root.querySelector('[data-history-search]');
       novo?.focus();
@@ -156,7 +164,77 @@ export class OutboxView {
     box.innerHTML = shown.length
       ? `${q ? `<p class="muted small" data-history-count>${shown.length} relatório${shown.length > 1 ? 's' : ''} encontrado${shown.length > 1 ? 's' : ''} para "${esc(q)}"</p>` : ''}
         <ul class="outbox-list" data-history>${shown.map((r) => this.itemHtml(r)).join('')}</ul>`
-      : `<p class="muted" data-history-empty>${q ? `Nenhum relatório encontrado para "${esc(q)}".` : 'Nenhum relatório deste tipo.'}</p>`;
+      : `<p class="muted" data-history-empty>${q ? `Nenhum relatório encontrado para "${esc(q)}"${podeBuscarNoServidor() ? ' neste aparelho' : ''}.` : this.items.length ? 'Nenhum relatório deste tipo.' : 'Nenhum relatório neste aparelho.'}</p>`;
+  }
+
+  // ---------- Busca no servidor: todo o histórico dos contratos (core/busca.js) ----------
+
+  limparServidor() {
+    this.servidor = { itens: [], fim: false, carregando: false, erro: '', feito: false };
+  }
+
+  servidorHtml() {
+    if (!podeBuscarNoServidor()) return '';
+    const s = this.servidor;
+    const q = this.query.trim();
+    const locais = new Set(this.items.map((r) => r.uniqueId));
+    const itens = s.itens.filter((r) => !locais.has(r.uniqueId));
+    return `
+      <section class="history-server" data-history-server>
+        <div class="history-server__head">
+          <h3>Todo o histórico do contrato (servidor)</h3>
+          ${s.feito || s.carregando ? '' : `<button type="button" class="btn btn--ghost btn--sm" data-action="server-search">${icon('search', 15)} ${q ? `Buscar "${esc(q)}" no servidor` : 'Buscar no servidor'}</button>`}
+        </div>
+        <p class="muted small">Sem limite de data: todos os relatórios dos seus contratos, inclusive os que não estão neste aparelho. Precisa de internet.</p>
+        ${s.erro ? `<div class="notice notice--error" role="alert" data-server-erro>${esc(s.erro)}</div>` : ''}
+        ${s.feito ? (itens.length
+          ? `<p class="muted small" data-server-count>${itens.length} relatório${itens.length > 1 ? 's' : ''} no servidor que não estão neste aparelho${q ? ` para "${esc(q)}"` : ''}</p>
+             <ul class="outbox-list" data-history-server-list>${itens.map((r) => this.itemHtml(r)).join('')}</ul>`
+          : `<p class="muted" data-server-empty>Nenhum outro relatório no servidor${q ? ` para "${esc(q)}"` : ''}.</p>`) : ''}
+        ${s.carregando ? '<p class="muted" data-server-loading><span class="spinner" aria-hidden="true"></span> Buscando no servidor…</p>' : ''}
+        ${s.feito && !s.fim && !s.carregando ? `<div class="history-server__mais"><button type="button" class="btn btn--ghost" data-action="server-more">Carregar mais</button></div>` : ''}
+      </section>`;
+  }
+
+  renderServidor() {
+    const box = this.root.querySelector('[data-history-server-box]');
+    if (box) box.innerHTML = this.servidorHtml();
+  }
+
+  async buscarServidor(mais = false) {
+    const s = this.servidor;
+    if (s.carregando) return;
+    s.carregando = true;
+    s.erro = '';
+    this.renderServidor();
+    try {
+      const r = await buscarNoServidor({
+        query: this.query.trim(),
+        module: this.filter === 'all' ? null : this.filter,
+        antes: mais ? s.itens.at(-1)?.createdAt : null
+      });
+      s.itens = mais ? [...s.itens, ...r.itens] : r.itens;
+      s.fim = r.fim;
+      s.feito = true;
+    } catch (err) {
+      s.erro = /PGRST202|search_team_reports/.test(`${err?.code} ${err?.message}`)
+        ? 'A busca no servidor ainda não está disponível (o banco precisa da migração 001).'
+        : `Não foi possível buscar no servidor: ${err?.message || err}`;
+    } finally {
+      s.carregando = false;
+      this.renderServidor();
+    }
+  }
+
+  /** Resultado do servidor: baixa as fotos (só agora) e abre a prévia / PDF. */
+  async abrirDoServidor(rec) {
+    if (rec.fotosServidor?.length && !rec.photos.length) {
+      toast('Baixando as fotos do relatório…', 'info', 3000);
+      const { fotos, falhas } = await baixarFotosDoServidor(rec);
+      rec.photos = fotos;
+      rec.fotosPendentes = falhas;
+    }
+    this.open(rec);
   }
 
   itemHtml(r) {
@@ -212,6 +290,7 @@ export class OutboxView {
       module, uniqueId: rec.uniqueId, data: rec.data, photos: rec.photos, mode: 'view',
       meta: `Finalizado em ${formatDateTime(rec.createdAt)} · ${st.label}`,
       notice: lostPhotos ? `Este relatório tinha ${rec.photosCount} foto(s), mas foi finalizado numa versão anterior do app, que não guardava as fotos depois do envio. O PDF sai sem elas.`
+        : fotosABaixar && rec.status === 'server' ? `${rec.fotosPendentes} foto(s) não puderam ser baixadas agora; abra de novo com internet para tentar outra vez.`
         : fotosABaixar ? `${rec.fotosPendentes} foto(s) deste relatório da equipe ainda não foram baixadas; elas vêm na próxima sincronização com internet.` : '',
       onReuse: () => this.onReuse?.(rec)
     });
@@ -220,18 +299,21 @@ export class OutboxView {
   handleClick(e) {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
-    const rec = btn.dataset.id && this.items.find((r) => r.uniqueId === btn.dataset.id);
+    const rec = btn.dataset.id && (this.items.find((r) => r.uniqueId === btn.dataset.id) || this.servidor.itens.find((r) => r.uniqueId === btn.dataset.id));
     switch (btn.dataset.action) {
       case 'sync': return this.onSyncNow();
       case 'filter':
         this.filter = btn.dataset.filter;
         setPref('historyFilter', this.filter);
+        this.limparServidor();
         return this.render();
+      case 'server-search': return this.buscarServidor(false);
+      case 'server-more': return this.buscarServidor(true);
       case 'edit': return rec?.outbox && this.onEdit?.(rec.outbox);
       case 'reuse': return rec && this.onReuse?.(rec);
       case 'send': return rec && this.onSend?.(rec);
       case 'edit-local': return rec && this.onEditLocal?.(rec);
-      case 'view': return rec && this.open(rec);
+      case 'view': return rec && (rec.status === 'server' ? this.abrirDoServidor(rec) : this.open(rec));
       default:
     }
   }

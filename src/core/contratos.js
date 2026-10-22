@@ -38,8 +38,22 @@ export function meusContratos() {
   return s.email === email && Array.isArray(s.lista) ? s.lista : [];
 }
 
+/**
+ * Vínculos do usuário logado guardados no aparelho: [{ id, nome, role: 'gestor'|'tecnico' }] (my_access, migração
+ * 001 do banco). Vazio sem conta no servidor ou com o banco ainda sem a migração.
+ */
+export function meusVinculos() {
+  const email = emailAtual();
+  const s = ler();
+  return email && s.email === email && Array.isArray(s.vinculos) ? s.vinculos : [];
+}
+
+/** Contratos em que o usuário logado é gestor (aba Gestão de Equipe). */
+export const contratosGeridos = () => meusVinculos().filter((v) => v.role === 'gestor');
+export const souGestor = () => contratosGeridos().length > 0;
+
 /** Grava a lista do usuário (sem repetidos pela comparação do servidor), avisando quem desenha os campos. */
-export function guardarContratos(lista, email = emailAtual()) {
+export function guardarContratos(lista, email = emailAtual(), vinculos = []) {
   if (!email) return [];
   const vistos = new Set();
   const limpa = [];
@@ -48,9 +62,14 @@ export function guardarContratos(lista, email = emailAtual()) {
     if (!vistos.has(n)) { vistos.add(n); limpa.push(c); }
   }
   limpa.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const vinc = (Array.isArray(vinculos) ? vinculos : [])
+    .filter((v) => v?.id && v?.nome)
+    .map((v) => ({ id: String(v.id), nome: String(v.nome), role: v.role === 'gestor' ? 'gestor' : 'tecnico' }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   const antes = ler();
-  const mudou = antes.email !== email || JSON.stringify(antes.lista || []) !== JSON.stringify(limpa);
-  try { localStorage.setItem(KEY, JSON.stringify({ email, lista: limpa, atualizadoEm: new Date().toISOString() })); } catch { /* sem espaço: segue com a lista em memória */ }
+  const mudou = antes.email !== email || JSON.stringify(antes.lista || []) !== JSON.stringify(limpa)
+    || JSON.stringify(antes.vinculos || []) !== JSON.stringify(vinc);
+  try { localStorage.setItem(KEY, JSON.stringify({ email, lista: limpa, vinculos: vinc, atualizadoEm: new Date().toISOString() })); } catch { /* sem espaço: segue com a lista em memória */ }
   if (mudou) listeners.forEach((fn) => fn(limpa));
   return limpa;
 }
@@ -67,6 +86,14 @@ export async function atualizarContratos(client, { force = false } = {}) {
   if (!force && s.email === email && Date.now() - Date.parse(s.atualizadoEm || 0) < VALIDADE_MS) return meusContratos();
   const { data: sessao } = await client.auth.getSession();
   if (!sessao?.session) return meusContratos();
+  // my_access (migração 001): contratos + papel. Banco sem a migração → my_contracts (só os nomes)
+  let acesso;
+  try { acesso = await client.rpc('my_access'); } catch (err) { acesso = { data: null, error: null }; console.warn('[contratos] my_access', err); }
+  if (!acesso.error && acesso.data && Array.isArray(acesso.data.contratos)) {
+    const vinculos = acesso.data.contratos;
+    return guardarContratos(vinculos.map((v) => v.nome), email, vinculos);
+  }
+  if (acesso.error && !/PGRST202|my_access/i.test(`${acesso.error.code} ${acesso.error.message}`)) throw acesso.error;
   const { data, error } = await client.rpc('my_contracts');
   if (error) throw error;
   return guardarContratos((data || []).map((c) => (typeof c === 'string' ? c : c?.my_contracts)));

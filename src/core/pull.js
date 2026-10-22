@@ -40,7 +40,7 @@ export function resetPullInfo() {
 }
 
 /** Fotos do relatório recebido. As que falharem ficam para a próxima sincronização (fotosPendentes). */
-async function baixarFotos(client, row, anteriores = []) {
+export async function baixarFotos(client, row, anteriores = []) {
   const jaTem = new Map(anteriores.filter((p) => p.blob && p.path).map((p) => [p.path, p]));
   const fotos = [];
   let falhas = 0;

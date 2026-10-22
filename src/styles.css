@@ -986,3 +986,24 @@ textarea.is-locked:hover { border-color: var(--border); }
 /* Relatório recebido de outro técnico do contrato (histórico da equipe) */
 .outbox-item--team { border-left-color: var(--primary); }
 .status--team { background: var(--primary-soft); color: var(--primary); }
+
+/* ---------- Gestão de Equipe (ui/equipe-view.js) ---------- */
+.equipe > .card { margin-bottom: 16px; }
+.cota { display: flex; flex-direction: column; gap: 8px; padding: 18px 22px 22px; }
+.cota__texto { margin: 0; font-size: 1.05rem; font-weight: 650; }
+.cota__barra { height: 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+.cota__barra > span { display: block; height: 100%; width: 0; background: var(--primary); transition: width .25s; }
+.cota--cheia .cota__barra > span { background: var(--warn); }
+.cota .notice { margin: 0; }
+.input-acao { display: flex; gap: 8px; align-items: stretch; }
+.input-acao input { flex: 1; min-width: 0; }
+.form-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 0 22px 22px; }
+.equipe-tabela td, .equipe-tabela th { padding: 8px 10px; white-space: nowrap; }
+.form-section > .table-wrap { margin: 18px 22px 22px; }
+.form-section > p.muted { padding: 18px 22px 22px; margin: 0; }
+
+/* ---------- Histórico: busca no servidor (todo o acervo do contrato) ---------- */
+.history-server { margin-top: 20px; padding-top: 16px; border-top: 1px dashed var(--border); }
+.history-server__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.history-server__head h3 { margin: 0; font-size: 1rem; }
+.history-server__mais { display: flex; justify-content: center; margin-top: 12px; }

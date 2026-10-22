@@ -12,10 +12,11 @@ import { getPref, setPref } from './core/prefs.js';
 import { newUniqueId } from './core/ids.js';
 import { bdoAtivo, herdar } from './core/heranca.js';
 import { currentUser, displayName, logout } from './core/auth.js';
-import { showLogin } from './ui/login-view.js';
+import { showLogin, showTrocaSenha } from './ui/login-view.js';
 import { licenciamentoAtivo, licencaLocal, verificarLicenca, avaliarSemRede } from './core/licenca.js';
 import { showLicenca } from './ui/licenca-view.js';
-import { onContratosChange } from './core/contratos.js';
+import { onContratosChange, souGestor } from './core/contratos.js';
+import { EquipeView } from './ui/equipe-view.js';
 import { limparEquipeDeOutroUsuario } from './core/pull.js';
 import { photoMeta } from './core/fotos.js';
 import { FormView, validate, cleanData, requiredProgress, rehydrate } from './ui/form.js';
@@ -31,6 +32,7 @@ import { $, $$, esc } from './ui/dom.js';
 
 const OUTBOX_TAB = 'outbox';
 const SETTINGS_TAB = 'settings';
+const EQUIPE_TAB = 'equipe'; // Gestão de Equipe: só aparece (e só abre) para gestor de contrato
 
 const state = {
   tab: getPref('tab', 'bdo'),
@@ -44,6 +46,7 @@ const state = {
 
 let outboxView;
 let settingsView;
+let equipeView;
 
 const timeNow = () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
@@ -110,6 +113,11 @@ function renderTabs() {
         <span class="tab__text"><span class="tab__title">${esc(m.shortTitle)}</span><span class="tab__sub">${esc(m.subtitle)}</span></span>
       </button>`).join('')}
     <span class="tabs__spacer"></span>
+    ${souGestor() ? `
+    <button type="button" role="tab" class="tab" data-tab="${EQUIPE_TAB}">
+      <span class="tab__icon">${icon('users', 18)}</span>
+      <span class="tab__text"><span class="tab__title">Gestão de Equipe</span><span class="tab__sub">Técnicos e licenças do contrato</span></span>
+    </button>` : ''}
     <button type="button" role="tab" class="tab" data-tab="${OUTBOX_TAB}">
       <span class="tab__icon">${icon('inbox', 18)}</span>
       <span class="tab__text"><span class="tab__title">Histórico <span id="outbox-badge" class="badge" hidden>0</span></span><span class="tab__sub">Relatórios salvos e Caixa de Saída</span></span>
@@ -119,9 +127,19 @@ function renderTabs() {
       <span class="tab__text"><span class="tab__title">Configurações</span><span class="tab__sub">Empresa, contrato e técnico</span></span>
     </button>`;
   updateBadge();
+  marcarAba(state.tab);
+}
+
+function marcarAba(tab) {
+  $$('#tabs .tab').forEach((t) => {
+    const active = t.dataset.tab === tab;
+    t.classList.toggle('is-active', active);
+    t.setAttribute('aria-selected', String(active));
+  });
 }
 
 function isTabAvailable(tab) {
+  if (tab === EQUIPE_TAB) return souGestor(); // técnico não abre nem pelo endereço / preferência salva
   return tab === OUTBOX_TAB || tab === SETTINGS_TAB || MODULES.some((m) => m.id === tab);
 }
 
@@ -150,11 +168,7 @@ async function showTab(tab) {
   state.tab = tab;
   setPref('tab', tab);
 
-  $$('#tabs .tab').forEach((t) => {
-    const active = t.dataset.tab === tab;
-    t.classList.toggle('is-active', active);
-    t.setAttribute('aria-selected', String(active));
-  });
+  marcarAba(tab);
 
   const view = $('#view');
   view.classList.toggle('view--form', !!getModule(tab));
@@ -163,6 +177,13 @@ async function showTab(tab) {
   if (tab === SETTINGS_TAB) {
     settingsView.render();
     view.replaceChildren(settingsView.root);
+    view.dataset.ready = tab;
+    return;
+  }
+  if (tab === EQUIPE_TAB) {
+    view.replaceChildren(equipeView.root);
+    await equipeView.refresh();
+    if (state.tab !== tab) return;
     view.dataset.ready = tab;
     return;
   }
@@ -597,6 +618,7 @@ async function signOut() {
   renderUser();
   // a tela de login cobre o app (sem recarregar: o Electron bloqueia navegação na janela)
   await showLogin();
+  if (currentUser()?.trocarSenha) await showTrocaSenha(); // conta nova: senha inicial do gestor
   await limparEquipeDeOutroUsuario(currentUser()?.email);
   renderUser();
   await showTab(state.tab);
@@ -653,10 +675,13 @@ async function init() {
 
   // Login: primeira tela quando não há sessão salva neste aparelho
   if (!currentUser()) await showLogin();
+  // conta criada pelo gestor: troca de senha obrigatória antes de usar o app
+  if (currentUser()?.trocarSenha) await showTrocaSenha();
   await limparEquipeDeOutroUsuario(currentUser()?.email);
   renderUser();
 
   settingsView = new SettingsView();
+  equipeView = new EquipeView();
   settingsView.onSaved = () => syncNow();
   settingsView.onLogout = signOut;
   settingsView.onServerChanged = () => syncNow({ force: true });
@@ -665,6 +690,9 @@ async function init() {
   onContratosChange(() => {
     state.formView?.atualizarContratos();
     if (state.tab === SETTINGS_TAB && !settingsView.dirty) settingsView.render();
+    // papel mudou (virou ou deixou de ser gestor): refaz as abas; a de equipe some se não for mais gestor
+    renderTabs();
+    if (state.tab === EQUIPE_TAB) { if (souGestor()) equipeView.refresh(); else showTab(MODULES[0].id); }
   });
   outboxView = new OutboxView(document.createElement('div'), { onSyncNow: () => syncNow({ force: true }), onEdit: editFromOutbox, onReuse: reuseReport, onSend: sendSaved, onEditLocal: editLocal });
 
