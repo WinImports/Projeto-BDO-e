@@ -57,6 +57,27 @@ let ctx;
 test.beforeEach(async () => { ctx = await launchApp(); });
 test.afterEach(async () => { await ctx.close(); });
 
+test('normalização igual à do servidor (_norm_contrato): separadores viram um espaço, sem separador é outro contrato', async () => {
+  const r = await ctx.page.evaluate(async () => {
+    const { normContrato, contratoDaLista } = await import('./src/core/contratos.js');
+    const iguais = ['Os Mans', 'OS-MANS', 'os.mans', 'os_mans', '  os -- mans  ', 'OS\tMANS'].map(normContrato);
+    return {
+      iguais,
+      semSeparador: normContrato('OSMANS'),
+      acento: normContrato('Manutenção - Água Grande'),
+      vazio: normContrato(null),
+      daLista: contratoDaLista('os.mans', ['OS-Mans', 'OSMANS']),
+      semSepDaLista: contratoDaLista('osmans', ['OS-Mans'])
+    };
+  });
+  expect(new Set(r.iguais)).toEqual(new Set(['OS MANS']));
+  expect(r.semSeparador).toBe('OSMANS');
+  expect(r.acento).toBe('MANUTENÇÃO ÁGUA GRANDE');
+  expect(r.vazio).toBe('');
+  expect(r.daLista).toBe('OS-Mans');
+  expect(r.semSepDaLista).toBeNull();
+});
+
 test('um contrato: já vem selecionado nos três relatórios e nas Configurações', async () => {
   const { page } = ctx;
   await supabaseFalso(page, ['OS-Mans']);

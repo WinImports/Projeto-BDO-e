@@ -116,7 +116,8 @@ test.describe('prévia, PDF, finalizar e editar', () => {
     await expect(preview.locator('.notice--info')).toContainText('Paradas');
 
     await preview.locator('[data-pdf]').click();
-    await expect(toast(page)).toContainText('PDF salvo', { timeout: 15_000 });
+    // qualquer aviso da pilha (outro aviso pode chegar depois e ficar por último)
+    await expect(page.locator('#toasts .toast', { hasText: 'PDF salvo' }).first()).toBeVisible({ timeout: 15_000 });
     // BDO-e: PDF de página única (jsPDF, fontes padrão → arquivo pequeno)
     const raw = fs.readFileSync(pdfPath).toString('latin1');
     expect(raw.slice(0, 5)).toBe('%PDF-');

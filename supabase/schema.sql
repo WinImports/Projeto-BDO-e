@@ -322,10 +322,15 @@ create table if not exists public.contract_members (
 );
 alter table public.contract_members enable row level security; -- sem políticas: só o administrador mexe
 
--- "os-mans " = "OS-MANS": compara contratos sem diferença de maiúsculas e espaços
+-- Compara contratos ignorando maiúsculas, espaços, hífen, ponto e sublinhado: "Os Mans" = "OS-MANS" = "os.mans".
+-- Qualquer sequência de caracteres que não seja letra ou número vira UM espaço e as pontas são aparadas
+-- (todos acima viram "OS MANS"); sem separador nenhum ("OSMANS") é outro contrato.
+-- Mesma regra no app: normContrato em src/core/contratos.js.
 create or replace function public._norm_contrato(t text)
-returns text language sql immutable as $$
-  select upper(regexp_replace(trim(coalesce(t, '')), '\s+', ' ', 'g'));
+returns text language sql immutable
+set search_path = pg_catalog
+as $$
+  select btrim(regexp_replace(upper(coalesce(t, '')), '[^[:alnum:]]+', ' ', 'g'));
 $$;
 
 create index if not exists bdo_reports_contrato_idx       on public.bdo_reports (public._norm_contrato(contrato), client_created_at desc);

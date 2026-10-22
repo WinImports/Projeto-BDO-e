@@ -132,7 +132,8 @@ test('sem internet o relatório fica "Pendente de Envio"; ao voltar a conexão s
   expect(await page.evaluate(() => window.__sb.rpc.filter((c) => c.name === 'submit_reports').length)).toBe(0);
 
   await page.evaluate(() => window.__setOnline(true)); // evento "online" dispara o envio da fila
-  await expect(item.locator('.status')).toHaveText('Sincronizado');
+  // o envio gera o PDF e o Word do relatório antes do submit_reports (~2-3 s; mais com a máquina carregada)
+  await expect(item.locator('.status')).toHaveText('Sincronizado', { timeout: 15_000 });
 
   const sb = await page.evaluate(() => window.__sb);
   const envio = sb.rpc.find((c) => c.name === 'submit_reports').args.reports[0];

@@ -5,15 +5,18 @@
 // no aparelho POR USUÁRIO (localStorage), para o campo funcionar sem internet. Usuário local (sem conta no
 // servidor) ou outro e-mail → lista vazia: o campo fica desabilitado e o relatório segue sem contrato.
 //
-// Comparação igual à do servidor (_norm_contrato): ignora maiúsculas, espaços, hífen, ponto e sublinhado —
-// "os mans" e "OS-MANS" são o mesmo contrato e o valor gravado passa a ser o nome da lista.
+// Comparação igual à do servidor (_norm_contrato em supabase/schema.sql): maiúsculas e separadores (espaço,
+// hífen, ponto, sublinhado…) não importam — "Os Mans" = "OS-MANS" = "os.mans" (todos viram "OS MANS"), e o
+// valor gravado passa a ser o nome da lista. Sem separador nenhum ("OSMANS") é outro contrato, como no servidor.
 
 import { currentUser } from './auth.js';
 
 const KEY = 'bdoe.contratos';
 const VALIDADE_MS = 5 * 60_000; // sincronizações periódicas não consultam o servidor mais do que isso
 
-export const normContrato = (t) => String(t ?? '').toUpperCase().replace(/[\s\-._]+/g, '');
+// = btrim(regexp_replace(upper(t), '[^[:alnum:]]+', ' ', 'g')): letras (com acento) e números ficam,
+// qualquer sequência de outros caracteres vira um espaço
+export const normContrato = (t) => String(t ?? '').toUpperCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
 const listeners = new Set();
 export const onContratosChange = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
