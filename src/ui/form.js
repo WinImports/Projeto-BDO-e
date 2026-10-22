@@ -17,6 +17,8 @@ import { routeLinks, showRoutePrompt } from './route-prompt.js';
 import { assignPhotoFields, photoFields, photosOf, photoMeta } from '../core/fotos.js';
 import { STORES, get } from '../core/db.js';
 import { getModule } from '../modules/index.js';
+import { meusContratos, valorContrato } from '../core/contratos.js';
+import { contratoSelectHtml } from './contrato-campo.js';
 
 const INPUT_TYPES = { text: 'text', number: 'number', date: 'date', time: 'time', datetime: 'datetime-local' };
 
@@ -150,6 +152,8 @@ export function validate(module, data) {
       continue;
     }
     if (!f.required) continue;
+    // sem contrato vinculado à conta o campo fica desabilitado: o relatório segue sem contrato
+    if (f.type === 'contrato' && !meusContratos().length) continue;
     const v = f.type === 'table' ? filledRows(data[f.id], f.columns) : data[f.id];
     if (isBlank(v)) {
       errors.push({ field: f.id, label: f.label || sectionOf.get(f), message: f.type === 'table' ? 'Preencha ao menos uma linha' : 'Campo obrigatório' });
@@ -269,6 +273,21 @@ export class FormView {
     }
   }
 
+  /** A lista de contratos mudou (login / sincronização): refaz o campo e aplica o padrão se estava vazio. */
+  atualizarContratos() {
+    const settings = getSettings();
+    let mudou = false;
+    for (const f of this.fields.values()) {
+      if (f.type !== 'contrato') continue;
+      const antes = this.draft.data[f.id];
+      const v = valorContrato(antes, settings[f.settingsKey]);
+      if (v !== undefined && v !== antes) { this.draft.data[f.id] = v; mudou = true; }
+      const wrap = $(`[data-wrap="${CSS.escape(f.id)}"]`, this.el);
+      if (wrap) wrap.innerHTML = this.fieldInnerHtml(f);
+    }
+    if (mudou) this.onChange(this.draft);
+  }
+
   destroy() {
     clearTimeout(this.travelTimer);
     clearTimeout(this.routeRefreshTimer);
@@ -280,6 +299,12 @@ export class FormView {
     const now = localIso();
     const settings = getSettings();
     for (const f of this.fields.values()) {
+      if (f.type === 'contrato') {
+        // só contratos da conta: o único da lista ou o padrão das Configurações, se estiver na lista
+        const v = valorContrato(this.draft.data[f.id], settings[f.settingsKey]);
+        if (v !== undefined) this.draft.data[f.id] = v;
+        continue;
+      }
       if (f.settingsKey && settings[f.settingsKey]) this.draft.data[f.id] ??= settings[f.settingsKey];
       if (f.defaultValue != null) this.draft.data[f.id] ??= f.defaultValue;
       if (f.type === 'table' && f.defaultRows && this.draft.data[f.id] === undefined) this.draft.data[f.id] = f.defaultRows(settings);
@@ -326,8 +351,9 @@ export class FormView {
   }
 
   fieldInnerHtml(f) {
+    const exigido = f.required && !(f.type === 'contrato' && !meusContratos().length); // sem contratos não é exigido
     const label = f.label && !f.previewButton
-      ? `<span class="field__label">${esc(f.label)}${f.required ? '<span class="req" aria-hidden="true">*</span>' : ''}</span>`
+      ? `<span class="field__label">${esc(f.label)}${exigido ? '<span class="req" aria-hidden="true">*</span>' : ''}</span>`
       : '';
     const hint = f.hint ? `<small class="field__hint">${esc(f.hint)}</small>` : '';
     const error = '<small class="field__error" aria-live="polite"></small>';
@@ -343,6 +369,9 @@ export class FormView {
     const v = this.draft.data[f.id];
     const id = esc(f.id);
     switch (f.type) {
+      case 'contrato':
+        return contratoSelectHtml({ id: `f-${f.id}`, attrs: `data-field="${id}"`, valor: v });
+
       case 'select':
         return `<select id="f-${id}" data-field="${id}">
           <option value="">Selecione…</option>

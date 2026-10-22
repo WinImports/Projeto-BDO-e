@@ -3,7 +3,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { launchApp, fill, openTab, preencherVisita } = require('./helpers');
+const { launchApp, fill, openTab, preencherVisita, vincularContratos } = require('./helpers');
 
 const toast = (page) => page.locator('#toasts .toast').last();
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
@@ -39,6 +39,7 @@ test('Visita Técnica em Word: identificação sem GPS, fotos em 2 colunas e ass
     shell.openPath = async () => '';
   }, docxPath);
 
+  await vincularContratos(page, ['OS-Mans']); // Contrato = lista dos contratos da conta
   await openTab(page, 'visita_tecnica');
   await preencherVisita(page, 'FBM-89');
   await fill(page, 'campo', 'Campo de Buracica');

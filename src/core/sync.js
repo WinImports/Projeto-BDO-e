@@ -20,6 +20,7 @@ import * as outbox from './outbox.js';
 import { syncSettings, pullSettings, getDeviceId } from './settings.js';
 import { currentUser } from './auth.js';
 import { pullTeamHistory } from './pull.js';
+import { atualizarContratos } from './contratos.js';
 
 const state = { running: false, lastRunAt: null, lastError: null, pullError: null, pullPending: false };
 const listeners = new Set();
@@ -184,6 +185,15 @@ export async function syncNow({ force = false, pull = false } = {}) {
         await pullSettings(client);
       } catch (err) {
         console.warn('[sync] configurações do servidor não lidas', err);
+      }
+    }
+    // contratos do técnico (my_contracts) para o campo Contrato: ao entrar / abrir / voltar a internet e,
+    // nas verificações periódicas, no máximo a cada 5 min; sem rede fica a lista guardada no aparelho
+    if (navigator.onLine) {
+      try {
+        await atualizarContratos(client, { force: pull || force });
+      } catch (err) {
+        console.warn('[sync] contratos não atualizados', err);
       }
     }
     if (navigator.onLine) {

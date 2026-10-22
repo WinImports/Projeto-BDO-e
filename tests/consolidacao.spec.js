@@ -3,7 +3,7 @@ const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { launchApp, openTab, fill } = require('./helpers');
+const { launchApp, openTab, fill, vincularContratos } = require('./helpers');
 
 // Base de poços vazia: o autocompletar não interfere nos cliques do teste
 function noWellBase() {
@@ -108,6 +108,7 @@ test('sem relatórios do poço no período: avisa e o bloco fica fora da prévia
 
 test('BDO finalizado pelo app entra na consolidação (inclusive depois de sair da Caixa de Saída)', async () => {
   const { page } = ctx;
+  await vincularContratos(page, ['OS-Mans']); // Contrato = lista dos contratos da conta
   await openTab(page, 'bdo');
   for (const [field, value] of [['cliente', 'PETROBRAS'], ['contrato', 'OS-Mans'], ['poco', 'TST-500'], ['cidade_uf', 'Catu - BA'],
     ['turno', 'Diurno'], ['atividade_principal', 'Manutenção de válvulas'], ['tecnico', 'TÉCNICO TESTE'], ['matricula', '123']]) {

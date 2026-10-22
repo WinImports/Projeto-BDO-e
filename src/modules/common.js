@@ -2,7 +2,10 @@
 //
 // Tipos de campo suportados pelo renderizador (ui/form.js):
 //   text | number | date | time | datetime | select | textarea | checklist | yesno
-//   table | photos | signature | geo
+//   table | photos | signature | geo | contrato
+// contrato: lista dos contratos do usuário logado (core/contratos.js, my_contracts() guardado no aparelho);
+//   padrão = único contrato ou o settingsKey se estiver na lista; valor antigo fora da lista vira opção extra;
+//   sem contratos fica desabilitado com aviso e o required é ignorado
 // Seção: { title, short (rótulo no índice lateral), icon (nome em ui/icons.js), hint, fields }
 // span: largura do campo na grade de 12 colunas (padrão 3; textos longos, tabelas, fotos etc. = 12)
 // { type: 'divider', label, icon }: subtítulo que agrupa campos dentro da seção (não entra no PDF)

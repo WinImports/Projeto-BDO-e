@@ -123,7 +123,7 @@ export default {
         { id: 'data', label: 'Data da visita', type: 'date', required: true },
         { id: 'turno', label: 'Turno', type: 'select', options: TURNOS },
         { id: 'cliente', label: 'Cliente / Contratante', type: 'text', required: true, settingsKey: 'cliente_padrao' },
-        { id: 'contrato', label: 'Contrato', type: 'text', settingsKey: 'contrato_padrao' },
+        { id: 'contrato', label: 'Contrato', type: 'contrato', settingsKey: 'contrato_padrao' },
         { type: 'divider', label: 'Equipe', icon: 'users' },
         equipe(),
         { type: 'divider', label: 'Objetivo da visita', icon: 'flag' },

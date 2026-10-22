@@ -18,7 +18,7 @@ export default {
       fields: [
         { type: 'divider', label: 'Cliente, contrato e local', icon: 'building' },
         { id: 'cliente', label: 'Cliente', type: 'text', required: true, settingsKey: 'cliente_padrao', placeholder: 'Ex.: PETROBRAS' },
-        { id: 'contrato', label: 'Contrato', type: 'text', required: true, settingsKey: 'contrato_padrao', placeholder: 'Ex.: OS-Mans' },
+        { id: 'contrato', label: 'Contrato', type: 'contrato', required: true, settingsKey: 'contrato_padrao' },
         { ...poco(), placeholder: 'Ex.: RCB-04, FBM-78' },
         { id: 'cidade_uf', label: 'Cidade / Estado', type: 'text', required: true, placeholder: 'Ex.: Catu - BA' },
         { id: 'data', label: 'Data do boletim', type: 'date', required: true },

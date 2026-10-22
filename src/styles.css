@@ -322,6 +322,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .field__group legend { padding: 0; margin-bottom: 4px; }
 .req { color: var(--danger); margin-left: 3px; }
 .field__hint { color: var(--text-muted); font-size: .76rem; }
+.field__hint--warn { color: var(--warn); font-weight: 600; }
 .field__error { color: var(--danger); font-size: .78rem; font-weight: 600; }
 .field__error:empty { display: none; }
 

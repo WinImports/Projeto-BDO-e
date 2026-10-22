@@ -15,6 +15,7 @@ import { currentUser, displayName, logout } from './core/auth.js';
 import { showLogin } from './ui/login-view.js';
 import { licenciamentoAtivo, licencaLocal, verificarLicenca, avaliarSemRede } from './core/licenca.js';
 import { showLicenca } from './ui/licenca-view.js';
+import { onContratosChange } from './core/contratos.js';
 import { limparEquipeDeOutroUsuario } from './core/pull.js';
 import { photoMeta } from './core/fotos.js';
 import { FormView, validate, cleanData, requiredProgress, rehydrate } from './ui/form.js';
@@ -660,6 +661,11 @@ async function init() {
   settingsView.onLogout = signOut;
   settingsView.onServerChanged = () => syncNow({ force: true });
   onSettingsChange(() => { settingsView.refreshStatus(); renderUser(); });
+  // lista de contratos chegou do servidor (login / sincronização): refaz o campo Contrato aberto
+  onContratosChange(() => {
+    state.formView?.atualizarContratos();
+    if (state.tab === SETTINGS_TAB && !settingsView.dirty) settingsView.render();
+  });
   outboxView = new OutboxView(document.createElement('div'), { onSyncNow: () => syncNow({ force: true }), onEdit: editFromOutbox, onReuse: reuseReport, onSend: sendSaved, onEditLocal: editLocal });
 
   renderTabs();

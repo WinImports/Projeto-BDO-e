@@ -9,6 +9,7 @@ import { confirmDialog } from './confirm.js';
 import { currentUser, displayName } from '../core/auth.js';
 import { supabaseConfig, saveSupabaseOverride, urlSupabaseValida } from '../config.js';
 import { resetClient } from '../core/supabase.js';
+import { contratoSelectHtml } from './contrato-campo.js';
 
 const ORIGEM_SERVIDOR = {
   aparelho: 'Configurado neste aparelho',
@@ -62,7 +63,7 @@ const GROUPS = [
     hint: 'Preenchidos automaticamente em cada relatório novo (podem ser alterados no próprio relatório).',
     fields: [
       { id: 'cliente_padrao', label: 'Cliente padrão', placeholder: 'Ex.: PETROBRAS' },
-      { id: 'contrato_padrao', label: 'Nome do contrato', placeholder: 'Ex.: OS-Mans / OS-MANUTEC NE' }
+      { id: 'contrato_padrao', label: 'Contrato padrão', contratos: true, hint: 'Contratos vinculados à sua conta no servidor.' }
     ]
   },
   {
@@ -130,7 +131,9 @@ export class SettingsView {
               ${g.fields.map((f) => `
                 <div class="field${f.multiline ? ' span-12' : ''}" data-wrap="${f.id}">
                   <label class="field__label-wrap" for="s-${f.id}"><span class="field__label">${esc(f.label)}${f.required ? '<span class="req">*</span>' : ''}</span></label>
-                  ${f.multiline
+                  ${f.contratos
+                    ? contratoSelectHtml({ id: `s-${f.id}`, attrs: `data-setting="${f.id}"`, valor: s[f.id] })
+                    : f.multiline
                     ? `<textarea id="s-${f.id}" data-setting="${f.id}" rows="4" placeholder="${esc(f.placeholder || '')}">${esc(s[f.id])}</textarea>`
                     : `<input id="s-${f.id}" data-setting="${f.id}" type="text" value="${esc(s[f.id])}" placeholder="${esc(f.placeholder || '')}"${f.inputmode ? ` inputmode="${f.inputmode}"` : ''}>`}
                   ${f.hint ? `<small class="field__hint">${esc(f.hint)}</small>` : ''}

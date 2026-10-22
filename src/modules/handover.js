@@ -64,7 +64,7 @@ export default {
         { id: 'data_hora', label: 'Data e hora da passagem', type: 'datetime', required: true },
         { id: 'tipo_passagem', label: 'Tipo', type: 'select', required: true, options: ['Troca de turma (revezamento 14x14)', 'Troca de turno', 'Encerramento do serviço'] },
         { id: 'cliente', label: 'Cliente / Contratante', type: 'text', settingsKey: 'cliente_padrao' },
-        { id: 'contrato', label: 'Contrato', type: 'text', settingsKey: 'contrato_padrao' },
+        { id: 'contrato', label: 'Contrato', type: 'contrato', settingsKey: 'contrato_padrao' },
         { type: 'divider', label: 'Equipe', icon: 'users' },
         equipe(),
         {

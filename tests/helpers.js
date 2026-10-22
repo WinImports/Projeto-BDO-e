@@ -36,6 +36,21 @@ async function entrar(page, email = 'tecnico@teste.com', senha = 'senha123') {
   await page.waitForSelector('#tabs .tab');
 }
 
+/**
+ * Técnico que já entrou com a conta do servidor e tem a lista de contratos guardada no aparelho
+ * (core/contratos.js). Sem isso o usuário de teste é "local" e o campo Contrato fica desabilitado.
+ * Recarrega a página para os formulários usarem a lista.
+ */
+async function vincularContratos(page, lista, email = 'tecnico@teste.com') {
+  await page.evaluate(({ lista, email }) => {
+    const s = JSON.parse(localStorage.getItem('bdoe.auth.session'));
+    localStorage.setItem('bdoe.auth.session', JSON.stringify({ ...s, email, modo: 'offline' }));
+    localStorage.setItem('bdoe.contratos', JSON.stringify({ email, lista, atualizadoEm: new Date().toISOString() }));
+  }, { lista, email });
+  await page.reload();
+  await page.waitForSelector('#view[data-ready]');
+}
+
 /** Preenche um campo do formulário (input, select ou textarea) pelo data-field. */
 async function fill(page, field, value) {
   const el = page.locator(`[data-field="${field}"]`);
@@ -65,4 +80,4 @@ async function preencherVisita(page, poco = 'FBM-89') {
   ]) await fill(page, f, v);
 }
 
-module.exports = { launchApp, newUserData, fill, openTab, preencherVisita, cell, entrar };
+module.exports = { launchApp, newUserData, fill, openTab, preencherVisita, cell, entrar, vincularContratos };

@@ -16,6 +16,7 @@ import { STORES, get, put, getAll, remove } from './db.js';
 import { currentUser } from './auth.js';
 import { photoMeta } from './fotos.js';
 import { notifyHistory } from './outbox.js';
+import { atualizarContratos } from './contratos.js';
 
 const INFO_KEY = 'bdoe.pull';
 export const PULL_DIAS = 30;
@@ -109,11 +110,11 @@ async function executar(force) {
 
   try {
     const desde = new Date(Date.now() - PULL_DIAS * 864e5).toISOString();
-    const [contratos, lista] = await Promise.all([
-      client.rpc('my_contracts'),
+    // contratos: a lista guardada por core/contratos.js (a sincronização acabou de atualizá-la; sozinha, consulta)
+    const [nomes, lista] = await Promise.all([
+      atualizarContratos(client),
       client.rpc('list_team_reports', { p_since: desde })
     ]);
-    if (contratos.error) throw contratos.error;
     if (lista.error) throw lista.error;
 
     let novos = 0;
@@ -124,7 +125,6 @@ async function executar(force) {
       await put(STORES.history, paraHistorico(row, fotos, falhas));
       if (!local) novos++;
     }
-    const nomes = (contratos.data || []).map((c) => (typeof c === 'string' ? c : c?.my_contracts)).filter(Boolean);
     const resultado = { lastAt: new Date().toISOString(), contratos: nomes, total: (lista.data || []).length, novos, erro: '' };
     saveInfo(resultado);
     if (novos || (lista.data || []).length) await notifyHistory();
