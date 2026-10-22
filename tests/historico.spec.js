@@ -24,6 +24,8 @@ async function finalizarVisita(page, poco = 'FBM-89') {
   await page.locator('#btn-finalize').click();
   await page.locator('dialog.modal[open] [data-confirm]').click();
   await expect(toast(page)).toContainText('Caixa de Saída');
+  // o aviso e o data-ready podem ser os da finalização ANTERIOR: só o rascunho novo (outro ID) prova que terminou
+  await expect(page.locator('.doc-head__meta code')).not.toHaveText(id);
   await page.locator('#view[data-ready=visita_tecnica]').waitFor();
   return id;
 }

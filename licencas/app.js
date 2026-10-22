@@ -23,8 +23,8 @@ const LOGS_LIMITE = 300;
 
 // Assinaturas das RPCs do projeto de licenciamento (um só lugar para ajustar se o banco mudar)
 const RPC = {
-  criar: (f) => ['create_license', { p_app_code: f.app, p_client_id: f.cliente, p_max_devices: f.maxDevices, p_duration_days: f.dias }],
-  renovar: (id, dias) => ['renew_license', { p_license_id: id, p_days: dias }],
+  criar: (f) => ['create_license', { p_app_id: f.app, p_client_id: f.cliente, p_max_devices: f.maxDevices, p_duration_days: f.dias }],
+  renovar: (id, dias) => ['renew_license', { p_license_id: id, p_additional_days: dias }],
   status: (id, status) => ['set_license_status', { p_license_id: id, p_status: status }]
 };
 
@@ -510,8 +510,12 @@ function abrirNovaLicenca() {
   const form = $('#form-licenca');
   form.reset();
   const appSel = form.elements.app;
-  appSel.innerHTML = state.apps.map((a) => `<option value="${esc(a.code)}">${esc(a.name || a.code)} (${esc(a.code)})</option>`).join('');
-  appSel.value = state.filtroApp !== 'all' ? state.filtroApp : state.apps[0]?.code || '';
+  // create_license recebe o UUID (p_app_id): só os apps cadastrados em public.apps podem receber licença
+  const cadastrados = state.apps.filter((a) => a.id);
+  appSel.innerHTML = cadastrados.length
+    ? cadastrados.map((a) => `<option value="${esc(a.id)}">${esc(a.name || a.code)} (${esc(a.code)})</option>`).join('')
+    : '<option value="">Nenhum aplicativo cadastrado em public.apps</option>';
+  appSel.value = (cadastrados.find((a) => a.code === state.filtroApp) || cadastrados[0])?.id || '';
   const cliSel = form.elements.cliente;
   cliSel.innerHTML = `<option value="">Selecione o cliente…</option>${state.clientes
     .map((c) => `<option value="${esc(c.id)}">${esc(c.name)}${c.document ? ` — ${esc(fmtDocumento(c.document))}` : ''}</option>`).join('')}`;
@@ -530,7 +534,7 @@ async function salvarLicenca(e) {
     maxDevices: Number(form.elements.max_devices.value),
     dias: Number(form.elements.dias.value)
   };
-  if (!f.app) return erroNoModal(dlg, 'Escolha o aplicativo.');
+  if (!f.app) return erroNoModal(dlg, 'Escolha o aplicativo (cadastrado em public.apps).');
   if (!f.cliente) return erroNoModal(dlg, 'Escolha o cliente.');
   if (!Number.isInteger(f.maxDevices) || f.maxDevices < 1 || f.maxDevices > 1000) return erroNoModal(dlg, 'Limite de dispositivos: número inteiro entre 1 e 1000.');
   if (!Number.isInteger(f.dias) || f.dias < 1 || f.dias > 3650) return erroNoModal(dlg, 'Validade: número inteiro de dias entre 1 e 3650.');

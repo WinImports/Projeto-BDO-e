@@ -26,7 +26,11 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       // credenciais do Supabase por variável de ambiente (opcional; ver src/config.js)
-      additionalArguments: [`--bdoe-supabase=${JSON.stringify({ url: process.env.BDOE_SUPABASE_URL || '', anonKey: process.env.BDOE_SUPABASE_ANON_KEY || '' })}`],
+      additionalArguments: [
+        `--bdoe-supabase=${JSON.stringify({ url: process.env.BDOE_SUPABASE_URL || '', anonKey: process.env.BDOE_SUPABASE_ANON_KEY || '' })}`,
+        // trava de licença desligada só fora do app empacotado (testes / desenvolvimento): o .exe ignora
+        ...(!app.isPackaged && process.env.BDOE_LICENCA === 'off' ? ['--bdoe-licenca-off'] : [])
+      ],
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true

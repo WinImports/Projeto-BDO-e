@@ -54,20 +54,29 @@ const MOCK = `(() => {
     };
     return api;
   };
+  // Assinaturas REAIS do projeto winappos-licensing (conferidas no servidor): parâmetros diferentes = PGRST202
+  const ASSINATURAS = {
+    create_license: ['p_app_id', 'p_client_id', 'p_duration_days', 'p_max_devices'],
+    renew_license: ['p_additional_days', 'p_license_id'],
+    set_license_status: ['p_license_id', 'p_status']
+  };
   const rpc = async (nome, args) => {
     calls.push({ rpc: nome, args });
+    if (!ASSINATURAS[nome] || Object.keys(args).sort().join() !== ASSINATURAS[nome].join()) {
+      return { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.' + nome + '(' + Object.keys(args).join(', ') + ')' } };
+    }
     const log = (id, tipo) => db.license_logs.unshift({ id: 'g' + db.license_logs.length + 1, license_id: id, event_type: tipo, details: args, created_at: iso(Date.now()) });
     if (nome === 'create_license') {
-      const app = db.apps.find((a) => a.code === args.p_app_code);
+      const app = db.apps.find((a) => a.id === args.p_app_id);
       const l = { id: 'l-novo', license_key: 'NEW-KEY-9999', app_id: app.id, client_id: args.p_client_id, status: 'active', max_devices: args.p_max_devices,
         starts_at: iso(Date.now()), expires_at: iso(Date.now() + args.p_duration_days * dia), created_at: iso(Date.now()) };
       db.licenses.unshift(l); log(l.id, 'license_created');
       return { data: { license_key: l.license_key }, error: null };
     }
     const l = db.licenses.find((x) => x.id === args.p_license_id);
-    if (nome === 'renew_license') { l.expires_at = iso(Math.max(Date.now(), Date.parse(l.expires_at)) + args.p_days * dia); log(l.id, 'license_renewed'); return { data: true, error: null }; }
-    if (nome === 'set_license_status') { l.status = args.p_status; log(l.id, 'status_changed'); return { data: true, error: null }; }
-    return { data: null, error: { code: 'PGRST202', message: 'função ' + nome } };
+    if (nome === 'renew_license') { l.expires_at = iso(Math.max(Date.now(), Date.parse(l.expires_at)) + args.p_additional_days * dia); log(l.id, 'license_renewed'); return { data: true, error: null }; }
+    l.status = args.p_status; log(l.id, 'status_changed');
+    return { data: true, error: null };
   };
   let session = null;
   const subs = [];
@@ -158,7 +167,9 @@ test('painel de licenças: login, métricas, filtro por app, licenças, disposit
     // ---- nova licença (RPC create_license)
     await page.getByRole('button', { name: 'Nova Licença' }).first().click();
     const modal = page.locator('#modal-licenca');
-    await modal.locator('[name=app]').selectOption('bdo-e');
+    // só apps cadastrados em public.apps (com UUID) aparecem; o valor enviado é o id
+    expect(await modal.locator('[name=app] option').evaluateAll((os) => os.map((o) => o.value))).toEqual(['a1', 'a2', 'a3']);
+    await modal.locator('[name=app]').selectOption('a2');
     await modal.locator('[name=cliente]').selectOption('c1');
     await modal.locator('[name=max_devices]').fill('5');
     await modal.locator('[data-dias="90"]').click();
@@ -166,7 +177,7 @@ test('painel de licenças: login, métricas, filtro por app, licenças, disposit
     await expect(modal).toBeHidden();
     await expect(linha(page, 'NEW-KEY-9999')).toBeVisible();
     let calls = await page.evaluate(() => window.__calls.filter((c) => c.rpc));
-    expect(calls.at(-1)).toEqual({ rpc: 'create_license', args: { p_app_code: 'bdo-e', p_client_id: 'c1', p_max_devices: 5, p_duration_days: 90 } });
+    expect(calls.at(-1)).toEqual({ rpc: 'create_license', args: { p_app_id: 'a2', p_client_id: 'c1', p_max_devices: 5, p_duration_days: 90 } });
     await expect(metrica(page, 'Total de Licenças')).toHaveText('4');
 
     // ---- renovar a expirada (+365 dias): volta a ficar ativa
@@ -174,7 +185,7 @@ test('painel de licenças: login, métricas, filtro por app, licenças, disposit
     await confirmarDialogo(page);
     await expect(linha(page, 'BDO-CCCC-3333').locator('[data-status]')).toHaveText('Ativa');
     calls = await page.evaluate(() => window.__calls.filter((c) => c.rpc));
-    expect(calls.at(-1)).toEqual({ rpc: 'renew_license', args: { p_license_id: 'l3', p_days: 365 } });
+    expect(calls.at(-1)).toEqual({ rpc: 'renew_license', args: { p_license_id: 'l3', p_additional_days: 365 } });
 
     // ---- bloquear / ativar
     await linha(page, 'WOS-AAAA-1111').locator('[data-acao=status]').click();

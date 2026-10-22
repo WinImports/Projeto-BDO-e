@@ -157,8 +157,11 @@ test.describe('BDO-e → Visita Técnica / Relatório de Execução', () => {
       await openTab(page, 'visita_tecnica');
       await preencherVisita(page, poco);
       await cell(page, 'equipe', 0, 'nome').fill('João');
+      const id = await page.locator('.doc-head__meta code').innerText();
       await page.locator('#btn-finalize').click();
       await page.locator('dialog.modal[open] [data-local]').click();
+      // o data-ready pode ser o de antes de finalizar: só o rascunho novo (outro ID) prova que terminou
+      await expect(page.locator('.doc-head__meta code')).not.toHaveText(id);
       await page.locator('#view[data-ready=visita_tecnica]').waitFor();
     }
     await openTab(page, 'outbox');

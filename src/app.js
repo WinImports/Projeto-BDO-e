@@ -13,6 +13,8 @@ import { newUniqueId } from './core/ids.js';
 import { bdoAtivo, herdar } from './core/heranca.js';
 import { currentUser, displayName, logout } from './core/auth.js';
 import { showLogin } from './ui/login-view.js';
+import { licenciamentoAtivo, licencaLocal, verificarLicenca, avaliarSemRede } from './core/licenca.js';
+import { showLicenca } from './ui/licenca-view.js';
 import { limparEquipeDeOutroUsuario } from './core/pull.js';
 import { photoMeta } from './core/fotos.js';
 import { FormView, validate, cleanData, requiredProgress, rehydrate } from './ui/form.js';
@@ -35,7 +37,8 @@ const state = {
   draft: null,
   formView: null,
   saveTimer: null,
-  sectionObserver: null
+  sectionObserver: null,
+  navSeq: 0 // cada troca de aba incrementa: tarefas assíncronas sabem se o usuário navegou enquanto rodavam
 };
 
 let outboxView;
@@ -122,6 +125,7 @@ function isTabAvailable(tab) {
 }
 
 async function showTab(tab) {
+  state.navSeq += 1;
   if (!isTabAvailable(tab)) tab = MODULES[0].id;
   if (state.tab === SETTINGS_TAB && tab !== SETTINGS_TAB && settingsView.dirty) {
     const leave = await confirmDialog({
@@ -164,6 +168,7 @@ async function showTab(tab) {
   if (tab === OUTBOX_TAB) {
     view.replaceChildren(outboxView.root);
     await outboxView.refresh();
+    if (state.tab !== tab) return; // outra aba assumiu enquanto a lista carregava: não marca pronto
     view.dataset.ready = tab;
     return;
   }
@@ -356,6 +361,7 @@ async function finalize(module) {
   if (!choice) return;
 
   const report = { uniqueId: draft.uniqueId, module: module.id, data, photos: draft.photos.map(photoMeta) };
+  const navAntes = state.navSeq;
   try {
     // 1) grava no aparelho (persistido em disco antes de seguir): fila de envio ou só o histórico
     clearTimeout(state.saveTimer);
@@ -371,7 +377,9 @@ async function finalize(module) {
     return;
   }
 
-  await showTab(module.id);
+  // formulário novo; se o técnico já foi para outra aba enquanto gravava, não o puxa de volta
+  // (o rascunho novo é criado quando ele voltar a esta aba)
+  if (state.navSeq === navAntes) await showTab(module.id);
   if (choice === 'local') {
     toast(`Relatório salvo na memória local do app (IndexedDB). Para salvar na pasta de Arquivos do seu celular, clique em 'Baixar / Compartilhar PDF' (na prévia ou em Histórico › Ver / PDF). Para enviar depois: Histórico › Enviar.`, 'success', 10000);
     return;
@@ -594,12 +602,53 @@ async function signOut() {
   syncNow({ pull: true }); // login: baixa o histórico da equipe (últimos 30 dias)
 }
 
+// ---------- Licença (core/licenca.js) ----------
+
+const REVALIDAR_LICENCA_MS = 6 * 60 * 60_000;
+
+/** Bloqueia o app com a tela da licença até uma chave ser validada. */
+async function bloquearPorLicenca(motivo) {
+  await flushSave();
+  await showLicenca({ motivo, chave: licencaLocal()?.chave || '' });
+}
+
+/** Valida no servidor; valid=false (ou tolerância offline esgotada) bloqueia o app. */
+async function revalidarLicenca({ avisarOffline = false } = {}) {
+  let r;
+  try { r = await verificarLicenca(); } catch (err) { console.error('[licença]', err); return; }
+  if (r.status === 'offline' && avisarOffline) {
+    toast(`Sem conexão com o servidor de licenças: uso liberado offline por mais ${r.diasRestantes} dia${r.diasRestantes === 1 ? '' : 's'}.`, 'warn', 7000);
+  }
+  if (r.status === 'bloqueado' || r.status === 'sem-licenca') await bloquearPorLicenca(r.motivo);
+}
+
+/**
+ * Abertura do app. Com validação ok recente (dentro dos 7 dias) o app abre na hora e a validação roda em
+ * segundo plano — sinal ruim no campo não atrasa a abertura; se o servidor disser valid=false, bloqueia.
+ * Sem licença válida guardada, espera o servidor (ou a ativação) antes de continuar.
+ */
+async function exigirLicenca() {
+  if (!licenciamentoAtivo()) return;
+  if (avaliarSemRede().status === 'offline') {
+    revalidarLicenca({ avisarOffline: true });
+  } else {
+    const r = await verificarLicenca();
+    if (r.status !== 'ok' && r.status !== 'offline') await showLicenca({ motivo: r.motivo, chave: licencaLocal()?.chave || '' });
+  }
+  // app aberto por muito tempo (desktop) e volta da internet: valida de novo
+  window.addEventListener('online', () => revalidarLicenca());
+  setInterval(() => revalidarLicenca(), REVALIDAR_LICENCA_MS);
+}
+
 // ---------- Inicialização ----------
 
 async function init() {
   initTheme();
   await openDb();
   requestPersistence();
+
+  // Licença: ativação na primeira abertura; bloqueio com o motivo se o servidor recusar
+  await exigirLicenca();
 
   // Login: primeira tela quando não há sessão salva neste aparelho
   if (!currentUser()) await showLogin();

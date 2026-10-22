@@ -10,6 +10,8 @@ function supabaseEnv() {
 contextBridge.exposeInMainWorld('desktop', {
   isElectron: true,
   supabaseEnv: supabaseEnv(),
+  /** Licença desligada (só Electron não empacotado com BDOE_LICENCA=off — testes). */
+  licencaDesligada: process.argv.includes('--bdoe-licenca-off'),
   platform: process.platform,
   versions: {
     electron: process.versions.electron,
