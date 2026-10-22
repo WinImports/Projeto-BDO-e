@@ -10,6 +10,7 @@ create table auth.users (
   email              text unique,
   email_confirmed_at timestamptz,
   raw_user_meta_data jsonb not null default '{}'::jsonb,
+  encrypted_password text,
   banned_until       timestamptz,
   created_at         timestamptz not null default now()
 );
@@ -44,3 +45,10 @@ grant execute on all functions in schema auth to anon, authenticated, service_ro
 -- Como no Supabase: tabelas novas do public ficam acessíveis aos papéis da API (o RLS é quem barra)
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
 alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+
+-- pgcrypto (no Supabase fica no schema "extensions"): versão FALSA e barata só para os testes —
+-- crypt(senha, hash) = 'h:' || senha; no banco real é bcrypt
+create schema if not exists extensions;
+create function extensions.gen_salt(tipo text, rodadas integer default 10) returns text language sql immutable as $$ select 'h:' $$;
+create function extensions.crypt(senha text, sal text) returns text language sql immutable as $$ select 'h:' || senha $$;
+grant usage on schema extensions to anon, authenticated, service_role;

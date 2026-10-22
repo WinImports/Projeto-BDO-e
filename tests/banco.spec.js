@@ -3,62 +3,10 @@
 // papéis gestor/técnico (sem "master geral" no app), cota max_technicians, matrícula, login por matrícula, busca ilimitada,
 // envio só para os próprios contratos e isolamento entre contratos. Não abre o Electron.
 const { test, expect } = require('@playwright/test');
-const fs = require('fs');
-const path = require('path');
-const { PGlite } = require('@electric-sql/pglite');
+const { SCHEMA, MIGRACAO, ANTES, novoBanco, usuario, como, rpc, um, erro, cenario } = require('./sql/pg');
 
-const ROOT = path.join(__dirname, '..');
-const STUB = fs.readFileSync(path.join(__dirname, 'sql', 'supabase-stub.sql'), 'utf8');
-const SCHEMA = fs.readFileSync(path.join(ROOT, 'supabase', 'schema.sql'), 'utf8');
-const MIGRACAO = fs.readFileSync(path.join(ROOT, 'supabase', 'migrations', '001_equipe.sql'), 'utf8');
-const ANTES = SCHEMA.slice(0, SCHEMA.indexOf(MIGRACAO)); // schema de antes da migração (= produção hoje)
-
-/** Banco novo. antigo: só o schema anterior (para testar a migração sobre dados existentes). */
-async function novoBanco({ antigo = false } = {}) {
-  const db = new PGlite();
-  await db.exec(STUB);
-  await db.exec(antigo ? ANTES : SCHEMA);
-  return db;
-}
-
-/** Usuário do Supabase Auth (e-mail confirmado por padrão). Devolve o id. */
-async function usuario(db, email, { confirmado = true } = {}) {
-  const r = await db.query('insert into auth.users (email, email_confirmed_at) values ($1, $2) returning id', [email, confirmado ? new Date() : null]);
-  return r.rows[0].id;
-}
-
-/** Executa fn com a identidade de uma requisição da API: { id, email } logado, 'anon' ou 'service'. */
-async function como(db, quem, fn) {
-  const claims = quem === 'anon' ? { role: 'anon' } : quem === 'service' ? { role: 'service_role' } : { sub: quem.id, email: quem.email, role: 'authenticated' };
-  const papel = quem === 'anon' ? 'anon' : quem === 'service' ? 'service_role' : 'authenticated';
-  await db.query("select set_config('request.jwt.claims', $1, false)", [JSON.stringify(claims)]);
-  await db.exec(`set role ${papel}`);
-  try { return await fn(); } finally { await db.exec('reset role'); await db.query("select set_config('request.jwt.claims', '', false)"); }
-}
-
-const rpc = async (db, sql, params = []) => (await db.query(sql, params)).rows;
-const um = async (db, sql, params = []) => (await rpc(db, sql, params))[0];
-const erro = async (p) => { try { await p; return null; } catch (e) { return e; } };
-
-/** Cenário: contratos A (cota 2) e B, gestores e técnicos. Cota e gestores: só o dono, por SQL. */
-async function cenario() {
-  const db = await novoBanco();
-  const ids = {};
-  for (const [k, email] of Object.entries({ gestorA: 'gestor.a@empresa-a.com', gestorB: 'gestor.b@empresa-b.com', tec1: 'tec1@empresa-a.com', tecB: 'tecb@empresa-b.com' })) {
-    ids[k] = { id: await usuario(db, email), email };
-  }
-  const A = (await um(db, "insert into public.contracts (nome) values ('OS-Mans') returning id")).id;
-  const B = (await um(db, "insert into public.contracts (nome, max_technicians) values ('Contrato Bahia Terra', 5) returning id")).id;
-  await db.query(`insert into public.contract_members (email, contrato_id, role, nome, matricula) values
-    ('gestor.a@empresa-a.com', $1, 'gestor', 'Gestor A', 'G-001'),
-    ('tec1@empresa-a.com', $1, 'tecnico', 'Técnico Um', 'T-001'),
-    ('gestor.b@empresa-b.com', $2, 'gestor', 'Gestor B', 'G-002'),
-    ('tecb@empresa-b.com', $2, 'tecnico', 'Técnico B', 'T-900')`, [A, B]);
-  return { db, A, B, ...ids };
-}
-
-test('migração = trecho final do schema.sql e roda duas vezes sem erro (idempotente)', async () => {
-  expect(SCHEMA.endsWith(MIGRACAO) || SCHEMA.trimEnd().endsWith(MIGRACAO.trimEnd())).toBe(true);
+test('migrações = trecho final do schema.sql (em ordem) e rodam duas vezes sem erro (idempotentes)', async () => {
+  expect(SCHEMA).toBe(ANTES + MIGRACAO);
   const db = await novoBanco();
   await db.exec(MIGRACAO);
   await db.exec(SCHEMA);
@@ -171,20 +119,27 @@ test('ativar / desativar: desativado perde o acesso aos dados do contrato e libe
   expect((await erro(set(tec1, await id('tec2@empresa-a.com'), false))).code).toBe('42501'); // técnico não mexe em ninguém
 });
 
-test('login por matrícula: só a chave de serviço descobre o e-mail; inativo ou inexistente = nulo; 5 falhas bloqueiam por 15 min', async () => {
+test('login por matrícula: o banco confere a senha e só devolve o e-mail com a senha certa; inativo = falha; 5 falhas bloqueiam por 15 min', async () => {
   const { db, A } = await cenario();
-  for (const quem of ['anon', { id: '00000000-0000-0000-0000-000000000000', email: 'x@y.com' }]) {
-    expect((await erro(como(db, quem, () => um(db, "select public.login_matricula_preparar('T-001')")))).message).toMatch(/permission denied/);
-  }
-  const preparar = (m) => como(db, 'service', () => um(db, 'select public.login_matricula_preparar($1) as r', [m])).then((x) => x.r);
-  expect(await preparar(' t-001 ')).toEqual({ email: 'tec1@empresa-a.com', bloqueado: false });
-  expect(await preparar('NAO-EXISTE')).toEqual({ email: null, bloqueado: false });
+  // senhas (no stub, crypt(senha) = 'h:' || senha)
+  await db.query("update auth.users set encrypted_password = 'h:' || split_part(email, '@', 1) || '-senha'");
+  const login = (m, senha, quem = 'anon') => como(db, quem, () => um(db, 'select public.login_matricula($1, $2) as r', [m, senha])).then((x) => x.r);
+
+  expect(await login(' t-001 ', 'tec1-senha')).toEqual({ ok: true, email: 'tec1@empresa-a.com' }); // "t-001" = "T-001"
+  expect(await login('T-001', 'errada')).toEqual({ ok: false, bloqueado: false });                  // sem e-mail
+  expect(await login('NAO-EXISTE', 'qualquer')).toEqual({ ok: false, bloqueado: false });
+  expect(await login('', 'x')).toEqual({ ok: false, bloqueado: false });
 
   await db.query("update public.contract_members set ativo = false where email = 'tec1@empresa-a.com' and contrato_id = $1", [A]);
-  expect((await preparar('T-001')).email).toBeNull();
+  expect(await login('T-001', 'tec1-senha')).toEqual({ ok: false, bloqueado: false });
 
-  for (let i = 0; i < 5; i++) await como(db, 'service', () => db.query("select public.login_matricula_registrar('T-900', false)"));
-  expect(await preparar('T-900')).toEqual({ email: null, bloqueado: true });
+  for (let i = 0; i < 5; i++) await login('T-900', 'errada');
+  expect(await login('T-900', 'tecb-senha')).toEqual({ ok: false, bloqueado: true }); // nem a senha certa passa
+  await db.query("update public.login_tentativas set quando = now() - interval '16 minutes'");
+  expect((await login('T-900', 'tecb-senha')).ok).toBe(true);
+
+  // as funções antigas (001) foram removidas; a tabela de tentativas não é lida pela API
+  expect(await um(db, "select to_regprocedure('public.login_matricula_preparar(text)') as f")).toEqual({ f: null });
 });
 
 /** Relatório gravado no servidor (direto na tabela, como o submit_reports grava). */
