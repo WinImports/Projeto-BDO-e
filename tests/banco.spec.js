@@ -1,6 +1,6 @@
 // Banco (supabase/schema.sql + supabase/migrations/001_equipe.sql) rodando num Postgres local (PGlite),
 // com auth/storage/papéis do Supabase simulados (tests/sql/supabase-stub.sql). Valida a Gestão de Equipe:
-// papéis master/gestor/técnico, cota max_technicians, matrícula, login por matrícula, busca ilimitada,
+// papéis gestor/técnico (sem "master geral" no app), cota max_technicians, matrícula, login por matrícula, busca ilimitada,
 // envio só para os próprios contratos e isolamento entre contratos. Não abre o Electron.
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
@@ -40,14 +40,13 @@ const rpc = async (db, sql, params = []) => (await db.query(sql, params)).rows;
 const um = async (db, sql, params = []) => (await rpc(db, sql, params))[0];
 const erro = async (p) => { try { await p; return null; } catch (e) { return e; } };
 
-/** Cenário: contratos A (cota 2) e B, master, gestores e técnicos. */
+/** Cenário: contratos A (cota 2) e B, gestores e técnicos. Cota e gestores: só o dono, por SQL. */
 async function cenario() {
   const db = await novoBanco();
   const ids = {};
-  for (const [k, email] of Object.entries({ master: 'dono@winapp.com', gestorA: 'gestor.a@empresa-a.com', gestorB: 'gestor.b@empresa-b.com', tec1: 'tec1@empresa-a.com', tecB: 'tecb@empresa-b.com' })) {
+  for (const [k, email] of Object.entries({ gestorA: 'gestor.a@empresa-a.com', gestorB: 'gestor.b@empresa-b.com', tec1: 'tec1@empresa-a.com', tecB: 'tecb@empresa-b.com' })) {
     ids[k] = { id: await usuario(db, email), email };
   }
-  await db.query("insert into public.masters (email) values ('dono@winapp.com')");
   const A = (await um(db, "insert into public.contracts (nome) values ('OS-Mans') returning id")).id;
   const B = (await um(db, "insert into public.contracts (nome, max_technicians) values ('Contrato Bahia Terra', 5) returning id")).id;
   await db.query(`insert into public.contract_members (email, contrato_id, role, nome, matricula) values
@@ -63,6 +62,11 @@ test('migração = trecho final do schema.sql e roda duas vezes sem erro (idempo
   const db = await novoBanco();
   await db.exec(MIGRACAO);
   await db.exec(SCHEMA);
+  // quem rodou a primeira versão desta migração (com "master geral"): a versão atual remove
+  await db.exec(`create table public.masters (email text primary key);
+    create function public.is_master() returns boolean language sql as $$ select true $$;`);
+  await db.exec(MIGRACAO);
+  expect(await um(db, "select to_regclass('public.masters') as t, to_regprocedure('public.is_master()') as f")).toEqual({ t: null, f: null });
 });
 
 test('migração sobre os dados de hoje: contratos em texto viram public.contracts (mesma regra de comparação) e membros são ligados', async () => {
@@ -88,16 +92,14 @@ test('migração sobre os dados de hoje: contratos em texto viram public.contrac
   expect(await um(db, "select email, contrato from public.contract_members where email = 'novo@empresa.com'")).toEqual({ email: 'novo@empresa.com', contrato: 'OS-Mans' });
 });
 
-test('papéis: master vê todos os contratos; gestor e técnico só os seus; e-mail não confirmado não vale', async () => {
-  const { db, master, gestorA, tec1 } = await cenario();
+test('papéis: cada um vê só os próprios contratos (sem "master geral" no app); e-mail não confirmado não vale', async () => {
+  const { db, gestorA, gestorB, tec1 } = await cenario();
   const acesso = (q) => como(db, q, () => um(db, 'select public.my_access() as a')).then((r) => r.a);
-  const m = await acesso(master);
-  expect(m.master).toBe(true);
-  expect(m.contratos.map((c) => [c.nome, c.role])).toEqual([['Contrato Bahia Terra', 'master'], ['OS-Mans', 'master']]);
-  expect((await acesso(gestorA)).contratos.map((c) => [c.nome, c.role])).toEqual([['OS-Mans', 'gestor']]);
-  const t = await acesso(tec1);
-  expect(t.master).toBe(false);
-  expect(t.contratos.map((c) => [c.nome, c.role])).toEqual([['OS-Mans', 'tecnico']]);
+  expect(await acesso(gestorA)).toEqual({ contratos: [{ id: expect.any(String), nome: 'OS-Mans', role: 'gestor' }] });
+  expect((await acesso(gestorB)).contratos.map((c) => [c.nome, c.role])).toEqual([['Contrato Bahia Terra', 'gestor']]);
+  expect((await acesso(tec1)).contratos.map((c) => [c.nome, c.role])).toEqual([['OS-Mans', 'tecnico']]);
+  // não sobra nada de "master" no banco do app
+  expect(await um(db, "select to_regclass('public.masters') as t, to_regprocedure('public.is_master()') as f")).toEqual({ t: null, f: null });
 
   const sem = { id: await usuario(db, 'naoconfirmado@empresa-a.com', { confirmado: false }), email: 'naoconfirmado@empresa-a.com' };
   await db.query("insert into public.contract_members (email, contrato) values ('naoconfirmado@empresa-a.com', 'OS-Mans')");
@@ -118,31 +120,31 @@ test('cota max_technicians: gestor cadastra até o limite; o seguinte é recusad
   expect(lista.membros.map((x) => [x.email, x.role])).toContainEqual(['tec2@empresa-a.com', 'tecnico']);
 
   const e = await erro(add('tec3@empresa-a.com', 'T-003'));
-  expect(e.message).toBe('Limite de 2 técnicos liberados para este contrato atingido. Peça ao master para ampliar a licença.');
+  expect(e.message).toBe('Limite de 2 técnicos liberados para este contrato atingido. Entre em contato com o Master para ampliar a licença.');
   expect(e.code).toBe('P0001');
 
-  // master amplia a cota → cadastra
+  // o Master (dono da licença) amplia a cota pelo SQL Editor → cadastra
   await db.query('update public.contracts set max_technicians = 3 where id = $1', [A]);
   expect((await add('tec3@empresa-a.com', 'T-003')).r.tecnicos_ativos).toBe(3);
 });
 
-test('permissões do cadastro: técnico não cadastra; gestor de outro contrato não cadastra nem vê a equipe; master pode', async () => {
-  const { db, A, tec1, gestorB, master } = await cenario();
+test('permissões do cadastro: técnico não cadastra; gestor de outro contrato não cadastra nem vê a equipe; o gestor do contrato pode', async () => {
+  const { db, A, tec1, gestorB, gestorA } = await cenario();
   const add = (q) => como(db, q, () => um(db, 'select public.team_add_technician($1, $2, $3, $4) as r', [A, 'novo@empresa-a.com', 'Novo', 'T-050']));
   expect((await erro(add(tec1))).code).toBe('42501');
   expect((await erro(add(gestorB))).code).toBe('42501');
   expect((await erro(como(db, gestorB, () => um(db, 'select public.team_list($1)', [A])))).code).toBe('42501');
   expect((await erro(como(db, 'anon', () => um(db, 'select public.team_list($1)', [A])))).message).toMatch(/permission denied/);
-  expect((await add(master)).r.tecnicos_ativos).toBe(2);
+  expect((await add(gestorA)).r.tecnicos_ativos).toBe(2);
 });
 
 test('matrícula: única por pessoa no sistema inteiro (sem espaços / maiúsculas); a mesma pessoa pode estar em dois contratos', async () => {
-  const { db, A, B, gestorA, master } = await cenario();
+  const { db, A, B, gestorA } = await cenario();
   // T-900 já é do técnico B, em outro contrato
   const e = await erro(como(db, gestorA, () => um(db, 'select public.team_add_technician($1, $2, $3, $4)', [A, 'x@empresa-a.com', 'X', 't 900'])));
   expect(e.message).toBe('Matrícula T 900 já está cadastrada para outra pessoa.'); // "t 900" = "T-900"
   // a mesma pessoa (mesmo e-mail e matrícula) entra em outro contrato
-  await como(db, master, () => um(db, 'select public.team_add_technician($1, $2, $3, $4)', [A, 'tecb@empresa-b.com', 'Técnico B', 'T-900']));
+  await como(db, gestorA, () => um(db, 'select public.team_add_technician($1, $2, $3, $4)', [A, 'tecb@empresa-b.com', 'Técnico B', 'T-900']));
   expect((await rpc(db, "select contrato from public.contract_members where email = 'tecb@empresa-b.com' order by contrato")).map((r) => r.contrato))
     .toEqual(['Contrato Bahia Terra', 'OS-Mans']);
   // e-mail com outra matrícula é recusado (direto na tabela também)
@@ -151,7 +153,7 @@ test('matrícula: única por pessoa no sistema inteiro (sem espaços / maiúscul
 });
 
 test('ativar / desativar: desativado perde o acesso aos dados do contrato e libera a cota; reativar respeita a cota; gestor não mexe em gestor', async () => {
-  const { db, A, gestorA, tec1, master } = await cenario();
+  const { db, A, gestorA, tec1 } = await cenario();
   await como(db, gestorA, () => um(db, 'select public.team_add_technician($1, $2, $3, $4)', [A, 'tec2@empresa-a.com', 'Tec 2', 'T-002']));
   const id = async (email) => (await um(db, 'select id from public.contract_members where email = $1 and contrato_id = $2', [email, A])).id;
   const set = (q, mid, v) => como(db, q, () => um(db, 'select public.team_set_active($1, $2) as r', [mid, v]));
@@ -163,10 +165,10 @@ test('ativar / desativar: desativado perde o acesso aos dados do contrato e libe
   // com a vaga livre, outro técnico entra; reativar o primeiro passaria da cota
   await como(db, gestorA, () => um(db, 'select public.team_add_technician($1, $2, $3, $4)', [A, 'tec3@empresa-a.com', 'Tec 3', 'T-003']));
   const e = await erro(set(gestorA, await id('tec1@empresa-a.com'), true));
-  expect(e.message).toMatch(/^Limite de 2 técnicos/);
+  expect(e.message).toBe('Limite de 2 técnicos liberados para este contrato atingido. Entre em contato com o Master para ampliar a licença.');
 
-  expect((await erro(set(gestorA, await id('gestor.a@empresa-a.com'), false))).message).toBe('Somente o master altera o acesso de gestores.');
-  expect((await set(master, await id('gestor.a@empresa-a.com'), false)).r.membros.find((m) => m.role === 'gestor').ativo).toBe(false);
+  expect((await erro(set(gestorA, await id('gestor.a@empresa-a.com'), false))).message).toBe('O acesso de gestores é alterado pelo Master da licença.');
+  expect((await erro(set(tec1, await id('tec2@empresa-a.com'), false))).code).toBe('42501'); // técnico não mexe em ninguém
 });
 
 test('login por matrícula: só a chave de serviço descobre o e-mail; inativo ou inexistente = nulo; 5 falhas bloqueiam por 15 min', async () => {
@@ -244,14 +246,17 @@ test('envio: só logado; relatório do próprio contrato (ou sem contrato) é gr
 });
 
 test('isolamento: pela API ninguém lê as tabelas direto (RLS sem políticas); dados só pelas funções', async () => {
-  const { db, tec1, master } = await cenario();
+  const { db, tec1, gestorA } = await cenario();
   await relatorio(db, 'bdo_reports', { contrato: 'OS-Mans', poco: 'FBM-89' });
-  for (const quem of ['anon', tec1, master]) {
-    for (const t of ['contract_members', 'contracts', 'masters', 'bdo_reports', 'technical_visits', 'execution_reports', 'login_tentativas']) {
+  for (const quem of ['anon', tec1, gestorA]) {
+    for (const t of ['contract_members', 'contracts', 'bdo_reports', 'technical_visits', 'execution_reports', 'login_tentativas']) {
       const r = await erro(como(db, quem, () => rpc(db, `select * from public.${t}`)).then((rows) => { if (rows.length) throw new Error(`${t} vazou ${rows.length} linha(s)`); }));
       expect(r).toBeNull();
     }
-    const escrita = await erro(como(db, quem, () => db.query("insert into public.masters (email) values ('invasor@x.com')")));
+    const escrita = await erro(como(db, quem, () => db.query("update public.contracts set max_technicians = 99")).then(async () => {
+      if ((await um(db, 'select max(max_technicians) as m from public.contracts')).m === 99) throw new Error('cota alterada pela API');
+      throw new Error('row-level security: nada alterado');
+    }));
     expect(escrita?.message).toMatch(/row-level security|permission denied/);
   }
 });

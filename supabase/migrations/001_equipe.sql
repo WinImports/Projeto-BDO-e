@@ -1,19 +1,18 @@
 -- =====================================================================
 -- 7) Gestão de Equipe — migração 001
--- Contratos com cota de técnicos (max_technicians), papéis (master / gestor / técnico), matrícula,
+-- Contratos com cota de técnicos (max_technicians), papéis (gestor / técnico), matrícula,
 -- busca ilimitada no histórico do contrato e isolamento por contrato.
 -- Idempotente: pode rodar mais de uma vez. Rode inteiro no SQL Editor do projeto BDO eletronico.
 -- (O mesmo texto está no fim de supabase/schema.sql — um teste confere que são iguais.)
 -- =====================================================================
 
--- 7.1) Master (dono do sistema) --------------------------------------------------------------
--- Só por SQL: ninguém vira master pelo app. Depois de rodar, cadastre o seu e-mail:
---   insert into public.masters (email) values ('seu-email@dominio.com');
-create table if not exists public.masters (
-  email      text        primary key check (email = lower(btrim(email))),
-  created_at timestamptz not null default now()
-);
-alter table public.masters enable row level security; -- sem políticas: ninguém lê pela API
+-- 7.1) Sem "master geral" no app --------------------------------------------------------------
+-- O Master (dono da licença) administra pelo Painel de Licenças e, neste banco, só pelo SQL Editor:
+-- cadastra o primeiro gestor de cada cliente e amplia a cota (max_technicians). No app, quem manda na
+-- equipe é o GESTOR do contrato; nenhuma conta do app enxerga os dados de todas as empresas.
+-- (Remove o que uma versão anterior desta migração tenha criado.)
+drop function if exists public.is_master();
+drop table if exists public.masters;
 
 -- 7.2) Contratos com cota de técnicos ----------------------------------------------------------
 -- max_technicians: quantas contas de TÉCNICO ativas o contrato pode ter (gestores não contam).
@@ -132,14 +131,6 @@ as $$
   select lower(u.email) from auth.users u where u.id = auth.uid() and u.email_confirmed_at is not null;
 $$;
 
-create or replace function public.is_master()
-returns boolean language sql stable
-security definer
-set search_path = public
-as $$
-  select exists (select 1 from public.masters m where m.email = public._email_atual());
-$$;
-
 -- Vínculos ATIVOS do usuário logado em contratos ativos
 create or replace function public._meus_vinculos()
 returns table (contrato_id uuid, contrato text, role text)
@@ -164,35 +155,26 @@ as $$
   select distinct v.contrato from public._meus_vinculos() v;
 $$;
 
--- Papel do usuário logado para a interface: { master, contratos: [{ id, nome, role }] }.
--- Master vê todos os contratos (role 'master'); gestor/técnico, só os seus.
+-- Papel do usuário logado para a interface: { contratos: [{ id, nome, role: 'gestor'|'tecnico' }] }.
+-- Só os contratos dele (gestor de um contrato pode ser técnico de outro).
 create or replace function public.my_access()
 returns jsonb
 language sql stable
 security definer
 set search_path = public
 as $$
-  select jsonb_build_object(
-    'master', public.is_master(),
-    'contratos', coalesce(
-      case when public.is_master() then
-        (select jsonb_agg(jsonb_build_object('id', c.id, 'nome', c.nome, 'role', 'master') order by c.nome)
-         from public.contracts c where c.ativo)
-      else
-        (select jsonb_agg(jsonb_build_object('id', v.contrato_id, 'nome', v.contrato, 'role', v.role) order by v.contrato)
-         from public._meus_vinculos() v)
-      end, '[]'::jsonb)
-  );
+  select jsonb_build_object('contratos', coalesce(
+    (select jsonb_agg(jsonb_build_object('id', v.contrato_id, 'nome', v.contrato, 'role', v.role) order by v.contrato)
+     from public._meus_vinculos() v), '[]'::jsonb));
 $$;
 
--- Master ou gestor ativo do contrato
+-- Gestor ativo do contrato (o único papel do app que gerencia equipe)
 create or replace function public._pode_gerir(p_contrato_id uuid)
 returns boolean language sql stable
 security definer
 set search_path = public
 as $$
-  select public.is_master()
-      or exists (select 1 from public._meus_vinculos() v where v.contrato_id = p_contrato_id and v.role = 'gestor');
+  select exists (select 1 from public._meus_vinculos() v where v.contrato_id = p_contrato_id and v.role = 'gestor');
 $$;
 
 create or replace function public._tecnicos_ativos(p_contrato_id uuid)
@@ -204,7 +186,7 @@ as $$
   where m.contrato_id = p_contrato_id and m.role = 'tecnico' and m.ativo;
 $$;
 
--- 7.5) Gestão de Equipe (gestor do contrato ou master) -------------------------------------------
+-- 7.5) Gestão de Equipe (gestor do contrato) ------------------------------------------------------
 -- Equipe do contrato + cota: { contrato_id, contrato, max_technicians, tecnicos_ativos, membros: [...] }
 create or replace function public.team_list(p_contrato_id uuid)
 returns jsonb
@@ -263,7 +245,7 @@ begin
     raise exception 'Este e-mail já faz parte da equipe deste contrato.' using errcode = '23505';
   end if;
   if public._tecnicos_ativos(c.id) >= c.max_technicians then
-    raise exception 'Limite de % técnicos liberados para este contrato atingido. Peça ao master para ampliar a licença.', c.max_technicians
+    raise exception 'Limite de % técnicos liberados para este contrato atingido. Entre em contato com o Master para ampliar a licença.', c.max_technicians
       using errcode = 'P0001', hint = 'cota';
   end if;
   if exists (select 1 from public.contract_members o where public._norm_matricula(o.matricula) = v_mat and o.email <> v_email) then
@@ -285,7 +267,7 @@ begin
 end;
 $$;
 
--- Ativa / desativa o acesso de um membro. Gestor só mexe em técnicos; gestores, só o master.
+-- Ativa / desativa o acesso de um membro. O gestor mexe nos técnicos; gestores só pelo Master (SQL Editor).
 -- Reativar respeita a cota.
 create or replace function public.team_set_active(p_member_id uuid, p_ativo boolean)
 returns jsonb
@@ -301,13 +283,13 @@ begin
   if not found or not public._pode_gerir(m.contrato_id) then
     raise exception 'Sem permissão para alterar este acesso.' using errcode = '42501';
   end if;
-  if m.role = 'gestor' and not public.is_master() then
-    raise exception 'Somente o master altera o acesso de gestores.' using errcode = '42501';
+  if m.role = 'gestor' then
+    raise exception 'O acesso de gestores é alterado pelo Master da licença.' using errcode = '42501';
   end if;
   select * into c from public.contracts where id = m.contrato_id for update;
   if m.ativo is distinct from p_ativo then
     if p_ativo and m.role = 'tecnico' and public._tecnicos_ativos(c.id) >= c.max_technicians then
-      raise exception 'Limite de % técnicos liberados para este contrato atingido. Peça ao master para ampliar a licença.', c.max_technicians
+      raise exception 'Limite de % técnicos liberados para este contrato atingido. Entre em contato com o Master para ampliar a licença.', c.max_technicians
         using errcode = 'P0001', hint = 'cota';
     end if;
     update public.contract_members set ativo = p_ativo where id = p_member_id;
@@ -500,8 +482,6 @@ revoke all on function public._pode_gerir(uuid) from public, anon, authenticated
 revoke all on function public._tecnicos_ativos(uuid) from public, anon, authenticated;
 revoke all on function public._contract_members_consistencia() from public, anon, authenticated;
 -- Usuário logado
-revoke all on function public.is_master() from public, anon;
-grant execute on function public.is_master() to authenticated;
 revoke all on function public.my_contracts() from public, anon;
 grant execute on function public.my_contracts() to authenticated;
 revoke all on function public.my_access() from public, anon;
