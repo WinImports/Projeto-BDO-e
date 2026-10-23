@@ -3,7 +3,7 @@
 // PDF compacto (sem campos/blocos vazios), fotos no bloco do componente como "Figura N",
 // "Antes x Depois" na Execução, fotos em 2 colunas e cabeçalho só com a identificação (sem GPS).
 import { displayValue, displayCell, hasContent, dadosParaRelatorio } from './form.js';
-import { assignPhotoFields, photosOf } from '../core/fotos.js';
+import { assignPhotoFields, photosOf, temAntes, rotuloFotos, TITULO_EXECUCAO } from '../core/fotos.js';
 import { cabecalhoItens, CAMPOS_CABECALHO } from './cabecalho.js';
 import { empresaDoRelatorio } from '../core/settings.js';
 import { buildBdoPdf } from './bdo-pdf.js';
@@ -306,8 +306,12 @@ export async function buildPdfBlob({ module, uniqueId, data, photos = [], compan
         try { doc.pdf.addImage(data[f.id], formatOf(data[f.id]), M, doc.y, w * sc, h * sc); } catch { /* assinatura inválida */ }
         doc.y += h * sc + 4;
       } else if (f.type === 'photos') {
-        doc.subTitle(f.label);
-        if (f.compare) {
+        doc.subTitle(rotuloFotos(f, data));
+        if (f.compare && !temAntes(f, photos)) {
+          // sem fotos "Antes" neste componente: uma coluna (fotos da execução, em largura total)
+          doc.subTitle(TITULO_EXECUCAO);
+          await doc.photoGrid(photosOf(f, photos, 'depois'), srcOf);
+        } else if (f.compare) {
           await doc.photoCompare(photosOf(f, photos, 'antes'), photosOf(f, photos, 'depois'), srcOf,
             `Antes — Visita Técnica${data._visita_data ? ` de ${data._visita_data}` : ''}`);
         } else {

@@ -14,7 +14,7 @@ import { loadPocos, searchPocos, findPoco } from '../core/pocos.js';
 import { consolidateFromHistory, hasConsolidation } from '../core/consolidar.js';
 import { consolidationHtml } from './consolidacao-view.js';
 import { routeLinks, showRoutePrompt } from './route-prompt.js';
-import { assignPhotoFields, photoFields, photosOf, photoMeta } from '../core/fotos.js';
+import { assignPhotoFields, photoFields, photosOf, photoMeta, rotuloFotos, TITULO_EXECUCAO } from '../core/fotos.js';
 import { STORES, get } from '../core/db.js';
 import { getModule } from '../modules/index.js';
 import { meusContratos, valorContrato } from '../core/contratos.js';
@@ -466,13 +466,15 @@ export class FormView {
       return `<div class="field-divider span-12">${f.icon ? icon(f.icon, 15) : ''}<span>${esc(f.label)}</span></div>`;
     }
     const cls = ['field', `span-${this.fieldSpan(f)}`, f.highlight && 'field--highlight'].filter(Boolean).join(' ');
-    return `<div class="${cls}" data-wrap="${esc(f.id)}">${this.fieldInnerHtml(f)}</div>`;
+    const oculto = f.type === 'visitaNota' && !this.draft.data[f.id] ? ' hidden' : ''; // sem Visita de referência: nada aparece
+    return `<div class="${cls}" data-wrap="${esc(f.id)}"${oculto}>${this.fieldInnerHtml(f)}</div>`;
   }
 
   fieldInnerHtml(f) {
+    if (f.type === 'visitaNota') return this.controlHtml(f);
     const exigido = f.required && !(f.type === 'contrato' && !meusContratos().length); // sem contratos não é exigido
     const label = f.label && !f.previewButton
-      ? `<span class="field__label">${esc(f.label)}${exigido ? '<span class="req" aria-hidden="true">*</span>' : ''}</span>`
+      ? `<span class="field__label">${esc(f.type === 'photos' ? rotuloFotos(f, this.draft.data) : f.label)}${exigido ? '<span class="req" aria-hidden="true">*</span>' : ''}</span>`
       : '';
     const hint = f.hint ? `<small class="field__hint">${esc(f.hint)}</small>` : '';
     const error = '<small class="field__error" aria-live="polite"></small>';
@@ -488,6 +490,9 @@ export class FormView {
     const v = this.draft.data[f.id];
     const id = esc(f.id);
     switch (f.type) {
+      case 'visitaNota':
+        return v ? `<p class="visita-nota" data-visita-nota="${id}">${icon('clock', 15)}<span>${esc(v)}</span></p>` : '';
+
       case 'flangeCard':
         return this.flangeCardHtml(f.flange);
 
@@ -745,14 +750,21 @@ export class FormView {
     // Relatório de Execução: "Antes" (fotos da Visita Técnica do poço) x "Depois" (fotos da execução)
     const d = this.draft.data;
     const antes = photosOf(f, this.draft.photos, 'antes');
-    const vazio = d._visita_ref
-      ? 'A Visita Técnica deste poço não tem fotos deste componente.'
-      : 'Informe o Poço / Locação e o período da quinzena: as fotos da última Visita Técnica do poço aparecem aqui.';
+    if (!antes.length) {
+      // sem Visita de referência (ou a Visita não tem foto deste componente): só as fotos da execução
+      return `
+      <div class="photo-compare photo-compare--uma" data-layout="uma-coluna">
+        <div class="photo-compare__col photo-compare__col--depois" data-fase="depois">
+          <div class="photo-compare__title">${icon('camera', 15)} ${TITULO_EXECUCAO}</div>
+          <div class="photo-cats">${this.photoSlotsHtml(f, 'depois')}</div>
+        </div>
+      </div>`;
+    }
     return `
-      <div class="photo-compare">
+      <div class="photo-compare" data-layout="antes-depois">
         <div class="photo-compare__col photo-compare__col--antes" data-fase="antes">
           <div class="photo-compare__title">${icon('clock', 15)} Antes — Visita Técnica${d._visita_data ? ` de ${esc(d._visita_data)}` : ''}</div>
-          ${antes.length ? `<div class="photo-grid">${antes.map((p) => this.photoFigureHtml(p)).join('')}</div>` : `<p class="muted small">${vazio}</p>`}
+          <div class="photo-grid">${antes.map((p) => this.photoFigureHtml(p)).join('')}</div>
         </div>
         <div class="photo-compare__col photo-compare__col--depois" data-fase="depois">
           <div class="photo-compare__title">${icon('checkCircle', 15)} Depois — Execução</div>
@@ -1331,11 +1343,33 @@ export class FormView {
    * Execução: copia as fotos da Visita Técnica (consolidada) para a coluna "Antes" de cada componente.
    * Refaz só quando a Visita de referência muda (ou as fotos "Antes" foram todas apagadas).
    */
+  /**
+   * Linha "Na Visita" (campos visitaNota) de cada componente, da Visita de referência (module.notasDaVisita).
+   * Refeita só quando a Visita muda (data._visita_notas); sem Visita, as linhas somem.
+   */
+  async aplicarNotasVisita(ref) {
+    const campos = [...this.fields.values()].filter((f) => f.type === 'visitaNota');
+    const d = this.draft.data;
+    if (!campos.length || (d._visita_notas || null) === ref) return;
+    const rec = ref ? await get(STORES.history, ref) : null;
+    const notas = rec && this.module.notasDaVisita ? this.module.notasDaVisita(rec.data || {}) : {};
+    if (!this.el.isConnected) return;
+    for (const f of campos) {
+      d[f.id] = notas[f.comp] || '';
+      this.refreshField(f.id);
+      const wrap = $(`[data-wrap="${CSS.escape(f.id)}"]`, this.el);
+      if (wrap) wrap.hidden = !d[f.id];
+    }
+    d._visita_notas = ref;
+    this.onChange(this.draft);
+  }
+
   async importBefore(visita) {
     const fields = photoFields(this.module).filter((f) => f.compare);
     if (!fields.length) return;
     const d = this.draft.data;
     const ref = visita?.uniqueId || null;
+    await this.aplicarNotasVisita(ref);
     const temAntes = this.draft.photos.some((p) => p.fase === 'antes');
     if (ref === (d._visita_ref || null) && (temAntes || !ref || d._visita_fotos === 0)) return;
     let novas = [];

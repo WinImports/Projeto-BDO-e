@@ -4,7 +4,7 @@
 // (sem coordenadas GPS), seções só com dados, fotos lado a lado em 2 colunas (~48% cada) com
 // "Figura N — legenda", Antes x Depois na Execução e a imagem da assinatura no bloco final.
 import { displayValue, displayCell, hasContent, dadosParaRelatorio } from './form.js';
-import { assignPhotoFields, photosOf } from '../core/fotos.js';
+import { assignPhotoFields, photosOf, temAntes, rotuloFotos, TITULO_EXECUCAO } from '../core/fotos.js';
 import { cabecalhoItens, CAMPOS_CABECALHO } from './cabecalho.js';
 import { empresaDoRelatorio } from '../core/settings.js';
 
@@ -424,8 +424,12 @@ export async function buildDocxBlob({ module, uniqueId, data, photos = [], compa
         const nome = data.gestor_nome || data.tecnico || (Array.isArray(data.equipe) ? data.equipe.find((r) => String(r.nome || '').trim())?.nome : '') || '';
         if (nome) doc.add(para(run(nome, { sz: 17 }), { after: 120 }));
       } else if (f.type === 'photos') {
-        doc.subTitle(f.label);
-        if (f.compare) {
+        doc.subTitle(rotuloFotos(f, data));
+        if (f.compare && !temAntes(f, photos)) {
+          // sem fotos "Antes" neste componente: uma coluna (fotos da execução, em largura total)
+          doc.subTitle(TITULO_EXECUCAO);
+          doc.photoGrid(photosOf(f, photos, 'depois').map((p) => fotoDe.get(p)));
+        } else if (f.compare) {
           doc.photoCompare(photosOf(f, photos, 'antes').map((p) => fotoDe.get(p)), photosOf(f, photos, 'depois').map((p) => fotoDe.get(p)),
             `Antes — Visita Técnica${data._visita_data ? ` de ${data._visita_data}` : ''}`);
         } else {

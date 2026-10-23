@@ -9,6 +9,36 @@ import {
 
 const comparar = (id, label, cats) => fotosDe(id, label, cats, { compare: true });
 
+const diaMes = (iso) => (/^\d{4}-\d{2}-\d{2}/.test(iso || '') ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '');
+const maiuscula = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
+/** "situação; situação — observação" (partes vazias saem). */
+const juntar = (situacoes, obs) => [maiuscula(situacoes.filter(Boolean).join('; ')), String(obs || '').trim()].filter(Boolean).join(' — ');
+
+/**
+ * Linha "Na Visita" de cada componente, a partir dos dados da Visita Técnica de referência (a mesma do
+ * Antes x Depois): { antepoco, vc, …, flange_inf: "Na Visita (18/10): Corrosão moderada — prisioneiros oxidados" }.
+ * Componente sem nada registrado na Visita não aparece.
+ */
+export function notasDaVisita(dv = {}) {
+  const quando = diaMes(dv.data);
+  const prefixo = `Na Visita${quando ? ` (${quando})` : ''}: `;
+  const notas = {};
+  const constatado = (dv.antepoco_checklist || []).filter((r) => r.situacao === 'Sim').map((r) => r.item);
+  const ant = juntar([dv.estado_antepoco, constatado.length ? `necessário: ${constatado.join(', ')}` : ''], dv.obs_antepoco);
+  if (ant) notas[ANTEPOCO.p] = prefixo + ant;
+  for (const v of VALVULAS_CABECA) {
+    const t = juntar([dv[`${v.p}_estanqueidade`], dv[`${v.p}_abertura`], dv[`${v.p}_intervencao`] === 'Sim' ? 'necessita intervenção' : ''], dv[`${v.p}_obs`]);
+    if (t) notas[v.p] = prefixo + t;
+  }
+  for (const fl of FLANGES) {
+    const cor = dv[`${fl.p}_corrosao`];
+    const corrosao = !cor ? '' : cor === 'Sem corrosão' ? cor : `corrosão ${cor.toLowerCase()}`;
+    const t = juntar([corrosao, dv[`${fl.p}_intervencao`] === 'Sim' ? 'necessita intervenção' : ''], dv[`${fl.p}_obs`]);
+    if (t) notas[fl.p] = prefixo + t;
+  }
+  return notas;
+}
+
 /**
  * Pendências automáticas: componente entregue sem estanqueidade ou com corrosão moderada/severa
  * vira linha _auto no Detalhamento das pendências, com a instrução clara do que fazer.
@@ -41,6 +71,8 @@ const componente = ({ p, nome, short, fotos }, n, situacao) => ({
   icon: p.startsWith('flange') ? 'wrench' : p === 'antepoco' ? 'map' : 'gauge',
   fields: [
     { id: `${p}_servico`, label: 'Serviço executado', type: 'textarea', placeholder: 'O que foi feito neste componente (deixe em branco se não houve intervenção)' },
+    // só leitura: situação do componente na Visita de referência (notasDaVisita); sem Visita, não aparece
+    { id: `${p}_na_visita`, label: 'Na Visita', pdfLabel: 'Situação na Visita Técnica', type: 'visitaNota', comp: p, full: true },
     { id: `${p}_situacao`, label: situacao.label, type: 'select', span: 6, options: situacao.options },
     { id: `${p}_obs`, label: 'Observações', type: 'text', span: 6 },
     comparar(`fotos_${p}`, `Fotos — ${short || nome}: antes x depois`, fotos)
@@ -82,7 +114,7 @@ export default {
       title: 'Consolidação da quinzena (14x14)',
       short: 'Consolidação 14x14',
       icon: 'listChecks',
-      hint: 'Informe o Poço/Locação e o período: o app reúne automaticamente as atividades, horas, paradas e SMS dos BDOs e o último status de equipamentos da Visita Técnica — e traz as fotos da Visita como "Antes" em cada componente.',
+      hint: 'Informe o Poço/Locação e o período: o app reúne automaticamente as atividades, horas, paradas e SMS dos BDOs e o último status de equipamentos da Visita Técnica — e traz as fotos da Visita como "Antes" em cada componente (Antes x Depois). Sem Visita Técnica do poço, o relatório mostra só as fotos da execução, em uma coluna.',
       fields: [
         { id: 'periodo_inicio', label: 'Início da quinzena', type: 'date', required: true, defaultDaysAgo: 13 },
         { id: 'periodo_fim', label: 'Fim da quinzena', type: 'date', required: true },
@@ -184,6 +216,7 @@ export default {
       ]
     }
   ],
+  notasDaVisita,
   herdaDoBdo: herancaBdo('data_hora'),
   autoRows: { table: 'pendencias', col: 'descricao', label: 'Pendências', defaults: { prioridade: 'Alta' }, rows: pendenciasAutomaticas },
   validate(data) {

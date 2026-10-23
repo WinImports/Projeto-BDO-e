@@ -1020,3 +1020,9 @@ textarea.is-locked:hover { border-color: var(--border); }
 .flange-card__rotulo { color: var(--text-muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; }
 .flange-card__nota { color: var(--text-muted); font-style: italic; }
 .flange-card__opcoes { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+
+/* ---------- Relatório de Execução: uma coluna sem "Antes" e linha "Na Visita" ---------- */
+.photo-compare--uma { grid-template-columns: 1fr; }
+.photo-compare--uma .photo-cats { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.visita-nota { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 8px 12px; border-left: 3px solid var(--text-muted); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); font-size: .9rem; }
+.visita-nota svg { flex: none; margin-top: 2px; color: var(--text-muted); }

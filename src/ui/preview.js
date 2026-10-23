@@ -9,7 +9,7 @@ import { cabecalhoItens, CAMPOS_CABECALHO } from './cabecalho.js';
 import { toast } from './toast.js';
 import { companyInfo, empresaDoRelatorio } from '../core/settings.js';
 import { consolidationHtml } from './consolidacao-view.js';
-import { assignPhotoFields, photosOf } from '../core/fotos.js';
+import { assignPhotoFields, photosOf, rotuloFotos, TITULO_EXECUCAO } from '../core/fotos.js';
 import { relatorioParaJson, nomeArquivoJson } from '../core/relatorio-json.js';
 import { showPdfSheet } from './pdf-sheet.js';
 
@@ -63,10 +63,14 @@ export function reportBodyHtml(module, data, photos, photoSrcs) {
       const antes = photosOf(f, photos, 'antes');
       const depois = photosOf(f, photos, 'depois');
       if (!antes.length && !depois.length) return '';
+      if (!antes.length) {
+        // sem fotos "Antes" neste componente: uma coluna, em largura total
+        return `<div class="preview__photos" data-photos="${esc(f.id)}" data-layout="uma-coluna"><h5 class="preview__photos-title">${esc(rotuloFotos(f, data))}</h5><div class="photo-compare__title">${TITULO_EXECUCAO}</div>${grid(depois)}</div>`;
+      }
       const col = (cls, title, list) => `<div class="photo-compare__col photo-compare__col--${cls}"><div class="photo-compare__title">${esc(title)}</div>${list.length ? grid(list) : '<p class="muted small">Sem fotos.</p>'}</div>`;
       const antesHtml = col('antes', `Antes — Visita Técnica${data._visita_data ? ` de ${data._visita_data}` : ''}`, antes);
       const depoisHtml = col('depois', 'Depois — Execução', depois);
-      return `<div class="preview__photos" data-photos="${esc(f.id)}"><h5 class="preview__photos-title">${esc(f.label)}</h5><div class="photo-compare">${antesHtml}${depoisHtml}</div></div>`;
+      return `<div class="preview__photos" data-photos="${esc(f.id)}" data-layout="antes-depois"><h5 class="preview__photos-title">${esc(rotuloFotos(f, data))}</h5><div class="photo-compare">${antesHtml}${depoisHtml}</div></div>`;
     }
     const list = photosOf(f, photos);
     return list.length ? `<div class="preview__photos" data-photos="${esc(f.id)}"><h5 class="preview__photos-title">${esc(f.label)}</h5>${grid(list)}</div>` : '';

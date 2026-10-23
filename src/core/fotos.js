@@ -39,3 +39,16 @@ export function photosOf(field, photos, fase) {
     .sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i)
     .map(({ p }) => p);
 }
+
+// ---------- Relatório de Execução: Antes x Depois só quando há "Antes" ----------
+
+/** Título do bloco em uma coluna (sem fotos "Antes" da Visita neste componente). */
+export const TITULO_EXECUCAO = 'Fotos da execução';
+
+/** O bloco compare tem fotos "Antes" (da Visita Técnica)? Sem elas, vira uma coluna só, em largura total. */
+export const temAntes = (field, photos) => Boolean(field.compare) && photosOf(field, photos, 'antes').length > 0;
+
+/** Rótulo do bloco: sem Visita de referência (data._visita_ref), sem o sufixo ": antes x depois". */
+export const rotuloFotos = (field, data) => (field.compare && !data?._visita_ref
+  ? String(field.label || '').replace(/:\s*antes x depois\s*$/i, '')
+  : field.label);

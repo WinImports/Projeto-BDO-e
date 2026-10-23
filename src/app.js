@@ -512,7 +512,7 @@ async function newReport(module) {
 }
 
 // Campos que não fazem sentido copiar para um relatório novo
-const NOT_REUSED = new Set(['date', 'datetime', 'time', 'signature', 'photos', 'consolidation']);
+const NOT_REUSED = new Set(['date', 'datetime', 'time', 'signature', 'photos', 'consolidation', 'visitaNota']);
 
 /** Histórico → novo rascunho (novo ID) preenchido com os dados de um relatório salvo. */
 async function reuseReport(rec) {

@@ -118,7 +118,9 @@ test('Relatório de Execução traz as fotos da Visita como "Antes" em cada comp
   await expect(vc.locator('[data-fase=antes] .photo-compare__title')).toContainText(`Antes — Visita Técnica de ${hojeBR()}`);
   await expect(vc.locator('[data-fase=antes] .photo__caption')).toHaveValue('VC com vazamento na haste');
   await expect(page.locator('[data-wrap=fotos_chegada] [data-fase=antes] img')).toHaveCount(1);
-  await expect(page.locator('[data-wrap=fotos_va1] [data-fase=antes]')).toContainText('não tem fotos deste componente');
+  // a Visita não tem foto da VA-1: esse bloco fica só com as fotos da execução, em uma coluna
+  await expect(page.locator('[data-wrap=fotos_va1] [data-fase=antes]')).toHaveCount(0);
+  await expect(page.locator('[data-wrap=fotos_va1] [data-layout=uma-coluna] .photo-compare__title')).toHaveText('Fotos da execução');
 
   // foto do "Depois" na VC
   await vaga(page, 'fotos_vc', 'Válvula da coluna (VC)', 'depois').setInputFiles(foto('vc-depois.png'));
