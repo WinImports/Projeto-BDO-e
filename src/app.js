@@ -17,6 +17,7 @@ import { licenciamentoAtivo, licencaLocal, verificarLicenca, avaliarSemRede } fr
 import { showLicenca } from './ui/licenca-view.js';
 import { onContratosChange, souGestor } from './core/contratos.js';
 import { EquipeView } from './ui/equipe-view.js';
+import { importarArquivoJson } from './ui/importar-json.js';
 import { limparEquipeDeOutroUsuario } from './core/pull.js';
 import { photoMeta } from './core/fotos.js';
 import { FormView, validate, cleanData, requiredProgress, rehydrate } from './ui/form.js';
@@ -231,6 +232,9 @@ async function showTab(tab) {
               <div class="progress__label"><span>Campos obrigatórios</span><strong id="progress-count"></strong></div>
               <div class="progress__track"><span class="progress__fill" id="progress-fill"></span></div>
             </div>
+            ${module.id === 'handover' ? `<label class="btn btn--ghost btn--sm" id="btn-import-json" title="Importar um relatório exportado em JSON: ele fica no Histórico e vira o ANTES desta Execução">
+              <input type="file" accept=".json,application/json" class="sr-only" data-import-json>${icon('upload', 15)} Upload de Relatório (JSON)
+            </label>` : ''}
             <button type="button" class="btn btn--text btn--sm btn--danger-text" id="btn-discard">${icon('trash', 15)} Limpar formulário</button>
           </div>
         </header>
@@ -256,6 +260,11 @@ async function showTab(tab) {
   $('#btn-preview').addEventListener('click', () => previewDraft(module));
   $('#btn-finalize').addEventListener('click', () => finalize(module));
   $('#btn-discard').addEventListener('click', () => discard(module));
+  $('[data-import-json]')?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite escolher o mesmo arquivo de novo
+    if (file) await importarJson(file);
+  });
   $('#section-nav').addEventListener('click', (e) => {
     const item = e.target.closest('[data-goto-section]');
     if (!item) return;
@@ -624,6 +633,37 @@ async function signOut() {
   await showTab(state.tab);
   syncNow({ pull: true }); // login: baixa o histórico da equipe (últimos 30 dias)
 }
+
+// ---------- Upload de Relatório (JSON) na Execução ----------
+
+/** Importa o arquivo; salvo, o relatório vira a referência "Antes" da Execução aberta. */
+async function importarJson(file) {
+  const res = await importarArquivoJson(file);
+  if (!res) return;
+  const [rel] = res.relatorios;
+  const fotos = res.relatorios.reduce((n, r) => n + r.photos.length, 0);
+  const comoAntes = await usarComoAntes(rel);
+  toast(`${res.relatorios.length} relatório${res.relatorios.length > 1 ? 's' : ''} importado${res.relatorios.length > 1 ? 's' : ''} (${fotos} foto${fotos === 1 ? '' : 's'}) e salvo${res.relatorios.length > 1 ? 's' : ''} no Histórico${res.modo === 'send' ? ' — enviando ao servidor' : ''}.${comoAntes ? ' As fotos aparecem como ANTES nesta Execução.' : ''}`, 'success', 8000);
+  if (res.modo === 'send') syncNow();
+}
+
+/** Fotos do relatório importado → coluna "Antes" do Relatório de Execução aberto (e o poço, se vazio). */
+async function usarComoAntes(rel) {
+  if (state.tab !== 'handover' || !state.draft || !rel?.photos?.length) return false;
+  if (state.draft.data.poco && rel.data.poco && normPoco(state.draft.data.poco) !== normPoco(rel.data.poco)) return false;
+  await flushSave();
+  const draft = state.draft;
+  if (!draft.data.poco && rel.data.poco) draft.data.poco = rel.data.poco;
+  draft.data._antes_fixo = rel.uniqueId;
+  await saveDraft(draft);
+  await showTab('handover');
+  const d = String(rel.data.data || rel.data.data_hora || '').slice(0, 10);
+  await state.formView?.importBefore({ uniqueId: rel.uniqueId, data: /^d{4}-d{2}-d{2}$/.test(d) ? d.split('-').reverse().join('/') : '' });
+  if (state.draft) await saveDraft(state.draft);
+  return true;
+}
+
+const normPoco = (t) => String(t || '').toUpperCase().replace(/[^p{L}p{N}]+/gu, '');
 
 // ---------- Licença (core/licenca.js) ----------
 

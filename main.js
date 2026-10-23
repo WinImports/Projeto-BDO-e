@@ -104,13 +104,13 @@ ipcMain.handle('pdf:save', async (event, { html, fileName }) => {
 });
 
 // Arquivo gerado na interface (Word .docx, PDF de página única do BDO-e): só grava os bytes no arquivo escolhido
-const FILTROS = { docx: { name: 'Documento do Word', extensions: ['docx'] }, pdf: { name: 'PDF', extensions: ['pdf'] } };
+const FILTROS = { docx: { name: 'Documento do Word', extensions: ['docx'] }, pdf: { name: 'PDF', extensions: ['pdf'] }, json: { name: 'Relatório BDO-e (JSON)', extensions: ['json'] } };
 ipcMain.handle('file:save', async (event, { bytes, fileName }) => {
   const ext = path.extname(String(fileName)).slice(1).toLowerCase();
   if (!FILTROS[ext]) throw new Error('Tipo de arquivo não permitido');
   const parent = BrowserWindow.fromWebContents(event.sender);
   const { canceled, filePath } = await dialog.showSaveDialog(parent, {
-    title: ext === 'docx' ? 'Salvar relatório em Word' : 'Salvar relatório em PDF',
+    title: ext === 'docx' ? 'Salvar relatório em Word' : ext === 'json' ? 'Exportar relatório (JSON)' : 'Salvar relatório em PDF',
     defaultPath: path.join(app.getPath('documents'), path.basename(String(fileName))),
     filters: [FILTROS[ext]]
   });

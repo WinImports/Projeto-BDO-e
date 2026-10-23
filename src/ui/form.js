@@ -1180,7 +1180,8 @@ export class FormView {
     if (!this.el.isConnected) return; // usuário saiu da tela enquanto calculava
     d[f.id] = result;
     this.refreshField(f.id);
-    await this.importBefore(result.visita);
+    // "Antes" escolhido pelo técnico (relatório importado em JSON) fica; senão, a última Visita do poço
+    if (!this.draft.data._antes_fixo) await this.importBefore(result.visita);
     this.changed(f.id);
     if (manual) {
       toast(hasConsolidation(result)

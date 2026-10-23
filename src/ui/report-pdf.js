@@ -191,7 +191,14 @@ async function docOpts({ module, uniqueId, data, photos, company, draft }) {
  * Compartilhar / Salvar em Arquivos (Web Share), Baixar e Imprimir.
  */
 export async function savePdf(args) {
-  const fileName = fileNameOf(args.module, args.data);
+  const fileName = fileNameOf(args.module, args.data).replace(/.pdf$/, args.paisagem ? '_paisagem.pdf' : '.pdf');
+  if (args.paisagem) {
+    // A4 deitado: sempre o PDF gerado no aparelho (jsPDF), no desktop e no navegador
+    const blob = await buildPdfBlob(args);
+    if (window.desktop?.saveFile) return window.desktop.saveFile(new Uint8Array(await blob.arrayBuffer()), fileName);
+    await showPdfSheet({ blob, fileName });
+    return { saved: true, sheet: true };
+  }
   if (window.desktop?.saveFile && temLayoutProprio(args.module)) {
     // BDO-e: PDF de página única (jsPDF), o mesmo do celular e do link do WhatsApp
     return window.desktop.saveFile(new Uint8Array(await (await buildPdfBlob(args)).arrayBuffer()), fileName);

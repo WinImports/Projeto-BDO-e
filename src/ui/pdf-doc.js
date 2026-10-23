@@ -13,7 +13,6 @@ export const temLayoutProprio = (module) => module.id === 'bdo';
 
 const A4 = { w: 210, h: 297 };
 const M = 12; // margem
-const CW = A4.w - 2 * M;
 const AZUL = [11, 92, 173];
 const CINZA = [91, 102, 118];
 const TEXTO = [15, 23, 42];
@@ -66,14 +65,18 @@ const formatOf = (dataUrl) => (/^data:image\/png/i.test(dataUrl) ? 'PNG' : 'JPEG
 // ---------- montagem ----------
 
 class Doc {
-  constructor(jsPDF, autoTable) {
-    this.pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+  /** paisagem: A4 deitado (297 × 210 mm) — PDF de relatório importado em JSON. */
+  constructor(jsPDF, autoTable, paisagem = false) {
+    this.pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: paisagem ? 'landscape' : 'portrait', compress: true });
+    this.W = paisagem ? A4.h : A4.w; // largura e altura da página deste documento
+    this.H = paisagem ? A4.w : A4.h;
+    this.CW = this.W - 2 * M;       // largura útil
     this.autoTable = autoTable;
     this.y = M;
     this.fig = 0;
   }
 
-  get bottom() { return A4.h - M - 8; } // espaço do rodapé
+  get bottom() { return this.H - M - 8; } // espaço do rodapé
 
   ensure(h) {
     if (this.y + h > this.bottom) { this.pdf.addPage(); this.y = M; }
@@ -137,7 +140,7 @@ class Doc {
       body,
       // espaço no topo da célula para o rótulo (desenhado em didDrawCell)
       styles: { fontSize: 9, cellPadding: { top: 5.4, bottom: 1.8, left: 2, right: 2 } },
-      columnStyles: { 0: { cellWidth: CW / 2 }, 1: { cellWidth: CW / 2 } },
+      columnStyles: { 0: { cellWidth: this.CW / 2 }, 1: { cellWidth: this.CW / 2 } },
       didDrawCell: (h) => {
         if (h.section !== 'body' || !h.cell.raw?.label) return;
         this.text(h.cell.raw.label, h.cell.x + 2, h.cell.y + 3.4, { size: 6.5, bold: true, color: CINZA });
@@ -161,8 +164,8 @@ class Doc {
 
   /** Fotos lado a lado em 2 colunas (~48% da largura cada). */
   async photoGrid(list, srcOf) {
-    const gap = CW * 0.04;
-    const w = (CW - gap) / 2;
+    const gap = this.CW * 0.04;
+    const w = (this.CW - gap) / 2;
     const h = w * 0.75;
     const capH = 7;
     for (let i = 0; i < list.length; i += 2) {
@@ -177,8 +180,8 @@ class Doc {
 
   /** Antes (esquerda) x Depois (direita). Numeração igual à prévia: primeiro as de "Antes", depois as de "Depois". */
   async photoCompare(antes, depois, srcOf, tituloAntes) {
-    const gap = CW * 0.04;
-    const w = (CW - gap) / 2;
+    const gap = this.CW * 0.04;
+    const w = (this.CW - gap) / 2;
     const h = w * 0.75;
     const capH = 7;
     const base = this.fig;
@@ -211,11 +214,11 @@ function header(doc, { module, uniqueId, data, company, draft, logo }) {
   if (company?.nome) { doc.text(`${company.nome}${company.cnpj ? `  ·  CNPJ ${company.cnpj}` : ''}`, x, y, { size: 8.5, bold: true }); y += 5; }
   doc.text(module.title, x, y + 1, { size: 14, bold: true }); y += 6;
   const generated = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-  if (draft) doc.text('RASCUNHO — NÃO FINALIZADO', A4.w - M, M + 3, { size: 9, bold: true, color: [180, 35, 24], align: 'right' });
-  doc.text(`Gerado em ${generated}`, A4.w - M, M + 8, { size: 7.5, color: CINZA, align: 'right' });
-  doc.text(`ID ${uniqueId}`, A4.w - M, M + 12, { size: 6.5, color: CINZA, align: 'right' });
+  if (draft) doc.text('RASCUNHO — NÃO FINALIZADO', doc.W - M, M + 3, { size: 9, bold: true, color: [180, 35, 24], align: 'right' });
+  doc.text(`Gerado em ${generated}`, doc.W - M, M + 8, { size: 7.5, color: CINZA, align: 'right' });
+  doc.text(`ID ${uniqueId}`, doc.W - M, M + 12, { size: 6.5, color: CINZA, align: 'right' });
   doc.y = Math.max(y, M + 16) + 2;
-  p.setDrawColor(...AZUL); p.setLineWidth(0.8); p.line(M, doc.y, A4.w - M, doc.y); p.setLineWidth(0.2);
+  p.setDrawColor(...AZUL); p.setLineWidth(0.8); p.line(M, doc.y, doc.W - M, doc.y); p.setLineWidth(0.2);
   doc.y += 3;
   // identificação: poço, cidade/campo, data, turno, cliente, contrato e equipe (sem coordenadas GPS)
   const ident = cabecalhoItens(module, data);
@@ -228,7 +231,7 @@ function consolidation(doc, c) {
     c.bdos ? `Atividades: ${c.horasAtividades}` : '', c.paradas?.length ? `Paradas: ${c.horasParadas}` : '', c.rpt ? `RPT/APR em ${c.rpt} boletins` : '']
     .filter(Boolean).join('  ·  ');
   doc.ensure(8);
-  doc.text(chips, M, doc.y + 3, { size: 8, bold: true, color: AZUL, maxWidth: CW });
+  doc.text(chips, M, doc.y + 3, { size: 8, bold: true, color: AZUL, maxWidth: doc.CW });
   doc.y += 6;
   const tabela = (titulo, cols, rows) => {
     if (!rows?.length) return;
@@ -250,11 +253,12 @@ function consolidation(doc, c) {
 export { imageSize, blobToDataUrl, formatOf };
 
 /** Gera o PDF do relatório e devolve um Blob (application/pdf). */
-export async function buildPdfBlob({ module, uniqueId, data, photos = [], company: empresa, draft = false }) {
+export async function buildPdfBlob({ module, uniqueId, data, photos = [], company: empresa, draft = false, paisagem = false }) {
   const { jsPDF, autoTable } = await libs();
   const company = empresaDoRelatorio(empresa); // sem empresa configurada: "Empresa Prestadora"
-  if (temLayoutProprio(module)) return buildBdoPdf({ jsPDF, autoTable, txt, formatOf, imageSize }, { uniqueId, data, company, draft });
-  const doc = new Doc(jsPDF, autoTable);
+  // BDO-e tem layout próprio de página única (retrato); em paisagem todos usam o layout geral
+  if (temLayoutProprio(module) && !paisagem) return buildBdoPdf({ jsPDF, autoTable, txt, formatOf, imageSize }, { uniqueId, data, company, draft });
+  const doc = new Doc(jsPDF, autoTable, paisagem);
   assignPhotoFields(module, photos);
   const srcOf = new Map();
   for (const p of photos) srcOf.set(p, await blobToDataUrl(p.blob));
@@ -318,9 +322,9 @@ export async function buildPdfBlob({ module, uniqueId, data, photos = [], compan
   for (let i = 1; i <= total; i++) {
     doc.pdf.setPage(i);
     doc.pdf.setDrawColor(221, 227, 234);
-    doc.pdf.line(M, A4.h - M - 4, A4.w - M, A4.h - M - 4);
-    doc.text('Documento gerado pelo BDO-e. O ID identifica este relatório de forma única no sistema.', M, A4.h - M, { size: 6.5, color: CINZA });
-    doc.text(`Página ${i} de ${total}`, A4.w - M, A4.h - M, { size: 6.5, color: CINZA, align: 'right' });
+    doc.pdf.line(M, doc.H - M - 4, doc.W - M, doc.H - M - 4);
+    doc.text('Documento gerado pelo BDO-e. O ID identifica este relatório de forma única no sistema.', M, doc.H - M, { size: 6.5, color: CINZA });
+    doc.text(`Página ${i} de ${total}`, doc.W - M, doc.H - M, { size: 6.5, color: CINZA, align: 'right' });
   }
   return doc.pdf.output('blob');
 }

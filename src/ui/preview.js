@@ -10,6 +10,8 @@ import { toast } from './toast.js';
 import { companyInfo, empresaDoRelatorio } from '../core/settings.js';
 import { consolidationHtml } from './consolidacao-view.js';
 import { assignPhotoFields, photosOf } from '../core/fotos.js';
+import { relatorioParaJson, nomeArquivoJson } from '../core/relatorio-json.js';
+import { showPdfSheet } from './pdf-sheet.js';
 
 function fieldHtml(f, data) {
   if (f.type === 'photos') return '';
@@ -99,7 +101,17 @@ const EYEBROW = {
  * @param {string} [o.notice] aviso informativo no topo do corpo
  * @returns {Promise<false|'send'|'local'>} modo "confirm": 'send' (salvar e enviar) | 'local' (só salvar no aparelho)
  */
-export function openPreview({ module, uniqueId, data, photos = [], mode = 'confirm', meta = '', pending = [], onNewReport, onReuse, notice = '' }) {
+/** Exporta o relatório em JSON (core/relatorio-json.js): "Salvar como" no desktop; painel no navegador. */
+async function exportarJson({ module, uniqueId, data, photos, createdAt }) {
+  const texto = await relatorioParaJson({ uniqueId, module: module.id, data, photos, createdAt });
+  const fileName = nomeArquivoJson(module, data);
+  const blob = new Blob([texto], { type: 'application/json' });
+  if (window.desktop?.saveFile) return window.desktop.saveFile(new Uint8Array(await blob.arrayBuffer()), fileName);
+  await showPdfSheet({ blob, fileName, kind: 'JSON' });
+  return { saved: true, sheet: true };
+}
+
+export function openPreview({ module, uniqueId, data, photos = [], mode = 'confirm', meta = '', pending = [], onNewReport, onReuse, notice = '', createdAt = null }) {
   // Relatório finalizado usa a empresa "congelada" no envio; rascunho usa as Configurações atuais
   const company = data._empresa || companyInfo();
   assignPhotoFields(module, photos); // cada foto no bloco do seu componente (antigas → "Outras fotos")
@@ -140,6 +152,8 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
         <div class="finalize-files">
           <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Baixar / Compartilhar PDF</button>
           <button type="button" class="btn btn--ghost" data-docx>${icon('fileText', 17)} Baixar Word (.docx)</button>
+          <button type="button" class="btn btn--ghost" data-pdf-paisagem>${icon('download', 17)} PDF (paisagem)</button>
+          <button type="button" class="btn btn--ghost" data-json>${icon('upload', 17)} Exportar JSON</button>
         </div>
         <div class="finalize-ask">
           <strong>Deseja enviar este relatório?</strong>
@@ -153,6 +167,8 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
       <div class="modal__footer">
         <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Baixar / Compartilhar PDF</button>
         <button type="button" class="btn btn--ghost" data-docx>${icon('fileText', 17)} Baixar Word (.docx)</button>
+        <button type="button" class="btn btn--ghost" data-pdf-paisagem>${icon('download', 17)} PDF (paisagem)</button>
+        <button type="button" class="btn btn--ghost" data-json>${icon('upload', 17)} Exportar JSON</button>
         <span class="modal__spacer"></span>
         <button type="button" class="btn btn--primary" data-close>Fechar</button>
       </div>`}`;
@@ -165,6 +181,32 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
       if (e.target.closest('[data-local]')) { confirmed = 'local'; return dialog.close(); }
       if (e.target.closest('[data-new]')) { after = onNewReport; return dialog.close(); }
       if (e.target.closest('[data-reuse]')) { after = onReuse; return dialog.close(); }
+      const jsonBtn = e.target.closest('[data-json]');
+      if (jsonBtn && !jsonBtn.disabled) {
+        jsonBtn.disabled = true;
+        try {
+          const res = await exportarJson({ module, uniqueId, data, photos, createdAt });
+          if (res?.saved && !res.sheet) toast(`JSON salvo: ${res.filePath}`, 'success', 6000);
+        } catch (err) {
+          toast(`Não foi possível exportar o JSON: ${err.message}`, 'error', 7000);
+        } finally {
+          jsonBtn.disabled = false;
+        }
+        return;
+      }
+      const paisagemBtn = e.target.closest('[data-pdf-paisagem]');
+      if (paisagemBtn && !paisagemBtn.disabled) {
+        paisagemBtn.disabled = true;
+        try {
+          const res = await savePdf({ module, uniqueId, data, photos, company, draft: mode === 'draft', paisagem: true });
+          if (res?.saved && !res.sheet) toast(`PDF (paisagem) salvo e aberto: ${res.filePath}`, 'success', 6000);
+        } catch (err) {
+          toast(`Não foi possível gerar o PDF: ${err.message}`, 'error', 7000);
+        } finally {
+          paisagemBtn.disabled = false;
+        }
+        return;
+      }
       const docxBtn = e.target.closest('[data-docx]');
       if (docxBtn && !docxBtn.disabled) {
         const label = docxBtn.innerHTML;
