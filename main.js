@@ -83,7 +83,8 @@ async function renderPdf(html) {
   try {
     await fs.writeFile(tmp, html, 'utf8');
     await win.loadFile(tmp);
-    return await win.webContents.printToPDF({ pageSize: 'A4', printBackground: true, margins: { marginType: 'default' } });
+    // todos os relatórios em paisagem (A4 deitado)
+    return await win.webContents.printToPDF({ pageSize: 'A4', landscape: true, printBackground: true, margins: { marginType: 'default' } });
   } finally {
     win.destroy();
     fs.unlink(tmp).catch(() => {});

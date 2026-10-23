@@ -75,7 +75,7 @@ test('Upload de Relatório (JSON) na Execução: resumo, contrato da conta, salv
   expect(await page.evaluate(async () => (await (await import('./src/core/drafts.js')).loadDraft('handover')).data._antes_fixo)).toBe(UID);
 });
 
-test('PDF em paisagem direto do JSON importado (A4 deitado) e "Importar e enviar" coloca na fila', async () => {
+test('PDF direto do JSON importado (A4 deitado, como todos os relatórios) e "Importar e enviar" coloca na fila', async () => {
   const { page, app, userData } = ctx;
   const destino = path.join(userData, 'importado.pdf');
   await salvarEm(app, destino);
@@ -86,7 +86,10 @@ test('PDF em paisagem direto do JSON importado (A4 deitado) e "Importar e enviar
   await expect.poll(() => fs.existsSync(destino) && fs.statSync(destino).size > 1000).toBe(true);
   const pdf = fs.readFileSync(destino).toString('latin1');
   expect(pdf.slice(0, 5)).toBe('%PDF-');
-  expect(pdf).toMatch(/\/MediaBox \[0 0 841\.8[89]\d* 595\.2[78]\d*\]/); // 297 × 210 mm: largura > altura (paisagem)
+  // 297 × 210 mm: largura > altura (paisagem). jsPDF grava 841,89 × 595,28; o Chromium (desktop), 842,88 × 595,92
+  const [, largura, altura] = (/\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/.exec(pdf) || []).map(Number);
+  expect(largura).toBeGreaterThan(altura);
+  expect(Math.abs(largura - 842)).toBeLessThan(2);
 
   await dlg.locator('[data-imp-enviar]').click();
   await expect(dlg).toHaveCount(0);

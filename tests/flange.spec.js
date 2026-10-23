@@ -1,6 +1,7 @@
-// Assistente Técnico de Flanges (src/shared/flangeTable.js + src/core/flange.js + card no form.js) na Visita
-// Técnica: busca por Flange + Pressão ("3/5M" vale para 3M e 5M), desempate pelos furos, edição manual
-// preservada, card de apoio (chave / torque + nota) e os campos novos no PDF e no Word (relatório antigo: "—").
+// Assistente Técnico de Flanges (src/shared/flangeTable.js + src/core/flange.js + form.js) na Visita Técnica:
+// busca CRUZADA em qualquer ordem (flange, pressão, furos, anel, diâmetro/comprimento em pol ou mm, chave em mm
+// ou pol, torque), opções que estreitam nas outras caixas, "3/5M", anotação que não trava, conflito com
+// "limpar", escolha no card, edição manual preservada e os campos novos no PDF e no Word (antigo: "—").
 const { test, expect } = require('@playwright/test');
 const zlib = require('zlib');
 const { launchApp, openTab } = require('./helpers');
@@ -11,119 +12,153 @@ let ctx;
 test.beforeEach(async () => { ctx = await launchApp(); });
 test.afterEach(async () => { await ctx.close(); });
 
-const flange = (page) => page.evaluate(() => import('./src/core/flange.js').then((m) => m));
+// A lógica (core/flange.js + a tabela) é JavaScript puro: testada direto no Node, sem abrir tela
+let flange;
+test.beforeAll(async () => {
+  flange = await import(require('url').pathToFileURL(require('path').join(__dirname, '..', 'src', 'core', 'flange.js')).href);
+});
+const noApp = async (_page, fn, arg) => fn(flange, arg);
 
-test('busca por Flange + Pressão, "3/5M" vale para 3M e 5M e os furos desempatam', async () => {
-  const r = await ctx.page.evaluate(async () => {
-    const { buscarFlange, sugestoes, MODELOS } = await import('./src/core/flange.js');
-    const resumo = (x) => ({ status: x.status, aneis: x.linhas.map((l) => `${l.anel}/${l.furos}`) });
+test('cruza qualquer campo, em qualquer ordem: anel sozinho, chave em mm ou pol, diâmetro em mm; "3/5M" vale para 3M e 5M', async () => {
+  const r = await noApp(ctx.page, (m) => {
+    const com = (campos) => {
+      const d = Object.fromEntries(Object.entries(campos).map(([c, v]) => [`f_${c}`, v]));
+      const { resultado } = m.aplicarSugestao(d, 'f');
+      return { status: resultado.status, n: resultado.linhas.length, aneis: resultado.linhas.map((l) => l.anel), d };
+    };
+    const so = (d) => Object.fromEntries(Object.entries(d).filter(([k]) => k.startsWith('f_')).map(([k, v]) => [k.slice(2), v]));
+    const anel = com({ anel: 'bx 160' });
+    const chaveMm = com({ chave: '36' });
+    const chavePol = com({ chave: '1-7/16"' });
+    const diamMm = com({ diametro: '22,23 mm' });
+    const chaveEFuros = com({ chave: '36 mm', parafusos: '6' });
+    const torque = com({ torque: '2.146 lbf·ft' });
     return {
-      unico: buscarFlange('7 1/16"', '3M'),
-      sug: sugestoes(buscarFlange('7 1/16"', '3M').linha),
-      tresM: resumo(buscarFlange('2 1/16"', '3M')),
-      cincoM: resumo(buscarFlange('2 1/16"', '5M')),
-      seisFuros: resumo(buscarFlange('2 1/16"', '5M', 6)),
-      oitoFuros: resumo(buscarFlange('2 1/16"', '3M', '8')),
-      furosSemPar: resumo(buscarFlange('2 1/16"', '3M', 10)),
-      dezM: resumo(buscarFlange('2 1/16"', '10M')),
-      dois9_16_5M: resumo(buscarFlange('2 9/16"', '5M')),
-      tres1_8_5M: resumo(buscarFlange('3 1/8"', '5M')),
-      nenhum: resumo(buscarFlange('9"', '2M')),
-      incompleto: resumo(buscarFlange('9"', '')),
-      divergem: buscarFlange('7 1/16"', '3M', 16).furosDivergem,
-      modelos: MODELOS
+      anel: { ...anel, campos: so(anel.d) },
+      chaveMm: { status: chaveMm.status, aneis: chaveMm.aneis, campos: so(chaveMm.d) },
+      chavePol: chavePol.aneis, diamMm: diamMm.aneis,
+      chaveEFuros: { status: chaveEFuros.status, campos: so(chaveEFuros.d) },
+      torque: torque.aneis,
+      tresM: com({ modelo: '2 1/16"', pressao: '3M' }).aneis,
+      cincoM: com({ modelo: '2 1/16"', pressao: '5M' }).aneis,
+      dezM: com({ modelo: '2 1/16"', pressao: '10M' }).aneis,
+      psi: com({ modelo: '2 1/16"', pressao: '10.000 psi' }).aneis,
+      vazio: com({}).status
     };
   });
-  expect(r.unico).toMatchObject({ status: 'unico', linha: { anel: 'R-45', furos: 12, pressao: '3M' }, furosDivergem: false });
-  expect(r.sug).toEqual({ diametro: '1 1/8" (28,58 mm)', comprimento: '8" (203,2 mm)', anel: 'R-45', chave: '46 mm / 1-13/16"', torque: '925 Nm / 686 lbf·ft' });
-  // "3/5M" casa com 3M e com 5M; 2 1/16" tem a variação DL (6 furos) e a normal (8 furos)
-  expect(r.tresM).toEqual({ status: 'multiplo', aneis: ['RX-24/6', 'R-24/8'] });
-  expect(r.cincoM).toEqual({ status: 'multiplo', aneis: ['RX-24/6', 'R-24/8'] });
-  expect(r.seisFuros).toEqual({ status: 'unico', aneis: ['RX-24/6'] });
-  expect(r.oitoFuros).toEqual({ status: 'unico', aneis: ['R-24/8'] });
-  expect(r.furosSemPar).toEqual({ status: 'multiplo', aneis: ['RX-24/6', 'R-24/8'] }); // não chuta
-  expect(r.dezM).toEqual({ status: 'unico', aneis: ['BX-152/8'] });                    // 3/5M não vale para 10M
-  expect(r.dois9_16_5M).toEqual({ status: 'unico', aneis: ['R-27/8'] });
-  expect(r.tres1_8_5M).toEqual({ status: 'unico', aneis: ['R-35/8'] });                // 3 1/8" tem linha própria de 5M
-  expect(r.nenhum).toEqual({ status: 'nenhum', aneis: [] });
-  expect(r.incompleto).toEqual({ status: 'incompleto', aneis: [] });
-  expect(r.divergem).toBe(true);
-  expect(r.modelos[0]).toBe('2 1/16"');
-  expect(r.modelos).not.toContain('2 1/16" DL');
-  expect(r.modelos.at(-1)).toBe('21 1/4"');
+  // só o anel isola o flange e completa todo o resto
+  expect(r.anel.status).toBe('unico');
+  expect(r.anel.campos).toEqual({ anel: 'bx 160', modelo: '13 5/8"', pressao: '5M', parafusos: '16', diametro: '1 5/8" (41,28 mm)',
+    comprimento: '12 1/2" (317,5 mm)', chave: '65 mm / 2-9/16"', torque: '2.894 Nm / 2.146 lbf·ft' });
+  // só a chave: 4 flanges; o que é comum a todos já é preenchido (prisioneiro 7/8" x 6", torque 429 Nm)
+  expect(r.chaveMm.status).toBe('multiplo');
+  expect(r.chaveMm.aneis).toEqual(['RX-24', 'R-24', 'R-31', 'BX-153']);
+  expect(r.chaveMm.campos).toMatchObject({ chave: '36', diametro: '7/8" (22,23 mm)', comprimento: '6" (152,4 mm)', torque: '429 Nm / 319 lbf·ft' });
+  expect(r.chaveMm.campos.modelo || '').toBe(''); // flange e anel ainda não definidos
+  expect(r.chaveMm.campos.anel || '').toBe('');
+  expect(r.chavePol).toEqual(r.chaveMm.aneis); // em polegadas dá o mesmo
+  expect(r.diamMm).toEqual(r.chaveMm.aneis);
+  // chave + furos isolam o 2 1/16" DL; a pressão fica vazia (vale 3M e 5M)
+  expect(r.chaveEFuros.status).toBe('unico');
+  expect(r.chaveEFuros.campos).toMatchObject({ modelo: '2 1/16"', anel: 'RX-24' });
+  expect(r.chaveEFuros.campos.pressao || '').toBe('');
+  expect(r.torque).toEqual(['R-73', 'R-50', 'BX-160']); // 2.146 lbf·ft
+  expect(r.tresM).toEqual(['RX-24', 'R-24']);
+  expect(r.cincoM).toEqual(['RX-24', 'R-24']);
+  expect(r.dezM).toEqual(['BX-152']);
+  expect(r.psi).toEqual(['BX-152']); // "10.000 psi" = 10M
+  expect(r.vazio).toBe('incompleto');
 });
 
-test('sugestões: preenche o que está vazio ou ainda sugerido; o que o técnico editou à mão fica', async () => {
-  const r = await ctx.page.evaluate(async () => {
-    const { aplicarSugestao } = await import('./src/core/flange.js');
-    const d = { flange_sup_modelo: '7 1/16"', flange_sup_pressao: '3M' };
-    const passos = [];
-    passos.push(aplicarSugestao(d, 'flange_sup').mudou);
-    d.flange_sup_anel = 'R-45 inox (trocado em campo)'; // edição manual
-    d.flange_sup_pressao = '5M';
-    passos.push(aplicarSugestao(d, 'flange_sup').mudou);
+test('as outras caixas estreitam com o que já foi preenchido (o select mostra o resto separado)', async () => {
+  const r = await noApp(ctx.page, (m) => ({
+    pressoesDo2_1_16: m.opcoesDe({ f_modelo: '2 1/16"' }, 'f', 'pressao'),
+    flangesDe2M: m.opcoesDe({ f_pressao: '2M' }, 'f', 'modelo').combinam,
+    aneisDaChave80: m.opcoesDe({ f_chave: '80' }, 'f', 'anel').combinam,
+    furosDe7_1_16: m.opcoesDe({ f_modelo: '7 1/16"' }, 'f', 'parafusos').combinam,
+    // o próprio campo não se filtra: com anel R-45 preenchido, a lista de anéis ainda mostra todos os de 7 1/16"
+    aneisCom45: m.opcoesDe({ f_modelo: '7 1/16"', f_anel: 'R-45' }, 'f', 'anel').combinam
+  }));
+  expect(r.pressoesDo2_1_16).toEqual({ combinam: ['3M', '5M', '10M'], outras: ['2M'] });
+  expect(r.flangesDe2M).toEqual(['7 1/16"', '21 1/4"']);
+  expect(r.aneisDaChave80).toEqual(['R-74', 'BX-165']);
+  expect(r.furosDe7_1_16).toEqual(['12']);
+  expect(r.aneisCom45).toEqual(['R-45', 'R-46', 'BX-156']);
+});
+
+test('o que o app preencheu não trava a busca; o que o técnico digitou fica; anotação fora da tabela não filtra; conflito mostra o que limpar', async () => {
+  const r = await noApp(ctx.page, (m) => {
+    const d = { f_modelo: '7 1/16"', f_pressao: '3M' };
+    m.aplicarSugestao(d, 'f');
+    const passo1 = { ...d };
+    d.f_anel = 'R-45 inox';                 // anotação do técnico: não existe na tabela
+    d.f_pressao = '5M';                     // troca: o anel/torque preenchidos pelo app NÃO travam
+    const passo2 = m.aplicarSugestao(d, 'f');
     const depois5M = { ...d };
-    d.flange_sup_modelo = '2 1/16"'; // vira "mais de uma opção": sugestões antigas saem, o manual fica
-    passos.push(aplicarSugestao(d, 'flange_sup').mudou);
-    const multiplo = { ...d };
-    d.flange_sup_anel = ''; // técnico apagou: volta a receber sugestão
-    d.flange_sup_parafusos = '8';
-    aplicarSugestao(d, 'flange_sup');
-    return { passos, depois5M, multiplo, final: d };
+    d.f_parafusos = '16';                   // contradiz 7 1/16" 5M (12 furos)
+    const conflito = m.aplicarSugestao(d, 'f').resultado;
+    m.limparCampo(d, 'f', 'parafusos');
+    const limpo = m.aplicarSugestao(d, 'f').resultado;
+    return { passo1, ignorados: passo2.resultado.ignorados, depois5M, conflito: { status: conflito.status, semCampo: conflito.semCampo }, limpo: { status: limpo.status, furos: d.f_parafusos } };
   });
-  expect(r.passos[0]).toEqual(['flange_sup_diametro', 'flange_sup_comprimento', 'flange_sup_anel', 'flange_sup_chave', 'flange_sup_torque']);
-  expect(r.depois5M).toMatchObject({ flange_sup_anel: 'R-45 inox (trocado em campo)', flange_sup_torque: '1.727 Nm / 1.281 lbf·ft', flange_sup_chave: '55 mm / 2-1/8"' });
-  expect(r.passos[1]).not.toContain('flange_sup_anel');
-  expect(r.multiplo).toMatchObject({ flange_sup_anel: 'R-45 inox (trocado em campo)', flange_sup_torque: '', flange_sup_chave: '', flange_sup_diametro: '' });
-  expect(r.final).toMatchObject({ flange_sup_anel: 'R-24', flange_sup_torque: '429 Nm / 319 lbf·ft', flange_sup_comprimento: '6" (152,4 mm)' });
+  expect(r.passo1).toMatchObject({ f_anel: 'R-45', f_parafusos: '12', f_torque: '925 Nm / 686 lbf·ft' });
+  expect(r.ignorados).toEqual({ anel: 'R-45 inox' });
+  expect(r.depois5M).toMatchObject({ f_anel: 'R-45 inox', f_torque: '1.727 Nm / 1.281 lbf·ft', f_chave: '55 mm / 2-1/8"', f_parafusos: '12' });
+  expect(r.conflito).toEqual({ status: 'nenhum', semCampo: { modelo: 1, pressao: 0, parafusos: 1 } });
+  expect(r.limpo).toEqual({ status: 'unico', furos: '12' });
 });
 
-test('na Visita: escolher Flange e Pressão preenche os campos e o card de apoio; edição manual preservada; opções quando há mais de uma linha', async () => {
+test('na Visita: começar pela chave, estreitar pelo anel, conflito com "limpar", escolher no card e rascunho salvo', async () => {
   const { page } = ctx;
   await openTab(page, 'visita_tecnica');
   const campo = (id) => page.locator(`[data-field="${id}"]`);
   const card = (p) => page.locator(`[data-flange-card="${p}"]`);
+  const lista = (id) => page.locator(`#dl-${id} option`).evaluateAll((os) => os.map((o) => o.value));
 
   await expect(card('flange_sup')).toHaveAttribute('data-estado', 'incompleto');
-  await campo('flange_sup_modelo').selectOption('7 1/16"');
-  await campo('flange_sup_pressao').selectOption('3M');
-  await expect(campo('flange_sup_anel')).toHaveValue('R-45');
-  await expect(campo('flange_sup_diametro')).toHaveValue('1 1/8" (28,58 mm)');
-  await expect(campo('flange_sup_comprimento')).toHaveValue('8" (203,2 mm)');
-  await expect(campo('flange_sup_chave')).toHaveValue('46 mm / 1-13/16"');
-  await expect(campo('flange_sup_torque')).toHaveValue('925 Nm / 686 lbf·ft');
+  // começa pela chave (mm): 2 flanges; anéis e flanges que sobram aparecem nas outras caixas
+  await campo('flange_sup_chave').fill('80');
+  await expect(card('flange_sup')).toHaveAttribute('data-estado', 'multiplo');
+  await expect(card('flange_sup').locator('[data-action=flange-opcao]')).toHaveCount(2);
+  expect(await lista('flange_sup_anel')).toEqual(['R-74', 'BX-165']);
+  expect(await campo('flange_sup_modelo').locator(':scope > option').allTextContents()).toEqual(['Selecione…', '20 3/4"', '21 1/4"']);
+  await expect(campo('flange_sup_modelo').locator('optgroup')).toHaveAttribute('label', 'Não combinam com o já preenchido');
+  await expect(campo('flange_sup_diametro')).toHaveValue('2" (50,8 mm)'); // comum aos dois
+  await expect(campo('flange_sup_chave')).toHaveValue('80');              // o que foi digitado fica como está
+
+  // o anel isola: o resto é completado
+  await campo('flange_sup_anel').fill('BX-165');
   await expect(card('flange_sup')).toHaveAttribute('data-estado', 'unico');
-  await expect(card('flange_sup').locator('[data-flange-chave]')).toHaveText('46 mm / 1-13/16"');
-  await expect(card('flange_sup').locator('[data-flange-torque]')).toHaveText('925 Nm / 686 lbf·ft');
+  await expect(campo('flange_sup_modelo')).toHaveValue('21 1/4"');
+  await expect(campo('flange_sup_pressao')).toHaveValue('5M');
+  await expect(campo('flange_sup_parafusos')).toHaveValue('24');
+  await expect(campo('flange_sup_torque')).toHaveValue('5.476 Nm / 4.061 lbf·ft');
+  await expect(card('flange_sup').locator('[data-flange-torque]')).toHaveText('5.476 Nm / 4.061 lbf·ft');
   await expect(card('flange_sup').locator('[data-flange-nota]')).toHaveText(NOTA);
 
-  // continua editável; o que foi editado à mão não é sobrescrito ao trocar a pressão
-  await campo('flange_sup_anel').fill('R-45 inox');
-  await campo('flange_sup_pressao').selectOption('5M');
-  await expect(campo('flange_sup_anel')).toHaveValue('R-45 inox');
-  await expect(campo('flange_sup_torque')).toHaveValue('1.727 Nm / 1.281 lbf·ft');
-  await expect(card('flange_sup').locator('[data-flange-torque]')).toHaveText('1.727 Nm / 1.281 lbf·ft');
-  await campo('flange_sup_torque').fill('1.700 Nm (procedimento do cliente)');
-  await campo('flange_sup_parafusos').fill('16'); // furos diferentes da tabela: avisa, não muda o torque digitado
-  await expect(card('flange_sup').locator('[data-flange-furos]')).toContainText('diferente da tabela (12 furos)');
-  await expect(campo('flange_sup_torque')).toHaveValue('1.700 Nm (procedimento do cliente)');
+  // conflito: furos que não existem para esse flange → o card oferece limpar
+  await campo('flange_sup_parafusos').fill('20');
+  await expect(card('flange_sup')).toHaveAttribute('data-estado', 'nenhum');
+  await card('flange_sup').locator('[data-action=flange-limpar][data-campo=parafusos]').click();
+  await expect(card('flange_sup')).toHaveAttribute('data-estado', 'unico');
+  await expect(campo('flange_sup_parafusos')).toHaveValue('24');
 
-  // mais de uma linha: não preenche sozinho, mostra as opções
-  await campo('flange_inf_modelo').selectOption('2 1/16"');
-  await campo('flange_inf_pressao').selectOption('3M');
+  // começa pelo diâmetro em polegadas e escolhe a opção no card
+  await campo('flange_inf_diametro').fill('7/8"');
   await expect(card('flange_inf')).toHaveAttribute('data-estado', 'multiplo');
-  await expect(card('flange_inf').locator('[data-action=flange-opcao]')).toHaveCount(2);
-  await expect(campo('flange_inf_anel')).toHaveValue('');
-  await card('flange_inf').locator('[data-action=flange-opcao][data-furos="6"]').click();
-  await expect(campo('flange_inf_parafusos')).toHaveValue('6');
-  await expect(campo('flange_inf_anel')).toHaveValue('RX-24');
+  await card('flange_inf').locator('[data-action=flange-opcao]', { hasText: '2 1/16" DL' }).click();
   await expect(card('flange_inf')).toHaveAttribute('data-estado', 'unico');
+  await expect(campo('flange_inf_anel')).toHaveValue('RX-24');
+  await expect(campo('flange_inf_parafusos')).toHaveValue('6');
+  await expect(card('flange_inf').locator('[data-flange-pressao]')).toContainText('vale para 3M e 5M');
+  await campo('flange_inf_pressao').selectOption('5M');
+  await expect(card('flange_inf').locator('[data-flange-pressao]')).toHaveCount(0);
 
   // fica no rascunho
   await openTab(page, 'bdo');
   await openTab(page, 'visita_tecnica');
-  await expect(campo('flange_sup_anel')).toHaveValue('R-45 inox');
-  await expect(campo('flange_inf_anel')).toHaveValue('RX-24');
+  await expect(campo('flange_sup_anel')).toHaveValue('BX-165');
+  await expect(campo('flange_inf_pressao')).toHaveValue('5M');
   await expect(card('flange_sup')).toHaveAttribute('data-estado', 'unico');
   await expect(page.locator('[data-field=flange_sup_tamanho]')).toHaveCount(0); // campo antigo fora do formulário
 });

@@ -96,7 +96,9 @@ test('Visita Técnica em Word: identificação sem GPS, fotos em 2 colunas e ass
   expect(texto).toContain('Medição com paquímetro / trena');
   expect(texto).not.toMatch(/Coordenadas|Rota até|google\.com\/maps|waze/i);
   // grade de fotos: 2 colunas de 48% da largura útil (+ espaço no meio)
-  expect(doc).toContain('<w:tblGrid><w:gridCol w:w="4626"/><w:gridCol w:w="386"/><w:gridCol w:w="4626"/></w:tblGrid>');
+  // página em paisagem (A4 deitado): largura útil 14570 twips; fotos em 2 colunas de 48%
+  expect(doc).toContain('<w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/>');
+  expect(doc).toContain('<w:tblGrid><w:gridCol w:w="6993"/><w:gridCol w:w="584"/><w:gridCol w:w="6993"/></w:tblGrid>');
   expect(texto).toContain('Assinatura do gestor técnico / responsável');
   expect(texto).toContain('Gestor Teste');
 });

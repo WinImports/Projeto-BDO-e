@@ -7,7 +7,7 @@
 import { duracao, duracaoEntreDatas, equipeTexto } from '../modules/common.js';
 import { resumoBdo, resumoExecutivo } from '../modules/resumo-bdo.js';
 
-const A4 = { w: 210, h: 297 };
+const A4 = { w: 297, h: 210 }; // todos os relatórios em paisagem (A4 deitado)
 const PETROLEO = [0, 43, 73]; // #002B49
 const ZEBRA = [242, 244, 247];
 const FUNDO_KPI = [232, 238, 244];
@@ -62,7 +62,7 @@ const fimDe = (r) => {
 };
 
 function render({ jsPDF, autoTable, txt, formatOf }, { uniqueId, data: d, company, draft, logo }, s) {
-  const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape', compress: true });
   const M = s >= 0.86 ? 10 : 8;
   const W = A4.w - 2 * M;
   const rodape = 7;

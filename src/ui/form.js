@@ -19,7 +19,7 @@ import { STORES, get } from '../core/db.js';
 import { getModule } from '../modules/index.js';
 import { meusContratos, valorContrato } from '../core/contratos.js';
 import { contratoSelectHtml } from './contrato-campo.js';
-import { buscarFlange, aplicarSugestao, sugestoes, rotuloLinha, NOTA_TORQUE } from '../core/flange.js';
+import { analisar, aplicarSugestao, opcoesDe, sugestoes, rotuloLinha, escolherLinha, limparCampo, NOTA_TORQUE, ROTULOS, CAMPOS, FLANGE_TABLE } from '../core/flange.js';
 
 const INPUT_TYPES = { text: 'text', number: 'number', date: 'date', time: 'time', datetime: 'datetime-local' };
 
@@ -295,39 +295,100 @@ export class FormView {
 
   // ---------- Assistente Técnico de Flanges (core/flange.js) ----------
 
-  /** Flange, Pressão ou Furos mudaram: sugere o que ainda não foi editado à mão e refaz o card de apoio. */
+  /**
+   * Um campo do flange p mudou: cruza tudo o que o técnico preencheu, completa o que der e atualiza as opções das
+   * outras caixas e o card. As caixas são atualizadas NO LUGAR (valor e lista), nunca recriadas: o técnico não
+   * perde o foco nem o cursor ao passar de um campo para outro.
+   */
   atualizarFlange(p) {
-    const { mudou } = aplicarSugestao(this.draft.data, p);
-    for (const id of mudou) this.refreshField(id);
-    this.refreshField(`${p}_apoio`);
+    aplicarSugestao(this.draft.data, p);
+    for (const c of CAMPOS) this.atualizarCampoFlange(`${p}_${c}`);
+    // o card só é redesenhado se mudou: sair de um campo (evento change) não pode recriar o botão que está
+    // sendo clicado — o clique se perderia
+    const wrap = $(`[data-wrap="${CSS.escape(`${p}_apoio`)}"]`, this.el);
+    const html = this.fieldInnerHtml(this.fields.get(`${p}_apoio`));
+    this.cardsFlange ||= {};
+    if (wrap && this.cardsFlange[p] !== html) { wrap.innerHTML = html; this.cardsFlange[p] = html; }
   }
 
-  /** Card de Apoio: chave e torque recomendados (linha única) ou as opções para escolher. */
+  atualizarCampoFlange(id) {
+    const f = this.fields.get(id);
+    const el = $(`[data-field="${CSS.escape(id)}"]`, this.el);
+    if (!f?.flangeCampo || !el) return;
+    const v = String(this.draft.data[id] ?? '');
+    if (el.tagName === 'SELECT') {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = this.selectFlangeHtml(f, v);
+      el.innerHTML = tmp.firstElementChild.innerHTML;
+    } else {
+      this.atualizarListaFlange(id);
+    }
+    // o campo que o técnico está digitando já tem em data o mesmo valor; só muda o que o app preencheu
+    if (el.value !== v) el.value = v;
+  }
+
+  /** Lista de sugestões (datalist) de um campo do flange: só o que ainda combina com os outros campos. */
+  listaFlangeHtml(f) {
+    const { combinam } = opcoesDe(this.draft.data, f.flange, f.flangeCampo);
+    return combinam.map((o) => `<option value="${esc(o)}"></option>`).join('');
+  }
+
+  atualizarListaFlange(id) {
+    const f = this.fields.get(id);
+    const dl = $(`#dl-${CSS.escape(id)}`, this.el);
+    if (f?.flangeCampo && dl) dl.innerHTML = this.listaFlangeHtml(f);
+  }
+
+  /** Select de Flange / Pressão: primeiro o que combina com o já preenchido; o resto separado (não trava). */
+  selectFlangeHtml(f, v) {
+    const { combinam, outras } = opcoesDe(this.draft.data, f.flange, f.flangeCampo);
+    const opt = (o) => `<option${o === v ? ' selected' : ''}>${esc(o)}</option>`;
+    const fora = v && !combinam.includes(v) && !outras.includes(v) ? [v] : []; // valor antigo fora da lista
+    const resto = outras.length && combinam.length
+      ? `<optgroup label="Não combinam com o já preenchido">${outras.map(opt).join('')}</optgroup>`
+      : outras.map(opt).join('');
+    return `<select id="f-${esc(f.id)}" data-field="${esc(f.id)}">
+      <option value="">Selecione…</option>
+      ${[...combinam, ...fora].map(opt).join('')}
+      ${resto}
+    </select>`;
+  }
+
+  /** Card de Apoio: o que foi cruzado, as opções que restam, a chave e o torque do flange identificado. */
   flangeCardHtml(p) {
-    const d = this.draft.data;
-    const modelo = d[`${p}_modelo`];
-    const pressao = d[`${p}_pressao`];
-    const r = buscarFlange(modelo, pressao, d[`${p}_parafusos`]);
+    const a = analisar(this.draft.data, p);
     const caixa = (estado, html) => `<div class="flange-card flange-card--${estado}" data-flange-card="${esc(p)}" data-estado="${estado}">${html}</div>`;
-    if (r.status === 'incompleto') {
-      return caixa('incompleto', `<p class="muted small">${icon('wrench', 15)} Escolha o <strong>Flange</strong> e a <strong>Pressão</strong> para ver o anel, a chave e o torque recomendados.</p>`);
+    const lista = (obj) => Object.entries(obj).map(([c, v]) => `<strong>${esc(ROTULOS[c])}</strong> ${esc(v)}`).join(' · ');
+    const usados = Object.keys(a.filtros).length ? `<p class="small" data-flange-filtros>Cruzando: ${lista(a.filtros)}</p>` : '';
+    const anotacoes = Object.keys(a.ignorados).length
+      ? `<p class="small muted" data-flange-ignorados>${icon('info', 14)} Não estão na tabela (ficam como anotação e não entram na busca): ${lista(a.ignorados)}</p>` : '';
+    const opcao = (l) => `<button type="button" class="btn btn--ghost btn--sm" data-action="flange-opcao" data-target="${esc(p)}" data-linha="${FLANGE_TABLE.indexOf(l)}">${esc(rotuloLinha(l))}</button>`;
+
+    if (a.status === 'incompleto') {
+      return caixa('incompleto', `<p class="muted small">${icon('wrench', 15)} Preencha <strong>qualquer</strong> dado que você tiver — flange, pressão, nº de parafusos, anel, diâmetro ou comprimento do prisioneiro, chave ou torque — em qualquer ordem. O app cruza com a tabela, mostra nas caixas só o que combina e completa o resto.</p>${anotacoes}`);
     }
-    if (r.status === 'nenhum') {
-      return caixa('nenhum', `<p class="small">${icon('info', 15)} ${esc(modelo)} em ${esc(pressao)} não está na tabela de referência. Preencha os campos à mão.</p>`);
+    if (a.status === 'nenhum') {
+      const limpar = Object.entries(a.semCampo).map(([c, n]) => `<button type="button" class="btn btn--ghost btn--sm" data-action="flange-limpar" data-target="${esc(p)}" data-campo="${c}">Limpar ${esc(ROTULOS[c])} (${esc(a.filtros[c])}) → ${n} ${n === 1 ? 'opção' : 'opções'}</button>`).join('');
+      return caixa('nenhum', `<p class="small">${icon('alert', 15)} <strong>Nenhum flange da tabela combina com tudo o que foi preenchido.</strong></p>${usados}
+        <div class="flange-card__opcoes" data-flange-limpar>${limpar}</div>${anotacoes}`);
     }
-    if (r.status === 'multiplo') {
-      return caixa('multiplo', `<p class="small"><strong>Mais de uma opção para ${esc(modelo)} ${esc(pressao)}.</strong> Informe o Nº de parafusos (furos) ou escolha:</p>
-        <div class="flange-card__opcoes">${r.linhas.map((l) => `<button type="button" class="btn btn--ghost btn--sm" data-action="flange-opcao" data-target="${esc(p)}" data-furos="${l.furos}">${esc(rotuloLinha(l))}</button>`).join('')}</div>`);
+    if (a.status === 'multiplo') {
+      const muitas = a.linhas.length > 8;
+      return caixa('multiplo', `<p class="small"><strong>${a.linhas.length} flanges combinam.</strong> ${muitas ? 'Preencha mais um campo para estreitar.' : 'Preencha mais um campo ou escolha:'}</p>${usados}
+        ${muitas ? '' : `<div class="flange-card__opcoes">${a.linhas.map(opcao).join('')}</div>`}${anotacoes}`);
     }
-    const l = r.linha;
+    const l = a.linhas[0];
     const sug = sugestoes(l);
+    const pedePressao = l.pressao === '3/5M' && !this.draft.data[`${p}_pressao`];
     return caixa('unico', `
-      <p class="flange-card__titulo">${icon('wrench', 16)} Apoio técnico — ${esc(l.flange)} ${esc(l.pressao)} · anel ${esc(l.anel)} · ${l.furos} furos</p>
+      <p class="flange-card__titulo">${icon('wrench', 16)} Flange identificado — ${esc(l.flange)} ${esc(l.pressao)} · anel ${esc(l.anel)} · ${l.furos} furos</p>
+      ${usados}
       <div class="flange-card__dados">
         <div><span class="flange-card__rotulo">Chave</span><strong data-flange-chave>${esc(sug.chave)}</strong></div>
         <div><span class="flange-card__rotulo">Torque recomendado</span><strong data-flange-torque>${esc(sug.torque)}</strong></div>
       </div>
-      ${r.furosDivergem ? `<p class="notice notice--warn small" data-flange-furos>O Nº de parafusos informado (${esc(d[`${p}_parafusos`])}) é diferente da tabela (${l.furos} furos). Confira.</p>` : ''}
+      ${pedePressao ? '<p class="small muted" data-flange-pressao>Na tabela vale para 3M e 5M: escolha a pressão do flange.</p>' : ''}
+      ${anotacoes}
       <p class="flange-card__nota small" data-flange-nota>${esc(NOTA_TORQUE)}</p>`);
   }
 
@@ -434,6 +495,7 @@ export class FormView {
         return contratoSelectHtml({ id: `f-${f.id}`, attrs: `data-field="${id}"`, valor: v });
 
       case 'select':
+        if (f.flangeCampo) return this.selectFlangeHtml(f, v);
         return `<select id="f-${id}" data-field="${id}">
           <option value="">Selecione…</option>
           ${f.options.map((o) => `<option${o === v ? ' selected' : ''}>${esc(o)}</option>`).join('')}
@@ -522,6 +584,9 @@ export class FormView {
             <div class="combo__list" id="f-${id}-list" role="listbox" aria-label="Poços da base oficial" hidden></div>
           </div>
           <small class="field__hint" data-pocos-hint>${this.pocosHintText()}</small>`;
+        }
+        if (f.flangeCampo) {
+          return `<input ${attrs} list="dl-${id}" autocomplete="off"><datalist id="dl-${id}">${this.listaFlangeHtml(f)}</datalist>`;
         }
         const input = `<input ${attrs}>`;
         return f.unit ? `<div class="input-unit">${input}<span>${esc(f.unit)}</span></div>` : input;
@@ -899,8 +964,8 @@ export class FormView {
     } else {
       data[id] = t.value;
     }
-    const flangeP = /^(.+)_(modelo|pressao|parafusos)$/.exec(id)?.[1];
-    if (flangeP && this.fields.has(`${flangeP}_apoio`)) this.atualizarFlange(flangeP);
+    const campoFlange = this.fields.get(id);
+    if (campoFlange?.flangeCampo) this.atualizarFlange(campoFlange.flange);
     this.changed(id);
   }
 
@@ -909,12 +974,12 @@ export class FormView {
     if (!btn) return;
     const { action, table } = btn.dataset;
 
-    if (action === 'flange-opcao') {
+    if (action === 'flange-opcao' || action === 'flange-limpar') {
       const p = btn.dataset.target;
-      this.draft.data[`${p}_parafusos`] = btn.dataset.furos;
-      this.refreshField(`${p}_parafusos`);
+      if (action === 'flange-opcao') escolherLinha(this.draft.data, p, Number(btn.dataset.linha));
+      else limparCampo(this.draft.data, p, btn.dataset.campo);
       this.atualizarFlange(p);
-      this.changed(`${p}_parafusos`);
+      this.changed(`${p}_modelo`);
       return;
     }
 

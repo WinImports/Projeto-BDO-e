@@ -18,7 +18,7 @@ const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
 const fileSafe = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '_').replace(/^_|_$/g, '');
 
 const PDF_CSS = `
-  @page { size: A4; margin: 14mm 12mm; }
+  @page { size: A4 landscape; margin: 12mm 14mm; } /* todos os relatórios em paisagem */
   * { box-sizing: border-box; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; color: #0f172a; margin: 0; }
   header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0b5cad; padding-bottom: 8px; margin-bottom: 6px; }
@@ -191,14 +191,7 @@ async function docOpts({ module, uniqueId, data, photos, company, draft }) {
  * Compartilhar / Salvar em Arquivos (Web Share), Baixar e Imprimir.
  */
 export async function savePdf(args) {
-  const fileName = fileNameOf(args.module, args.data).replace(/.pdf$/, args.paisagem ? '_paisagem.pdf' : '.pdf');
-  if (args.paisagem) {
-    // A4 deitado: sempre o PDF gerado no aparelho (jsPDF), no desktop e no navegador
-    const blob = await buildPdfBlob(args);
-    if (window.desktop?.saveFile) return window.desktop.saveFile(new Uint8Array(await blob.arrayBuffer()), fileName);
-    await showPdfSheet({ blob, fileName });
-    return { saved: true, sheet: true };
-  }
+  const fileName = fileNameOf(args.module, args.data);
   if (window.desktop?.saveFile && temLayoutProprio(args.module)) {
     // BDO-e: PDF de página única (jsPDF), o mesmo do celular e do link do WhatsApp
     return window.desktop.saveFile(new Uint8Array(await (await buildPdfBlob(args)).arrayBuffer()), fileName);

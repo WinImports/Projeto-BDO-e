@@ -65,7 +65,7 @@ const formatOf = (dataUrl) => (/^data:image\/png/i.test(dataUrl) ? 'PNG' : 'JPEG
 // ---------- montagem ----------
 
 class Doc {
-  /** paisagem: A4 deitado (297 × 210 mm) — PDF de relatório importado em JSON. */
+  /** paisagem: A4 deitado (297 × 210 mm) — padrão de todos os relatórios. */
   constructor(jsPDF, autoTable, paisagem = false) {
     this.pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: paisagem ? 'landscape' : 'portrait', compress: true });
     this.W = paisagem ? A4.h : A4.w; // largura e altura da página deste documento
@@ -253,12 +253,12 @@ function consolidation(doc, c) {
 export { imageSize, blobToDataUrl, formatOf };
 
 /** Gera o PDF do relatório e devolve um Blob (application/pdf). */
-export async function buildPdfBlob({ module, uniqueId, data, photos = [], company: empresa, draft = false, paisagem = false }) {
+export async function buildPdfBlob({ module, uniqueId, data, photos = [], company: empresa, draft = false }) {
   const { jsPDF, autoTable } = await libs();
   const company = empresaDoRelatorio(empresa); // sem empresa configurada: "Empresa Prestadora"
-  // BDO-e tem layout próprio de página única (retrato); em paisagem todos usam o layout geral
-  if (temLayoutProprio(module) && !paisagem) return buildBdoPdf({ jsPDF, autoTable, txt, formatOf, imageSize }, { uniqueId, data, company, draft });
-  const doc = new Doc(jsPDF, autoTable, paisagem);
+  // todos os relatórios em paisagem (A4 deitado); o BDO-e mantém o layout próprio, também deitado
+  if (temLayoutProprio(module)) return buildBdoPdf({ jsPDF, autoTable, txt, formatOf, imageSize }, { uniqueId, data, company, draft });
+  const doc = new Doc(jsPDF, autoTable, true);
   assignPhotoFields(module, photos);
   data = dadosParaRelatorio(module, data, photos); // campos fixos da seção ("—") e nota do torque
   const srcOf = new Map();

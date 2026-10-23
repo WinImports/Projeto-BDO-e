@@ -153,7 +153,6 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
         <div class="finalize-files">
           <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Baixar / Compartilhar PDF</button>
           <button type="button" class="btn btn--ghost" data-docx>${icon('fileText', 17)} Baixar Word (.docx)</button>
-          <button type="button" class="btn btn--ghost" data-pdf-paisagem>${icon('download', 17)} PDF (paisagem)</button>
           <button type="button" class="btn btn--ghost" data-json>${icon('upload', 17)} Exportar JSON</button>
         </div>
         <div class="finalize-ask">
@@ -168,7 +167,6 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
       <div class="modal__footer">
         <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Baixar / Compartilhar PDF</button>
         <button type="button" class="btn btn--ghost" data-docx>${icon('fileText', 17)} Baixar Word (.docx)</button>
-        <button type="button" class="btn btn--ghost" data-pdf-paisagem>${icon('download', 17)} PDF (paisagem)</button>
         <button type="button" class="btn btn--ghost" data-json>${icon('upload', 17)} Exportar JSON</button>
         <span class="modal__spacer"></span>
         <button type="button" class="btn btn--primary" data-close>Fechar</button>
@@ -192,19 +190,6 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
           toast(`Não foi possível exportar o JSON: ${err.message}`, 'error', 7000);
         } finally {
           jsonBtn.disabled = false;
-        }
-        return;
-      }
-      const paisagemBtn = e.target.closest('[data-pdf-paisagem]');
-      if (paisagemBtn && !paisagemBtn.disabled) {
-        paisagemBtn.disabled = true;
-        try {
-          const res = await savePdf({ module, uniqueId, data, photos, company, draft: mode === 'draft', paisagem: true });
-          if (res?.saved && !res.sheet) toast(`PDF (paisagem) salvo e aberto: ${res.filePath}`, 'success', 6000);
-        } catch (err) {
-          toast(`Não foi possível gerar o PDF: ${err.message}`, 'error', 7000);
-        } finally {
-          paisagemBtn.disabled = false;
         }
         return;
       }

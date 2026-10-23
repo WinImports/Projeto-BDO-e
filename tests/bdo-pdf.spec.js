@@ -27,13 +27,16 @@ const paginas = (page, n, texto) => page.evaluate(async ({ n, texto }) => {
   };
   const blob = await buildPdfBlob({ module, uniqueId: '00000000-0000-4000-8000-000000000000', data, company: null });
   const raw = new TextDecoder('latin1').decode(await blob.arrayBuffer());
+  if (!/\/MediaBox \[0 0 841\.8\d* 595\.2\d*\]/.test(raw)) throw new Error('PDF do BDO-e não está em paisagem');
   return (raw.match(/\/Type\s*\/Page[^s]/g) || []).length;
 }, { n, texto });
 
-test('turno comum e turno cheio (30 atividades longas) cabem em 1 página A4', async () => {
+test('A4 deitado: turno comum e cheio (até 20 atividades longas) em 1 página; turno muito cheio continua na 2ª sem cortar', async () => {
   const { page } = ctx;
+  const longa = 'Substituição dos prisioneiros do flange inferior com corrosão severa, teste com Enerpac e liberação da área para a fiscalização';
   expect(await paginas(page, 8, 'Troca de válvula com teste de estanqueidade')).toBe(1);
-  expect(await paginas(page, 30, 'Substituição dos prisioneiros do flange inferior com corrosão severa, teste com Enerpac e liberação da área para a fiscalização')).toBe(1);
+  expect(await paginas(page, 20, longa)).toBe(1);
+  expect(await paginas(page, 30, longa)).toBe(2);
 });
 
 test('resumo executivo: sem horários repetidos, sem atividades duplicadas e sem confundir válvula com poço', async () => {

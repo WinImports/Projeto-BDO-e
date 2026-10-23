@@ -1,6 +1,6 @@
 // Importação de relatório em JSON (formato core/relatorio-json.js): botão "Upload de Relatório (JSON)" na aba
 // do Relatório de Execução. Mostra o resumo, o contrato (lista da conta, core/contratos.js) e oferece:
-// Visualizar · PDF (paisagem) · Só salvar no aparelho · Importar e enviar. Salvo, o relatório entra no
+// Visualizar · Gerar PDF · Só salvar no aparelho · Importar e enviar. Salvo, o relatório entra no
 // Histórico (e na fila, se enviado) com as fotos — e serve de referência "Antes" para a Execução.
 import { lerRelatoriosJson } from '../core/relatorio-json.js';
 import { getModule } from '../modules/index.js';
@@ -71,7 +71,7 @@ function dialogo({ relatorios, fotosIgnoradas }, nomeArquivo) {
       </div>
       <div class="modal__footer">
         ${um ? `<button type="button" class="btn btn--ghost" data-imp-ver>${icon('eye', 17)} Visualizar</button>
-        <button type="button" class="btn btn--ghost" data-imp-pdf>${icon('download', 17)} PDF (paisagem)</button>` : ''}
+        <button type="button" class="btn btn--ghost" data-imp-pdf>${icon('download', 17)} Gerar PDF</button>` : ''}
         <span class="modal__spacer"></span>
         <button type="button" class="btn btn--ghost" data-imp-local>${icon('save', 17)} Só salvar no aparelho</button>
         <button type="button" class="btn btn--primary" data-imp-enviar>${icon('send', 17)} Importar e enviar</button>
@@ -94,8 +94,8 @@ function dialogo({ relatorios, fotosIgnoradas }, nomeArquivo) {
       if (pdf && !pdf.disabled) {
         pdf.disabled = true;
         try {
-          const res = await savePdf({ module, uniqueId: r.uniqueId, data: r.data, photos: r.photos, company: r.data._empresa, paisagem: true });
-          if (res?.saved && !res.sheet) toast(`PDF (paisagem) salvo: ${res.filePath}`, 'success', 6000);
+          const res = await savePdf({ module, uniqueId: r.uniqueId, data: r.data, photos: r.photos, company: r.data._empresa });
+          if (res?.saved && !res.sheet) toast(`PDF salvo: ${res.filePath}`, 'success', 6000);
         } catch (err) {
           toast(`Não foi possível gerar o PDF: ${err.message}`, 'error', 7000);
         } finally {

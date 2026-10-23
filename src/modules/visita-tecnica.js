@@ -96,16 +96,17 @@ const flange = (fl, n) => ({
   short: fl.short,
   icon: 'wrench',
   fields: [
-    // Assistente Técnico de Flanges (core/flange.js): Flange + Pressão (+ furos) sugerem os campos abaixo
-    { type: 'divider', label: 'Flange, prisioneiros e torque', icon: 'wrench' },
-    { id: `${fl.p}_modelo`, label: 'Flange', pdfLabel: 'Modelo do flange', type: 'select', options: MODELOS, reportAlways: true },
-    { id: `${fl.p}_pressao`, label: 'Pressão', pdfLabel: 'Pressão do flange', type: 'select', options: PRESSOES, reportAlways: true },
-    { id: `${fl.p}_parafusos`, label: 'Nº de parafusos (furos)', type: 'number', min: 0, step: 1 },
-    { id: `${fl.p}_anel`, label: 'Anel de vedação', pdfLabel: 'Tipo de anel de vedação', type: 'text', reportAlways: true },
-    { id: `${fl.p}_diametro`, label: 'Diâmetro do prisioneiro', type: 'text', span: 6 },
-    { id: `${fl.p}_comprimento`, label: 'Comprimento do prisioneiro', type: 'text', span: 6 },
-    { id: `${fl.p}_chave`, label: 'Chave', pdfLabel: 'Tamanho da chave', type: 'text', span: 6, reportAlways: true },
-    { id: `${fl.p}_torque`, label: 'Torque recomendado', pdfLabel: 'Torque recomendado (Nm / lbf·ft)', type: 'text', span: 6, reportAlways: true, reportNote: NOTA_TORQUE },
+    // Assistente Técnico de Flanges (core/flange.js): busca cruzada — preencha qualquer campo, em qualquer ordem;
+    // as caixas oferecem só o que ainda combina e, sobrando um flange, o resto é completado
+    { type: 'divider', label: 'Flange, prisioneiros e torque — preencha qualquer campo, em qualquer ordem', icon: 'wrench' },
+    { id: `${fl.p}_modelo`, label: 'Flange', pdfLabel: 'Modelo do flange', type: 'select', options: MODELOS, reportAlways: true, flange: fl.p, flangeCampo: 'modelo' },
+    { id: `${fl.p}_pressao`, label: 'Pressão', pdfLabel: 'Pressão do flange', type: 'select', options: PRESSOES, reportAlways: true, flange: fl.p, flangeCampo: 'pressao' },
+    { id: `${fl.p}_parafusos`, label: 'Nº de parafusos (furos)', type: 'number', min: 0, step: 1, flange: fl.p, flangeCampo: 'parafusos' },
+    { id: `${fl.p}_anel`, label: 'Anel de vedação', pdfLabel: 'Tipo de anel de vedação', type: 'text', reportAlways: true, placeholder: 'Ex.: R-45, BX-160', flange: fl.p, flangeCampo: 'anel' },
+    { id: `${fl.p}_diametro`, label: 'Diâmetro do prisioneiro', type: 'text', span: 6, placeholder: 'Pol ou mm. Ex.: 7/8" ou 22,23', flange: fl.p, flangeCampo: 'diametro' },
+    { id: `${fl.p}_comprimento`, label: 'Comprimento do prisioneiro', type: 'text', span: 6, placeholder: 'Pol ou mm. Ex.: 6" ou 152,4', flange: fl.p, flangeCampo: 'comprimento' },
+    { id: `${fl.p}_chave`, label: 'Chave', pdfLabel: 'Tamanho da chave', type: 'text', span: 6, reportAlways: true, placeholder: 'mm ou pol. Ex.: 36 ou 1-7/16"', flange: fl.p, flangeCampo: 'chave' },
+    { id: `${fl.p}_torque`, label: 'Torque recomendado', pdfLabel: 'Torque recomendado (Nm / lbf·ft)', type: 'text', span: 6, reportAlways: true, reportNote: NOTA_TORQUE, placeholder: 'Nm ou lbf·ft', flange: fl.p, flangeCampo: 'torque' },
     { id: `${fl.p}_apoio`, type: 'flangeCard', flange: fl.p, full: true },
     // relatórios antigos: o tamanho digitado à mão continua no PDF/Word (fora do formulário)
     { id: `${fl.p}_tamanho`, label: 'Tamanho dos parafusos', type: 'text', formHidden: true },

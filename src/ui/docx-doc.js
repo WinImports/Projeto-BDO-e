@@ -13,10 +13,11 @@ export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordproc
 // ---------- medidas (A4, margens de 2 cm) ----------
 const TWIP_CM = 567;
 const EMU_CM = 360000;
-const PAGE_W = 11906;
-const PAGE_H = 16838;
+// todos os relatórios em paisagem: A4 deitado (29,7 × 21 cm)
+const PAGE_W = 16838;
+const PAGE_H = 11906;
 const MARGEM = 1134; // 2 cm
-const LARGURA = PAGE_W - 2 * MARGEM; // 9638 twips ≈ 17 cm
+const LARGURA = PAGE_W - 2 * MARGEM; // ≈ 25,7 cm (paisagem)
 const FOTO_W_CM = 7.7; // cada coluna tem ~48% da largura útil (8,2 cm) menos o recuo da célula
 const FOTO_H_CM = FOTO_W_CM * 0.75;
 
@@ -435,7 +436,7 @@ export async function buildDocxBlob({ module, uniqueId, data, photos = [], compa
     fecharGrade();
   }
 
-  const sectPr = `<w:sectPr><w:headerReference w:type="default" r:id="rIdHeader"/><w:footerReference w:type="default" r:id="rIdFooter"/><w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}"/><w:pgMar w:top="${Math.round(3.2 * TWIP_CM)}" w:right="${MARGEM}" w:bottom="${MARGEM}" w:left="${MARGEM}" w:header="${Math.round(0.8 * TWIP_CM)}" w:footer="${Math.round(0.6 * TWIP_CM)}" w:gutter="0"/></w:sectPr>`;
+  const sectPr = `<w:sectPr><w:headerReference w:type="default" r:id="rIdHeader"/><w:footerReference w:type="default" r:id="rIdFooter"/><w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}" w:orient="landscape"/><w:pgMar w:top="${Math.round(3.2 * TWIP_CM)}" w:right="${MARGEM}" w:bottom="${MARGEM}" w:left="${MARGEM}" w:header="${Math.round(0.8 * TWIP_CM)}" w:footer="${Math.round(0.6 * TWIP_CM)}" w:gutter="0"/></w:sectPr>`;
   const document = `${XML_DECL}<w:document ${NS}><w:body>${doc.body.join('')}${para('')}${sectPr}</w:body></w:document>`;
 
   const exts = [...new Set(doc.media.map((m) => m.name.split('.').pop()))];
