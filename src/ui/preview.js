@@ -3,7 +3,7 @@
 
 import { icon } from './icons.js';
 import { esc, $ } from './dom.js';
-import { displayValue, displayCell, hasContent, emptyOptionalSections } from './form.js';
+import { displayValue, displayCell, hasContent, emptyOptionalSections, dadosParaRelatorio } from './form.js';
 import { savePdf, saveDocx } from './report-pdf.js';
 import { cabecalhoItens, CAMPOS_CABECALHO } from './cabecalho.js';
 import { toast } from './toast.js';
@@ -48,6 +48,7 @@ function fieldHtml(f, data) {
  */
 export function reportBodyHtml(module, data, photos, photoSrcs) {
   assignPhotoFields(module, photos);
+  data = dadosParaRelatorio(module, data, photos); // campos fixos da seção ("—") e nota do torque
   const srcOf = new Map(photos.map((p, i) => [p, photoSrcs[i]]));
   let fig = 0;
   const figure = (p) => {

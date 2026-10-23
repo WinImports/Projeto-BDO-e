@@ -2,7 +2,7 @@
 // (cópias locais em src/vendor, carregadas só quando necessário). Mesmo conteúdo da prévia:
 // PDF compacto (sem campos/blocos vazios), fotos no bloco do componente como "Figura N",
 // "Antes x Depois" na Execução, fotos em 2 colunas e cabeçalho só com a identificação (sem GPS).
-import { displayValue, displayCell, hasContent } from './form.js';
+import { displayValue, displayCell, hasContent, dadosParaRelatorio } from './form.js';
 import { assignPhotoFields, photosOf } from '../core/fotos.js';
 import { cabecalhoItens, CAMPOS_CABECALHO } from './cabecalho.js';
 import { empresaDoRelatorio } from '../core/settings.js';
@@ -260,6 +260,7 @@ export async function buildPdfBlob({ module, uniqueId, data, photos = [], compan
   if (temLayoutProprio(module) && !paisagem) return buildBdoPdf({ jsPDF, autoTable, txt, formatOf, imageSize }, { uniqueId, data, company, draft });
   const doc = new Doc(jsPDF, autoTable, paisagem);
   assignPhotoFields(module, photos);
+  data = dadosParaRelatorio(module, data, photos); // campos fixos da seção ("—") e nota do torque
   const srcOf = new Map();
   for (const p of photos) srcOf.set(p, await blobToDataUrl(p.blob));
   const logo = company?.logo ? { src: company.logo, ...(await imageSize(company.logo)) } : null;

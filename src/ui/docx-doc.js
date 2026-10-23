@@ -3,7 +3,7 @@
 // rodapé ("Página X de Y") e as imagens. Mesmo conteúdo do PDF: quadro de identificação no topo
 // (sem coordenadas GPS), seções só com dados, fotos lado a lado em 2 colunas (~48% cada) com
 // "Figura N — legenda", Antes x Depois na Execução e a imagem da assinatura no bloco final.
-import { displayValue, displayCell, hasContent } from './form.js';
+import { displayValue, displayCell, hasContent, dadosParaRelatorio } from './form.js';
 import { assignPhotoFields, photosOf } from '../core/fotos.js';
 import { cabecalhoItens, CAMPOS_CABECALHO } from './cabecalho.js';
 import { empresaDoRelatorio } from '../core/settings.js';
@@ -332,6 +332,7 @@ const STYLES = `${XML_DECL}<w:styles xmlns:w="http://schemas.openxmlformats.org/
 export async function buildDocxBlob({ module, uniqueId, data, photos = [], company: empresa, draft = false }) {
   const company = empresaDoRelatorio(empresa); // sem empresa configurada: "Empresa Prestadora"
   assignPhotoFields(module, photos);
+  data = dadosParaRelatorio(module, data, photos); // campos fixos da seção ("—") e nota do torque
   const doc = new DocxBuilder();
 
   // fotos: bytes + dimensões (uma vez por foto)

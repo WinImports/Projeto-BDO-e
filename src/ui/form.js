@@ -19,6 +19,7 @@ import { STORES, get } from '../core/db.js';
 import { getModule } from '../modules/index.js';
 import { meusContratos, valorContrato } from '../core/contratos.js';
 import { contratoSelectHtml } from './contrato-campo.js';
+import { buscarFlange, aplicarSugestao, sugestoes, rotuloLinha, NOTA_TORQUE } from '../core/flange.js';
 
 const INPUT_TYPES = { text: 'text', number: 'number', date: 'date', time: 'time', datetime: 'datetime-local' };
 
@@ -89,6 +90,25 @@ export function emptyOptionalSections(module, data, photos = []) {
 }
 
 /** Valor legível para prévia / listagens. */
+/**
+ * Dados para a prévia, o PDF e o Word: numa seção com algum dado, os campos reportAlways saem sempre ("—"
+ * quando vazios, ex.: relatórios antigos) e reportNote acompanha o valor. Devolve uma cópia; o relatório
+ * guardado não muda.
+ */
+export function dadosParaRelatorio(module, data, photos = []) {
+  let copia = null;
+  for (const s of module.sections) {
+    const fixos = s.fields.filter((f) => f.reportAlways);
+    if (!fixos.length || !s.fields.some((f) => hasContent(f, data, photos))) continue;
+    copia ||= { ...data };
+    for (const f of fixos) {
+      const v = displayValue(f, data[f.id]);
+      copia[f.id] = !v ? '—' : f.reportNote ? `${v} — ${f.reportNote}` : data[f.id];
+    }
+  }
+  return copia || data;
+}
+
 export function displayValue(field, value) {
   if (field.type === 'geo') {
     const c = parseCoords(value);
@@ -273,6 +293,44 @@ export class FormView {
     }
   }
 
+  // ---------- Assistente Técnico de Flanges (core/flange.js) ----------
+
+  /** Flange, Pressão ou Furos mudaram: sugere o que ainda não foi editado à mão e refaz o card de apoio. */
+  atualizarFlange(p) {
+    const { mudou } = aplicarSugestao(this.draft.data, p);
+    for (const id of mudou) this.refreshField(id);
+    this.refreshField(`${p}_apoio`);
+  }
+
+  /** Card de Apoio: chave e torque recomendados (linha única) ou as opções para escolher. */
+  flangeCardHtml(p) {
+    const d = this.draft.data;
+    const modelo = d[`${p}_modelo`];
+    const pressao = d[`${p}_pressao`];
+    const r = buscarFlange(modelo, pressao, d[`${p}_parafusos`]);
+    const caixa = (estado, html) => `<div class="flange-card flange-card--${estado}" data-flange-card="${esc(p)}" data-estado="${estado}">${html}</div>`;
+    if (r.status === 'incompleto') {
+      return caixa('incompleto', `<p class="muted small">${icon('wrench', 15)} Escolha o <strong>Flange</strong> e a <strong>Pressão</strong> para ver o anel, a chave e o torque recomendados.</p>`);
+    }
+    if (r.status === 'nenhum') {
+      return caixa('nenhum', `<p class="small">${icon('info', 15)} ${esc(modelo)} em ${esc(pressao)} não está na tabela de referência. Preencha os campos à mão.</p>`);
+    }
+    if (r.status === 'multiplo') {
+      return caixa('multiplo', `<p class="small"><strong>Mais de uma opção para ${esc(modelo)} ${esc(pressao)}.</strong> Informe o Nº de parafusos (furos) ou escolha:</p>
+        <div class="flange-card__opcoes">${r.linhas.map((l) => `<button type="button" class="btn btn--ghost btn--sm" data-action="flange-opcao" data-target="${esc(p)}" data-furos="${l.furos}">${esc(rotuloLinha(l))}</button>`).join('')}</div>`);
+    }
+    const l = r.linha;
+    const sug = sugestoes(l);
+    return caixa('unico', `
+      <p class="flange-card__titulo">${icon('wrench', 16)} Apoio técnico — ${esc(l.flange)} ${esc(l.pressao)} · anel ${esc(l.anel)} · ${l.furos} furos</p>
+      <div class="flange-card__dados">
+        <div><span class="flange-card__rotulo">Chave</span><strong data-flange-chave>${esc(sug.chave)}</strong></div>
+        <div><span class="flange-card__rotulo">Torque recomendado</span><strong data-flange-torque>${esc(sug.torque)}</strong></div>
+      </div>
+      ${r.furosDivergem ? `<p class="notice notice--warn small" data-flange-furos>O Nº de parafusos informado (${esc(d[`${p}_parafusos`])}) é diferente da tabela (${l.furos} furos). Confira.</p>` : ''}
+      <p class="flange-card__nota small" data-flange-nota>${esc(NOTA_TORQUE)}</p>`);
+  }
+
   /** A lista de contratos mudou (login / sincronização): refaz o campo e aplica o padrão se estava vazio. */
   atualizarContratos() {
     const settings = getSettings();
@@ -331,7 +389,7 @@ export class FormView {
           </div>
           <span class="section-badge" data-section-badge="${i}"></span>
         </header>
-        <div class="form-grid">${section.fields.map((f) => this.fieldHtml(f)).join('')}</div>
+        <div class="form-grid">${section.fields.filter((f) => !f.formHidden).map((f) => this.fieldHtml(f)).join('')}</div>
       </section>`;
   }
 
@@ -357,7 +415,7 @@ export class FormView {
       : '';
     const hint = f.hint ? `<small class="field__hint">${esc(f.hint)}</small>` : '';
     const error = '<small class="field__error" aria-live="polite"></small>';
-    const grouped = ['checklist', 'yesno', 'table', 'photos', 'signature', 'geo', 'consolidation'].includes(f.type);
+    const grouped = ['checklist', 'yesno', 'table', 'photos', 'signature', 'geo', 'consolidation', 'flangeCard'].includes(f.type);
     const control = this.controlHtml(f);
     if (f.previewButton) return `${control}${hint}${error}`; // sem <label>: o texto do botão é o nome acessível
     return grouped
@@ -369,6 +427,9 @@ export class FormView {
     const v = this.draft.data[f.id];
     const id = esc(f.id);
     switch (f.type) {
+      case 'flangeCard':
+        return this.flangeCardHtml(f.flange);
+
       case 'contrato':
         return contratoSelectHtml({ id: `f-${f.id}`, attrs: `data-field="${id}"`, valor: v });
 
@@ -838,6 +899,8 @@ export class FormView {
     } else {
       data[id] = t.value;
     }
+    const flangeP = /^(.+)_(modelo|pressao|parafusos)$/.exec(id)?.[1];
+    if (flangeP && this.fields.has(`${flangeP}_apoio`)) this.atualizarFlange(flangeP);
     this.changed(id);
   }
 
@@ -845,6 +908,15 @@ export class FormView {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     const { action, table } = btn.dataset;
+
+    if (action === 'flange-opcao') {
+      const p = btn.dataset.target;
+      this.draft.data[`${p}_parafusos`] = btn.dataset.furos;
+      this.refreshField(`${p}_parafusos`);
+      this.atualizarFlange(p);
+      this.changed(`${p}_parafusos`);
+      return;
+    }
 
     if (action === 'add-row') {
       const rows = this.draft.data[table];

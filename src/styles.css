@@ -1007,3 +1007,16 @@ textarea.is-locked:hover { border-color: var(--border); }
 .history-server__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .history-server__head h3 { margin: 0; font-size: 1rem; }
 .history-server__mais { display: flex; justify-content: center; margin-top: 12px; }
+
+/* ---------- Assistente Técnico de Flanges (card de apoio, ui/form.js) ---------- */
+.flange-card { border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: var(--radius-sm); background: var(--surface-2); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.flange-card p { margin: 0; }
+.flange-card--incompleto, .flange-card--nenhum { border-left-color: var(--border); }
+.flange-card--multiplo { border-left-color: var(--warn); }
+.flange-card__titulo { display: flex; align-items: center; gap: 6px; font-weight: 650; }
+.flange-card__dados { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.flange-card__dados > div { display: flex; flex-direction: column; gap: 2px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; }
+.flange-card__dados strong { font-size: 1.1rem; }
+.flange-card__rotulo { color: var(--text-muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; }
+.flange-card__nota { color: var(--text-muted); font-style: italic; }
+.flange-card__opcoes { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }

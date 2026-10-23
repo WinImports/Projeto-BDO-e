@@ -6,6 +6,7 @@ import {
   FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, FLANGES,
   ESTANQUEIDADE, ABERTURA, CORROSAO
 } from './common.js';
+import { MODELOS, PRESSOES, NOTA_TORQUE } from '../core/flange.js';
 
 const CORRECOES = [
   'Substituição de Válvula',
@@ -95,8 +96,19 @@ const flange = (fl, n) => ({
   short: fl.short,
   icon: 'wrench',
   fields: [
-    { id: `${fl.p}_parafusos`, label: 'Nº de parafusos', type: 'number', min: 0, step: 1 },
-    { id: `${fl.p}_tamanho`, label: 'Tamanho dos parafusos', type: 'text', placeholder: 'Ex.: 7/8" x 6"' },
+    // Assistente Técnico de Flanges (core/flange.js): Flange + Pressão (+ furos) sugerem os campos abaixo
+    { type: 'divider', label: 'Flange, prisioneiros e torque', icon: 'wrench' },
+    { id: `${fl.p}_modelo`, label: 'Flange', pdfLabel: 'Modelo do flange', type: 'select', options: MODELOS, reportAlways: true },
+    { id: `${fl.p}_pressao`, label: 'Pressão', pdfLabel: 'Pressão do flange', type: 'select', options: PRESSOES, reportAlways: true },
+    { id: `${fl.p}_parafusos`, label: 'Nº de parafusos (furos)', type: 'number', min: 0, step: 1 },
+    { id: `${fl.p}_anel`, label: 'Anel de vedação', pdfLabel: 'Tipo de anel de vedação', type: 'text', reportAlways: true },
+    { id: `${fl.p}_diametro`, label: 'Diâmetro do prisioneiro', type: 'text', span: 6 },
+    { id: `${fl.p}_comprimento`, label: 'Comprimento do prisioneiro', type: 'text', span: 6 },
+    { id: `${fl.p}_chave`, label: 'Chave', pdfLabel: 'Tamanho da chave', type: 'text', span: 6, reportAlways: true },
+    { id: `${fl.p}_torque`, label: 'Torque recomendado', pdfLabel: 'Torque recomendado (Nm / lbf·ft)', type: 'text', span: 6, reportAlways: true, reportNote: NOTA_TORQUE },
+    { id: `${fl.p}_apoio`, type: 'flangeCard', flange: fl.p, full: true },
+    // relatórios antigos: o tamanho digitado à mão continua no PDF/Word (fora do formulário)
+    { id: `${fl.p}_tamanho`, label: 'Tamanho dos parafusos', type: 'text', formHidden: true },
     { id: `${fl.p}_corrosao`, label: 'Corrosão', type: 'select', options: CORROSAO },
     { id: `${fl.p}_prisioneiros`, label: 'Prisioneiros?', type: 'yesno' },
     { id: `${fl.p}_intervencao`, label: 'Necessita intervenção?', type: 'yesno', span: 6 },

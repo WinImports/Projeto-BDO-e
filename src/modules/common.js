@@ -27,6 +27,10 @@
 // number.kmAuto: KM rodado estimado ao escolher o poço e somado a cada captura de GPS
 // módulo.autoRows: { table, rows(data) } → linhas automáticas (_auto) num quadro (ex.: ações da Visita)
 // Seção legacy: true → não aparece no formulário; só na prévia/PDF de relatórios antigos que tenham esses dados
+// formHidden: true (campo) → não aparece no formulário, mas sai na prévia/PDF/Word se tiver dado (formato anterior)
+// reportAlways: true → sai na prévia/PDF/Word sempre que a seção tiver algum dado ("—" quando vazio);
+//   reportNote: texto que acompanha o valor (ex.: nota do torque de referência)
+// flangeCard: card de apoio do Assistente Técnico de Flanges (core/flange.js), só no formulário
 // defaultValue: texto inicial do campo em relatórios novos; lockEdit: 'Editar Objetivo' → textarea protegida
 //            (somente leitura) até o técnico tocar no botão de edição
 // textarea.autoText(data): texto gerado e refeito a cada alteração do relatório enquanto o técnico não o
