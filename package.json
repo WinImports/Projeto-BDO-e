@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "description": "BDO-e & Inspeção Técnica — Boletim Diário de Operações Eletrônico (desktop, offline-first)",
   "main": "main.js",
-  "author": "WIN IMPORTS",
+  "author": "Win App Digital",
   "private": true,
   "scripts": {
     "start": "electron .",

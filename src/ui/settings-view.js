@@ -41,7 +41,7 @@ const GROUPS = [
     icon: 'building',
     hint: 'Aparecem no topo de todos os relatórios e no cabeçalho do PDF.',
     fields: [
-      { id: 'empresa_nome', label: 'Nome da empresa', placeholder: 'Ex.: WIN IMPORTS', required: true },
+      { id: 'empresa_nome', label: 'Nome da empresa', placeholder: 'Ex.: Nome da sua empresa', required: true },
       { id: 'empresa_cnpj', label: 'CNPJ', placeholder: '00.000.000/0000-00', inputmode: 'numeric' }
     ],
     logo: true

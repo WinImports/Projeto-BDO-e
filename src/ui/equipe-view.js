@@ -222,7 +222,7 @@ export class EquipeView {
         </header>
         <div class="form-grid">
           <div class="field span-6" data-wrap="eq-empresa-nome"><label class="field__label-wrap" for="eq-empresa-nome"><span class="field__label">Nome da empresa</span></label>
-            <input id="eq-empresa-nome" type="text" data-empresa-campo="nome" value="${esc(e.nome)}" placeholder="Ex.: WIN IMPORTS" autocomplete="off"></div>
+            <input id="eq-empresa-nome" type="text" data-empresa-campo="nome" value="${esc(e.nome)}" placeholder="Ex.: Nome da sua empresa" autocomplete="off"></div>
           <div class="field span-6" data-wrap="eq-empresa-cnpj"><label class="field__label-wrap" for="eq-empresa-cnpj"><span class="field__label">CNPJ</span></label>
             <input id="eq-empresa-cnpj" type="text" data-empresa-campo="cnpj" value="${esc(e.cnpj)}" placeholder="00.000.000/0000-00" inputmode="numeric" autocomplete="off">
             <small class="field__error"></small></div>
