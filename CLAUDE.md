@@ -28,7 +28,7 @@ src/config.js    credenciais do Supabase (supabaseConfig(): Configurações › 
 src/core/        db (IndexedDB), drafts, outbox, sync, supabase, settings, ids, prefs, auth (login), heranca (BDO → relatórios), pull (histórico da equipe)
 src/modules/     definições DECLARATIVAS dos formulários (visita-tecnica, bdo, handover, common)
 src/ui/          form (renderizador), preview, cabecalho, report-pdf, pdf-doc (jsPDF), bdo-pdf (BDO-e em 1 página), docx-doc (Word), outbox-view, settings-view, login-view, camera, icons, toast
-supabase/schema.sql  tabelas, RPCs e Storage (rodar no SQL Editor do Supabase); migrações novas em supabase/migrations/ (001 equipe, 002 login por matrícula, 003 empresa por contrato)
+supabase/schema.sql  tabelas, RPCs e Storage (rodar no SQL Editor do Supabase); migrações novas em supabase/migrations/ (001 equipe, 002 login por matrícula, 003 empresa por contrato, 004 segurança das configurações)
 licencas/        Painel de Licenças Multi-App (index.html + app.js), rota /licencas/: fala SÓ com o Supabase central
                  winappos-licensing (apps, clients, licenses, license_devices, license_logs; RPCs conferidas no servidor:
                  create_license(p_app_id = UUID de public.apps, p_client_id, p_max_devices, p_duration_days),
