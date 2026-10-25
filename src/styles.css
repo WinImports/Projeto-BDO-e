@@ -500,6 +500,11 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .
 .logo-upload__actions { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: 360px; }
 .logo-upload__actions .btn { cursor: pointer; }
 .settings-form .form-grid > .field:not(.span-12) { grid-column: span 6; }
+/* Empresa por contrato (somente leitura nas Configurações) */
+.empresa-contratos { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.empresa-contratos__item { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.empresa-contratos__item > div:last-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.empresa-contratos__item .logo-upload__preview { width: 160px; height: 80px; }
 
 /* ===================== Modal / Prévia ===================== */
 .modal {

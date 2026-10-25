@@ -6,6 +6,7 @@
 
 import { sanitizarWhatsApp } from './telefone.js';
 import { SYNC } from '../config.js';
+import { empresaParaContrato } from './contratos.js';
 
 const KEY = 'bdoe.settings';
 const DEVICE_KEY = 'bdoe.deviceId';
@@ -59,8 +60,14 @@ export function getDeviceId() {
   return id;
 }
 
-/** Dados da empresa para cabeçalhos de relatório/PDF (null se não configurada). */
-export function companyInfo() {
+/**
+ * Dados da empresa para cabeçalhos de relatório/PDF (null se não configurada). Com conta no servidor e a
+ * migração 003, a empresa é a do CONTRATO do relatório (core/contratos.js › empresaParaContrato): trocar o
+ * contrato troca a logo, e contrato sem empresa definida fica sem logo. Sem isso, vale a das Configurações.
+ */
+export function companyInfo(contrato) {
+  const doContrato = empresaParaContrato(contrato);
+  if (doContrato !== undefined) return doContrato;
   const s = getSettings();
   if (!s.empresa_nome && !s.empresa_logo) return null;
   return { nome: s.empresa_nome, cnpj: s.empresa_cnpj, logo: s.empresa_logo };

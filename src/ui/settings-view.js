@@ -10,6 +10,8 @@ import { currentUser, displayName } from '../core/auth.js';
 import { supabaseConfig, saveSupabaseOverride, urlSupabaseValida } from '../config.js';
 import { resetClient } from '../core/supabase.js';
 import { contratoSelectHtml } from './contrato-campo.js';
+import { LOGO_MAX, resizeLogo } from './logo.js';
+import { empresaPorContrato, empresasDosContratos, souGestor } from '../core/contratos.js';
 
 const ORIGEM_SERVIDOR = {
   aparelho: 'Configurado neste aparelho',
@@ -32,19 +34,6 @@ const MODO_LOGIN = {
   offline: 'Acesso offline com a última senha confirmada neste aparelho',
   local: 'Usuário local deste aparelho'
 };
-
-const LOGO_MAX = { w: 480, h: 240 };
-
-// Redimensiona o logo (mantém transparência de PNG) para não pesar no armazenamento local
-async function resizeLogo(file) {
-  const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, LOGO_MAX.w / bmp.width, LOGO_MAX.h / bmp.height);
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(bmp.width * scale);
-  canvas.height = Math.round(bmp.height * scale);
-  canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
-  return file.type === 'image/jpeg' ? canvas.toDataURL('image/jpeg', 0.9) : canvas.toDataURL('image/png');
-}
 
 const GROUPS = [
   {
@@ -106,6 +95,7 @@ export class SettingsView {
     const s = getSettings();
     this.logo = s.empresa_logo;
     this.dirty = false;
+    const porContrato = empresaPorContrato(); // empresa/logo definidas por contrato (migração 003)
     this.root.innerHTML = `
       <div class="page-head">
         <div>
@@ -118,7 +108,7 @@ export class SettingsView {
       ${this.servidorSectionHtml()}
       ${this.pocosSectionHtml()}
       <form class="report-form settings-form" novalidate>
-        ${GROUPS.map((g) => `
+        ${GROUPS.map((g) => g.logo && porContrato ? this.empresaContratoHtml(g) : `
           <section class="card form-section">
             <header class="form-section__head">
               <span class="form-section__icon">${icon(g.icon, 20)}</span>
@@ -164,6 +154,34 @@ export class SettingsView {
       </div>`;
     this.bindDropzone();
     this.refreshPocos();
+  }
+
+  // ---------- Empresa por contrato (somente leitura aqui; quem altera é o gestor em Gestão de Equipe) ----------
+
+  empresaContratoHtml(g) {
+    const empresas = empresasDosContratos();
+    const gestor = souGestor();
+    return `
+      <section class="card form-section" data-empresa-por-contrato>
+        <header class="form-section__head">
+          <span class="form-section__icon">${icon(g.icon, 20)}</span>
+          <div class="form-section__titles">
+            <h3 class="form-section__title">${esc(g.title)}</h3>
+            <p class="form-section__hint">Definidos por contrato pelo gestor. Cada relatório usa a empresa e a logo do contrato escolhido nele.</p>
+          </div>
+        </header>
+        <ul class="empresa-contratos">
+          ${empresas.map((e) => `
+            <li class="empresa-contratos__item" data-empresa-contrato="${esc(e.nome)}">
+              <div class="logo-upload__preview">${e.empresa_logo ? `<img src="${esc(e.empresa_logo)}" alt="Logo de ${esc(e.empresa_nome || e.nome)}">` : '<span class="muted small">Sem logo</span>'}</div>
+              <div>
+                <strong>${esc(e.nome)}</strong>
+                <span class="muted small">${e.empresa_nome ? `${esc(e.empresa_nome)}${e.empresa_cnpj ? ` · CNPJ ${esc(e.empresa_cnpj)}` : ''}` : 'Empresa ainda não definida pelo gestor'}</span>
+              </div>
+            </li>`).join('') || '<li class="muted">Nenhum contrato vinculado à sua conta.</li>'}
+        </ul>
+        ${gestor ? `<p class="small"><button type="button" class="link-btn" data-goto="equipe">Alterar em Gestão de Equipe</button></p>` : ''}
+      </section>`;
   }
 
   // ---------- Conta (login) ----------
@@ -466,8 +484,14 @@ export class SettingsView {
     const values = Object.fromEntries($$('[data-setting]', this.root).map((i) => [i.dataset.setting, i.value]));
     values.empresa_logo = this.logo || '';
     const errors = [];
-    if (!values.empresa_nome.trim()) errors.push(['empresa_nome', 'Informe o nome da empresa']);
-    if (values.empresa_cnpj.trim() && !isValidCnpj(values.empresa_cnpj)) errors.push(['empresa_cnpj', 'CNPJ inválido (confira os dígitos)']);
+    if (!('empresa_nome' in values)) {
+      // empresa por contrato: os campos não aparecem aqui; mantém o que estava guardado
+      const s = getSettings();
+      Object.assign(values, { empresa_nome: s.empresa_nome, empresa_cnpj: s.empresa_cnpj, empresa_logo: s.empresa_logo });
+    } else {
+      if (!values.empresa_nome.trim()) errors.push(['empresa_nome', 'Informe o nome da empresa']);
+      if (values.empresa_cnpj.trim() && !isValidCnpj(values.empresa_cnpj)) errors.push(['empresa_cnpj', 'CNPJ inválido (confira os dígitos)']);
+    }
     if (errors.length) {
       errors.forEach(([id, msg]) => this.showError(id, msg));
       return toast('Corrija os campos destacados.', 'error');

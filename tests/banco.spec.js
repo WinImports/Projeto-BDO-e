@@ -215,3 +215,52 @@ test('isolamento: pela API ninguém lê as tabelas direto (RLS sem políticas); 
     expect(escrita?.message).toMatch(/row-level security|permission denied/);
   }
 });
+
+const LOGO_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+test('empresa por contrato (migração 003): gestor grava; todos do contrato recebem; outro contrato não vê nem altera', async () => {
+  const { db, A, B, gestorA, gestorB, tec1, tecB } = await cenario();
+  const empresas = (q) => como(db, q, () => um(db, 'select public.my_contract_companies() as e')).then((r) => r.e);
+  const gravar = (q, contrato, nome, cnpj, logo) => como(db, q, () => um(db, 'select public.team_set_company($1, $2, $3, $4) as e', [contrato, nome, cnpj, logo]));
+
+  // sem empresa definida: vem vazia (o app mostra "Empresa Prestadora", sem logo)
+  expect(await empresas(tec1)).toEqual([{ id: A, nome: 'OS-Mans', empresa_nome: '', empresa_cnpj: '', empresa_logo: '', atualizada_em: null }]);
+
+  const r = await gravar(gestorA, A, ' Empresa A ', '12.345.678/0001-95', LOGO_PNG);
+  expect(r.e).toMatchObject({ id: A, empresa_nome: 'Empresa A', empresa_logo: LOGO_PNG });
+  expect((await empresas(tec1))[0]).toMatchObject({ empresa_nome: 'Empresa A', empresa_cnpj: '12.345.678/0001-95', empresa_logo: LOGO_PNG, atualizada_em: expect.any(String) });
+  // o contrato B não recebe a empresa do A
+  expect((await empresas(tecB)).map((e) => [e.nome, e.empresa_nome, e.empresa_logo])).toEqual([['Contrato Bahia Terra', '', '']]);
+
+  // técnico não altera; gestor de outro contrato também não
+  expect((await erro(gravar(tec1, A, 'X', '', '')))?.message).toMatch(/Somente o gestor/);
+  expect((await erro(gravar(gestorB, A, 'X', '', '')))?.message).toMatch(/Somente o gestor/);
+  // só PNG/JPEG
+  expect((await erro(gravar(gestorA, A, 'Empresa A', '', 'data:image/svg+xml;base64,PHN2Zz4=')))?.message).toMatch(/PNG ou JPEG/);
+  // remover a logo: texto vazio
+  expect((await gravar(gestorA, A, 'Empresa A', '', '')).e.empresa_logo).toBe('');
+  await gravar(gestorB, B, 'Empresa B', '', LOGO_PNG);
+  expect((await empresas(gestorB))[0]).toMatchObject({ nome: 'Contrato Bahia Terra', empresa_nome: 'Empresa B' });
+  // anon não chama
+  expect(await erro(como(db, 'anon', () => um(db, 'select public.my_contract_companies() as e')))).not.toBeNull();
+});
+
+test('empresa por contrato (migração 003): contrato sem empresa recebe a das Configurações de quem usa ele como "Contrato padrão"', async () => {
+  const db = await novoBanco({ antigo: true });
+  await db.query(`insert into public.contract_members (email, contrato) values ('tec@empresa.com', 'OS-MANS'), ('b@empresa.com', 'Bahia Terra')`);
+  await db.query(`insert into public.company_settings (device_id, user_email, contrato_padrao, settings, updated_at) values
+    (gen_random_uuid(), 'tec@empresa.com', 'os mans', $1, now() - interval '2 days'),
+    (gen_random_uuid(), 'tec@empresa.com', 'OS.Mans', $2, now()),
+    (gen_random_uuid(), 'b@empresa.com', 'Bahia Terra', '{"empresa_nome": ""}', now())`,
+  [JSON.stringify({ empresa_nome: 'Antiga', empresa_logo: '' }), JSON.stringify({ empresa_nome: 'Nova Ltda', empresa_cnpj: '1', empresa_logo: LOGO_PNG })]);
+  await db.exec(MIGRACAO);
+  const c = await rpc(db, 'select nome, empresa_nome, empresa_cnpj, empresa_logo from public.contracts order by nome');
+  expect(c).toEqual([
+    { nome: 'Bahia Terra', empresa_nome: null, empresa_cnpj: null, empresa_logo: null },
+    { nome: 'OS-MANS', empresa_nome: 'Nova Ltda', empresa_cnpj: '1', empresa_logo: LOGO_PNG }
+  ]);
+  // rodar de novo não sobrescreve o que o gestor definiu
+  await db.query("update public.contracts set empresa_nome = 'Definida pelo gestor' where nome = 'OS-MANS'");
+  await db.exec(MIGRACAO);
+  expect((await um(db, "select empresa_nome from public.contracts where nome = 'OS-MANS'")).empresa_nome).toBe('Definida pelo gestor');
+});

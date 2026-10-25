@@ -15,7 +15,7 @@ import { currentUser, displayName, logout } from './core/auth.js';
 import { showLogin, showTrocaSenha } from './ui/login-view.js';
 import { licenciamentoAtivo, licencaLocal, verificarLicenca, avaliarSemRede } from './core/licenca.js';
 import { showLicenca } from './ui/licenca-view.js';
-import { onContratosChange, souGestor } from './core/contratos.js';
+import { onContratosChange, souGestor, empresaPorContrato } from './core/contratos.js';
 import { EquipeView } from './ui/equipe-view.js';
 import { importarArquivoJson } from './ui/importar-json.js';
 import { limparEquipeDeOutroUsuario } from './core/pull.js';
@@ -218,7 +218,7 @@ async function showTab(tab) {
       <div class="form-main">
         <header class="doc-head card">
           <div class="doc-head__main">
-            ${companyChipHtml()}
+            ${companyChipHtml(draft.data?.contrato)}
             <p class="eyebrow">${esc(module.subtitle)}</p>
             <h2 class="doc-head__title">${esc(module.title)}</h2>
             <div class="doc-head__meta">
@@ -290,18 +290,32 @@ function herancaNoticeHtml(bdo, herdados) {
   return `<div class="notice notice--info notice--icon" data-heranca>${icon('clipboard', 16)}<span>${esc(texto)}</span></div>`;
 }
 
-function companyChipHtml() {
-  const c = companyInfo();
+function companyChipHtml(contrato) {
+  const c = companyInfo(contrato);
+  if (!c && empresaPorContrato()) {
+    // a empresa vem do contrato: sem contrato escolhido, ou o gestor ainda não definiu a do contrato
+    const texto = String(contrato || '').trim() ? 'Empresa do contrato não definida pelo gestor' : 'Escolha o contrato para ver a empresa';
+    return `<div class="company-chip company-chip--empty" data-empresa-contrato>${icon('building', 15)} ${esc(texto)}</div>`;
+  }
   if (!c) {
     return `<button type="button" class="company-chip company-chip--empty" data-goto="${SETTINGS_TAB}">${icon('building', 15)} Empresa não configurada — abrir Configurações</button>`;
   }
   return `<div class="company-chip">${c.logo ? `<img src="${esc(c.logo)}" alt="">` : icon('building', 16)}<span><strong>${esc(c.nome || '')}</strong>${c.cnpj ? ` · CNPJ ${esc(c.cnpj)}` : ''}</span></div>`;
 }
 
+/** Empresa no topo do formulário: segue o contrato escolhido (a logo troca junto com o contrato). */
+function refreshCompanyChip() {
+  const chip = document.querySelector('.doc-head .company-chip');
+  if (!chip || !state.draft) return;
+  const html = companyChipHtml(state.draft.data?.contrato);
+  if (chip.outerHTML !== html) chip.outerHTML = html;
+}
+
 // Índice lateral, progresso, poço no cabeçalho e "pronto para finalizar"
 function refreshFormChrome() {
   const { formView, module, draft } = state;
   if (!formView) return;
+  refreshCompanyChip();
 
   const nav = $('#section-nav');
   const active = nav.querySelector('.is-active')?.dataset.gotoSection;
@@ -387,7 +401,7 @@ async function finalize(module) {
   }
 
   const data = cleanData(module, draft.data);
-  data._empresa = companyInfo(); // congela empresa/logo no relatório finalizado
+  data._empresa = companyInfo(data.contrato); // congela empresa/logo (a do contrato do relatório) no relatório finalizado
   const choice = await openPreview({ module, uniqueId: draft.uniqueId, data, photos: draft.photos, onNewReport: () => newReport(module) });
   if (!choice) return;
 
@@ -729,6 +743,7 @@ async function init() {
   // lista de contratos chegou do servidor (login / sincronização): refaz o campo Contrato aberto
   onContratosChange(() => {
     state.formView?.atualizarContratos();
+    refreshCompanyChip(); // empresa/logo dos contratos pode ter mudado
     if (state.tab === SETTINGS_TAB && !settingsView.dirty) settingsView.render();
     // papel mudou (virou ou deixou de ser gestor): refaz as abas; a de equipe some se não for mais gestor
     renderTabs();

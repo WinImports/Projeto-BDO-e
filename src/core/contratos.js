@@ -89,14 +89,105 @@ export async function atualizarContratos(client, { force = false } = {}) {
   // my_access (migração 001): contratos + papel. Banco sem a migração → my_contracts (só os nomes)
   let acesso;
   try { acesso = await client.rpc('my_access'); } catch (err) { acesso = { data: null, error: null }; console.warn('[contratos] my_access', err); }
+  let lista;
   if (!acesso.error && acesso.data && Array.isArray(acesso.data.contratos)) {
     const vinculos = acesso.data.contratos;
-    return guardarContratos(vinculos.map((v) => v.nome), email, vinculos);
+    lista = guardarContratos(vinculos.map((v) => v.nome), email, vinculos);
+  } else {
+    if (acesso.error && !/PGRST202|my_access/i.test(`${acesso.error.code} ${acesso.error.message}`)) throw acesso.error;
+    const { data, error } = await client.rpc('my_contracts');
+    if (error) throw error;
+    lista = guardarContratos((data || []).map((c) => (typeof c === 'string' ? c : c?.my_contracts)));
   }
-  if (acesso.error && !/PGRST202|my_access/i.test(`${acesso.error.code} ${acesso.error.message}`)) throw acesso.error;
-  const { data, error } = await client.rpc('my_contracts');
-  if (error) throw error;
-  return guardarContratos((data || []).map((c) => (typeof c === 'string' ? c : c?.my_contracts)));
+  // empresa/logo dos contratos (pesa mais por causa das logos): ao entrar / abrir / voltar a internet, ou a cada 30 min
+  const emp = lerEmpresas();
+  if (force || emp.email !== email || Date.now() - Date.parse(emp.atualizadoEm || 0) > EMPRESAS_VALIDADE_MS) {
+    try { await atualizarEmpresas(client, email); } catch (err) { console.warn('[contratos] empresas', err); }
+  }
+  return lista;
+}
+
+// ---------- Empresa prestadora POR CONTRATO (migração 003) ----------
+// O gestor define nome, CNPJ e logo do contrato (Gestão de Equipe › team_set_company); todos do contrato recebem
+// por my_contract_companies(). Guardado POR USUÁRIO no aparelho (funciona offline). Com essa lista, o cabeçalho
+// dos relatórios usa a empresa do contrato escolhido no relatório — trocar de contrato troca a logo — e a empresa
+// das Configurações deixa de valer para quem tem conta no servidor. Banco sem a migração 003 → `suportado: false`
+// e tudo continua como antes (empresa das Configurações).
+
+const KEY_EMPRESAS = 'bdoe.empresas';
+const EMPRESAS_VALIDADE_MS = 30 * 60_000;
+
+function lerEmpresas() {
+  try { return JSON.parse(localStorage.getItem(KEY_EMPRESAS)) || {}; } catch { return {}; }
+}
+
+const empresaLimpa = (e) => ({
+  id: String(e.id || ''), nome: String(e.nome || ''),
+  empresa_nome: String(e.empresa_nome || '').trim(), empresa_cnpj: String(e.empresa_cnpj || '').trim(),
+  empresa_logo: /^data:image\/(png|jpe?g)/i.test(e.empresa_logo || '') ? e.empresa_logo : '',
+  atualizada_em: e.atualizada_em || null
+});
+
+/** Grava a lista de empresas dos contratos do usuário (suportado = o banco tem a migração 003). */
+export function guardarEmpresas(lista, email = emailAtual(), { suportado = true } = {}) {
+  if (!email) return;
+  const limpa = (Array.isArray(lista) ? lista : []).filter((e) => e?.id && e?.nome).map(empresaLimpa);
+  const antes = lerEmpresas();
+  const mudou = antes.email !== email || antes.suportado !== suportado || JSON.stringify(antes.lista || []) !== JSON.stringify(limpa);
+  try {
+    localStorage.setItem(KEY_EMPRESAS, JSON.stringify({ email, suportado, lista: limpa, atualizadoEm: new Date().toISOString() }));
+  } catch { /* sem espaço no aparelho: segue com o que já estava guardado */ }
+  if (mudou) listeners.forEach((fn) => fn(meusContratos()));
+}
+
+/** Atualiza (ou acrescenta) a empresa de um contrato no aparelho — depois que o gestor grava. */
+export function guardarEmpresaDoContrato(empresa) {
+  const s = lerEmpresas();
+  const email = emailAtual();
+  if (!email || s.email !== email) return guardarEmpresas([empresa], email);
+  const lista = (s.lista || []).filter((e) => e.id !== empresa.id).concat(empresaLimpa(empresa));
+  guardarEmpresas(lista, email);
+}
+
+/** Baixa my_contract_companies(). Banco sem a migração 003 → guarda `suportado: false` (vale a das Configurações). */
+export async function atualizarEmpresas(client, email = emailAtual()) {
+  if (!email || !client) return;
+  const { data, error } = await client.rpc('my_contract_companies');
+  if (error) {
+    if (/PGRST202|my_contract_companies/i.test(`${error.code} ${error.message}`)) return guardarEmpresas([], email, { suportado: false });
+    throw error;
+  }
+  // a função da migração 003 sempre devolve uma lista (mesmo vazia); outra resposta = servidor sem a migração
+  if (!Array.isArray(data)) return guardarEmpresas([], email, { suportado: false });
+  guardarEmpresas(data, email);
+}
+
+/** true quando a empresa vem do contrato (conta no servidor com a migração 003 e algum contrato vinculado). */
+export function empresaPorContrato() {
+  const email = emailAtual();
+  const s = lerEmpresas();
+  return Boolean(email && s.email === email && s.suportado && meusContratos().length);
+}
+
+/** Empresas guardadas dos contratos do usuário (para as telas de Configurações e Equipe). */
+export function empresasDosContratos() {
+  const email = emailAtual();
+  const s = lerEmpresas();
+  return email && s.email === email && Array.isArray(s.lista) ? s.lista : [];
+}
+
+/**
+ * Empresa do cabeçalho para um relatório com este contrato:
+ *  - undefined → a empresa NÃO vem do contrato (usuário local / banco sem a migração 003): use as Configurações;
+ *  - null → contrato vazio, fora da conta ou sem empresa definida pelo gestor: "Empresa Prestadora", sem logo;
+ *  - { nome, cnpj, logo } → a do contrato.
+ */
+export function empresaParaContrato(contrato) {
+  if (!empresaPorContrato()) return undefined;
+  const n = normContrato(contrato);
+  const e = n ? empresasDosContratos().find((x) => normContrato(x.nome) === n) : null;
+  if (!e || (!e.empresa_nome && !e.empresa_logo)) return null;
+  return { nome: e.empresa_nome, cnpj: e.empresa_cnpj, logo: e.empresa_logo };
 }
 
 /** Nome da lista equivalente a `valor` (mesma regra do servidor) ou null. */

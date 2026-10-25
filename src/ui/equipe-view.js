@@ -2,13 +2,17 @@
 // cadastro de técnico (Edge Function create-technician: conta com senha inicial e troca obrigatória no
 // 1º acesso) e ativar / desativar acessos (team_set_active). Tudo é conferido de novo no servidor (papel e
 // cota, migração 001): esconder a aba é só interface. Precisa de internet.
+// Também a EMPRESA DO CONTRATO (migração 003, team_set_company): nome, CNPJ e logo que saem no cabeçalho dos
+// relatórios de todos do contrato — cada contrato tem a sua.
 import { icon } from './icons.js';
 import { $, esc } from './dom.js';
 import { toast } from './toast.js';
 import { confirmDialog } from './confirm.js';
 import { getClient } from '../core/supabase.js';
 import { isSupabaseConfigured } from '../config.js';
-import { contratosGeridos } from '../core/contratos.js';
+import { contratosGeridos, empresasDosContratos, guardarEmpresaDoContrato } from '../core/contratos.js';
+import { formatCnpj, isValidCnpj } from '../core/settings.js';
+import { LOGO_MAX, resizeLogo } from './logo.js';
 import { SENHA_MIN } from '../core/auth.js';
 
 export const AVISO_COTA = 'Limite de técnicos liberados atingido. Entre em contato com o Master para ampliar a licença.';
@@ -47,10 +51,22 @@ export class EquipeView {
     this.carregando = false;
     this.enviando = false;
     this.root.addEventListener('click', (e) => this.handleClick(e));
+    this.empresa = null; // rascunho da empresa do contrato em edição: { contratoId, nome, cnpj, logo }
+    this.salvandoEmpresa = false;
     this.root.addEventListener('change', (e) => {
       if (e.target.matches('[data-equipe-contrato]')) { this.contratoId = e.target.value; this.refresh(); }
+      if (e.target.matches('[data-empresa-logo]')) this.escolherLogo(e.target);
     });
-    this.root.addEventListener('submit', (e) => { e.preventDefault(); this.cadastrar(e.target); });
+    this.root.addEventListener('input', (e) => {
+      if (!this.empresa) return;
+      if (e.target.matches('[data-empresa-campo=nome]')) this.empresa.nome = e.target.value;
+      if (e.target.matches('[data-empresa-campo=cnpj]')) { e.target.value = formatCnpj(e.target.value); this.empresa.cnpj = e.target.value; }
+    });
+    this.root.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (e.target.matches('[data-empresa-form]')) this.salvarEmpresa();
+      else this.cadastrar(e.target);
+    });
   }
 
   podeUsar() {
@@ -78,6 +94,15 @@ export class EquipeView {
     }
     this.carregando = false;
     this.render();
+  }
+
+  /** Empresa do contrato selecionado (guardada no aparelho), mantendo o que o gestor está editando. */
+  empresaAtual() {
+    if (this.empresa?.contratoId !== this.contratoId) {
+      const e = empresasDosContratos().find((x) => x.id === this.contratoId) || {};
+      this.empresa = { contratoId: this.contratoId, nome: e.empresa_nome || '', cnpj: e.empresa_cnpj || '', logo: e.empresa_logo || '' };
+    }
+    return this.empresa;
   }
 
   cota() {
@@ -121,6 +146,8 @@ export class EquipeView {
           ${cota?.cheia ? `<p class="notice notice--warn" data-cota-aviso>${esc(AVISO_COTA)}</p>` : ''}
         </div>
       </section>
+
+      ${this.empresaHtml(contratos)}
 
       <form class="card form-section" data-equipe-form novalidate>
         <header class="form-section__head">
@@ -177,6 +204,92 @@ export class EquipeView {
 
     const barra = $('[data-cota-barra]', this.root);
     if (barra) barra.style.width = cota && cota.max ? `${Math.min(100, Math.round((cota.ativos / cota.max) * 100))}%` : '0%';
+  }
+
+  empresaHtml(contratos) {
+    if (!contratos.length) return '';
+    const e = this.empresaAtual();
+    const nomeContrato = contratos.find((c) => c.id === this.contratoId)?.nome || '';
+    const bloqueado = !this.podeUsar() || this.salvandoEmpresa;
+    return `
+      <form class="card form-section" data-empresa-form novalidate>
+        <header class="form-section__head">
+          <span class="form-section__icon">${icon('building', 20)}</span>
+          <div class="form-section__titles">
+            <h3 class="form-section__title">Empresa do contrato${nomeContrato ? ` ${esc(nomeContrato)}` : ''}</h3>
+            <p class="form-section__hint">Nome, CNPJ e logo que saem no cabeçalho dos relatórios de toda a equipe deste contrato. Outros contratos não usam esta logo.</p>
+          </div>
+        </header>
+        <div class="form-grid">
+          <div class="field span-6" data-wrap="eq-empresa-nome"><label class="field__label-wrap" for="eq-empresa-nome"><span class="field__label">Nome da empresa</span></label>
+            <input id="eq-empresa-nome" type="text" data-empresa-campo="nome" value="${esc(e.nome)}" placeholder="Ex.: WIN IMPORTS" autocomplete="off"></div>
+          <div class="field span-6" data-wrap="eq-empresa-cnpj"><label class="field__label-wrap" for="eq-empresa-cnpj"><span class="field__label">CNPJ</span></label>
+            <input id="eq-empresa-cnpj" type="text" data-empresa-campo="cnpj" value="${esc(e.cnpj)}" placeholder="00.000.000/0000-00" inputmode="numeric" autocomplete="off">
+            <small class="field__error"></small></div>
+          <div class="field span-12">
+            <span class="field__label">Logo da empresa</span>
+            <div class="logo-upload">
+              <div class="logo-upload__preview" data-empresa-preview>${e.logo ? `<img src="${esc(e.logo)}" alt="Logo da empresa">` : '<span class="muted small">Sem logo</span>'}</div>
+              <div class="logo-upload__actions">
+                <label class="btn btn--ghost btn--sm">
+                  <input type="file" accept="image/png,image/jpeg" class="sr-only" data-empresa-logo>${icon('upload', 15)} Escolher logo (.png / .jpg)
+                </label>
+                <button type="button" class="btn btn--ghost btn--sm" data-action="remover-logo-empresa"${e.logo ? '' : ' hidden'}>${icon('trash', 15)} Remover logo</button>
+                <small class="muted">Redimensionada para até ${LOGO_MAX.w}×${LOGO_MAX.h} px.</small>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn--primary" id="eq-salvar-empresa"${bloqueado ? ' disabled' : ''}>
+            ${this.salvandoEmpresa ? '<span class="spinner" aria-hidden="true"></span> Salvando…' : `${icon('save', 17)} Salvar empresa do contrato`}
+          </button>
+        </div>
+      </form>`;
+  }
+
+  async escolherLogo(input) {
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    if (!/^image\/(png|jpe?g)$/i.test(file.type)) return toast('Use uma imagem PNG ou JPEG.', 'error');
+    try {
+      this.empresaAtual().logo = await resizeLogo(file);
+    } catch (err) {
+      console.error('[equipe] logo', err);
+      return toast('Não foi possível ler a imagem.', 'error');
+    }
+    this.atualizarLogoNaTela();
+  }
+
+  /** Só a prévia da logo (não refaz a tela: o que foi digitado no cadastro de técnico fica). */
+  atualizarLogoNaTela() {
+    const logo = this.empresaAtual().logo;
+    const prev = $('[data-empresa-preview]', this.root);
+    if (prev) prev.innerHTML = logo ? `<img src="${esc(logo)}" alt="Logo da empresa">` : '<span class="muted small">Sem logo</span>';
+    const rem = $('[data-action=remover-logo-empresa]', this.root);
+    if (rem) rem.hidden = !logo;
+  }
+
+  async salvarEmpresa() {
+    const e = this.empresaAtual();
+    if (e.cnpj.trim() && !isValidCnpj(e.cnpj)) return toast('CNPJ inválido (confira os dígitos).', 'error');
+    this.salvandoEmpresa = true;
+    this.render();
+    try {
+      const salva = await this.rpc('team_set_company', { p_contrato_id: e.contratoId, p_nome: e.nome, p_cnpj: e.cnpj, p_logo: e.logo });
+      this.salvandoEmpresa = false;
+      this.empresa = null; // relê da lista guardada (já com o que o servidor gravou)
+      guardarEmpresaDoContrato(salva);
+      this.render();
+      toast('Empresa do contrato salva. Os relatórios novos deste contrato já saem com ela.', 'success', 7000);
+    } catch (err) {
+      this.salvandoEmpresa = false;
+      this.render();
+      const msg = /PGRST202|team_set_company/i.test(`${err?.code} ${err?.message}`)
+        ? 'O banco ainda não tem a função team_set_company (migração 003).' : await mensagemDe(err);
+      toast(msg, 'error', 8000);
+    }
   }
 
   async cadastrar(form) {
@@ -248,6 +361,7 @@ export class EquipeView {
       campo.value = gerarSenha();
       campo.select();
     }
+    if (b.dataset.action === 'remover-logo-empresa') { this.empresaAtual().logo = ''; this.atualizarLogoNaTela(); }
     if (b.dataset.action === 'desativar') this.alterarAcesso(b.dataset.id, false);
     if (b.dataset.action === 'ativar') this.alterarAcesso(b.dataset.id, true);
   }
