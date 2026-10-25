@@ -67,3 +67,14 @@ sem mudar regra de negócio, formulário, dados ou envio. Nenhuma funcionalidade
 4. **Versão do app 2.0.0 → 2.1.0** (package.json e `APP_VERSAO` em `src/config.js`).
 
 ## Testes
+
+`npm test` (Playwright + Electron real), na nuvem:
+
+- **139 passaram**, 3 pulados (dependem de arquivos que só existem na sua máquina).
+- **1 falhou por causa do ambiente, não do código:** `atualizacao-banco.spec.js` abre o Electron diretamente, sem o Playwright, e na nuvem o Electron se recusa a rodar como administrador (root). Esse teste já falhava do mesmo jeito antes das mudanças. No seu computador ele roda normalmente.
+- **Corrigido de brinde:** o teste `mobile.spec.js` › "sem rolagem lateral" já falhava antes. A aba Execução tinha rolagem lateral no celular, e agora passa.
+- **Testes atualizados de propósito:**
+  - Os testes do servidor abrem "Avançado (administrador)" antes de preencher (`abrirAvancado` em helpers.js).
+  - O texto do aviso de "só salvar" mudou.
+  - O teste do tema escuro compara com a cor do tema, sem valor fixo.
+- **Novo teste:** bloco de assinaturas do PDF.
