@@ -157,7 +157,7 @@ export class SettingsView {
         ${this.servidorSectionHtml()}
       </details>
       <div class="action-bar">
-        <span class="save-status">${icon('info', 16)}<span>Salvas neste computador e enviadas ao servidor · ID do computador <code>${esc(getDeviceId().slice(0, 8))}</code></span></span>
+        <span class="save-status">${icon('info', 16)}<span>Salvas neste aparelho e enviadas ao servidor · ID do aparelho <code>${esc(getDeviceId().slice(0, 8))}</code></span></span>
         <div class="action-bar__buttons">
           <button type="button" class="btn btn--primary" data-action="save">${icon('save', 17)} Salvar configurações</button>
         </div>

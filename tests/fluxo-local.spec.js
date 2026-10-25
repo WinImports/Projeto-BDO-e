@@ -163,7 +163,16 @@ test('tema escuro aplica-se também aos diálogos', async () => {
   await openTab(page, 'bdo');
   await page.locator('#btn-discard').click();
   const bg = await page.locator('dialog.modal--confirm[open]').evaluate((d) => getComputedStyle(d).backgroundColor);
-  const expected = theme === 'dark' ? 'rgb(17, 26, 42)' : 'rgb(255, 255, 255)';
-  expect(bg).toBe(expected);
+  // o diálogo usa a superfície do tema ativo (token --surface), não a branca do tema claro
+  const superficie = await page.evaluate(() => {
+    const el = document.createElement('div');
+    el.style.background = 'var(--surface)';
+    document.body.append(el);
+    const cor = getComputedStyle(el).backgroundColor;
+    el.remove();
+    return cor;
+  });
+  expect(bg).toBe(superficie);
+  if (theme === 'dark') expect(bg).not.toBe('rgb(255, 255, 255)');
   await ctx.close();
 });

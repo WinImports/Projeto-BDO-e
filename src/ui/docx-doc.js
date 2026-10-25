@@ -21,7 +21,7 @@ const LARGURA = PAGE_W - 2 * MARGEM; // ≈ 25,7 cm (paisagem)
 const FOTO_W_CM = 7.7; // cada coluna tem ~48% da largura útil (8,2 cm) menos o recuo da célula
 const FOTO_H_CM = FOTO_W_CM * 0.75;
 
-const AZUL = '0B5CAD';
+const AZUL = '002B49'; // Azul Petróleo (identidade do app e dos PDFs)
 const CINZA = '5B6676';
 const BORDA = 'C3CCD7';
 const FUNDO_CAB = 'F1F4F8';

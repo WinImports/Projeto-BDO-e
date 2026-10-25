@@ -1,7 +1,7 @@
 // PDF do BDO-e em página única (A4), padrão operacional: faixa Azul Petróleo com a empresa prestadora
 // (Configurações / company_settings; sem cadastro → "Empresa Prestadora"), identificação, indicadores
 // (KM, horas, paradas, jornada), Apropriação [Início | Fim | Duração | Atividade], paradas e materiais
-// (só se houver), SMS & Segurança, Resumo executivo e observações.
+// (só se houver), SMS & Segurança, Resumo executivo, observações e bloco de assinaturas (técnico e fiscal do cliente).
 // Cabe em 1 página: o conteúdo é desenhado em escalas cada vez menores (fonte e espaçamentos) até caber;
 // se ainda assim não couber, continua na página 2 — nenhum dado é cortado.
 import { duracao, duracaoEntreDatas, equipeTexto } from '../modules/common.js';
@@ -14,8 +14,8 @@ const FUNDO_KPI = [232, 238, 244];
 const BORDA = [208, 214, 222];
 const TEXTO = [17, 24, 39];
 const CINZA = [91, 102, 118];
-const AMBAR = [242, 169, 0];
-const ESCALAS = [1, 0.93, 0.86, 0.8, 0.74, 0.68];
+const AMBAR = [232, 119, 34]; // laranja de segurança (#E87722), o mesmo destaque do app
+const ESCALAS = [1, 0.93, 0.86, 0.8, 0.74, 0.68, 0.63];
 
 const brData = (iso) => (/^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(0, 10).split('-').reverse().join('/') : '');
 const hora = (t) => (/^\d{2}:\d{2}$/.test(t || '') ? t : '');
@@ -43,6 +43,14 @@ export function indicadoresBdo(d) {
     ['Horas paradas', paradas.length ? fmtMin(parado) : '0h00'],
     ['Jornada', inicios.length && fins.length ? `${inicios[0]} – ${fins[fins.length - 1]}` : '—'],
     ['Atividades', String(ativ.filter((r) => !vazio(r.atividade)).length)]
+  ];
+}
+
+/** Bloco de assinaturas do PDF: [papel, nome já preenchido] — o fiscal do cliente assina e escreve o nome à mão. */
+export function assinaturasBdo(d) {
+  return [
+    ['Técnico responsável', [d.tecnico, d.matricula ? `Mat. ${d.matricula}` : ''].filter((v) => !vazio(v)).join(' · ')],
+    ['Fiscal / representante do cliente', '']
   ];
 }
 
@@ -82,7 +90,7 @@ function render({ jsPDF, autoTable, txt, formatOf }, { uniqueId, data: d, compan
       theme: 'grid',
       rowPageBreak: 'avoid',
       styles: { font: 'helvetica', fontSize: fs(8), cellPadding: fs(1.1), textColor: TEXTO, lineColor: BORDA, lineWidth: 0.15, overflow: 'linebreak', valign: 'middle' },
-      headStyles: { fillColor: PETROLEO, textColor: 255, fontStyle: 'bold', fontSize: fs(7.2) },
+      headStyles: { fillColor: PETROLEO, textColor: 255, fontStyle: 'bold', fontSize: fs(7.2), lineWidth: 0 }, // faixa sólida, sem divisórias brancas
       alternateRowStyles: { fillColor: ZEBRA },
       ...opts
     });
@@ -95,6 +103,26 @@ function render({ jsPDF, autoTable, txt, formatOf }, { uniqueId, data: d, compan
     pdf.line(M, y + fs(4.2), M + W, y + fs(4.2));
     y += fs(5.6);
   };
+
+  /** Duas colunas com linha para assinatura, nome e data. Cabe no fim da página atual ou vai para a próxima. */
+  function assinaturas() {
+    const h = fs(16);
+    const limite = A4.h - M - rodape;
+    if (y + h + fs(3) > limite) { pdf.addPage(); y = M; }
+    y = Math.max(y + fs(3), limite - h); // no fim da página: o espaço livre fica acima, não abaixo
+    const gapCol = 16;
+    const cw = (W - gapCol) / 2;
+    assinaturasBdo(d).forEach(([papel, nome], i) => {
+      const x0 = M + i * (cw + gapCol);
+      const yl = y + fs(7.5);
+      pdf.setDrawColor(...TEXTO); pdf.setLineWidth(0.3);
+      pdf.line(x0, yl, x0 + cw, yl);
+      text(nome || 'Nome: ______________________________________', x0, yl + fs(3.8), { size: fs(8), bold: Boolean(nome), color: nome ? TEXTO : CINZA, maxWidth: cw * 0.66 });
+      text('Data: ____/____/________', x0 + cw, yl + fs(3.8), { size: fs(7.5), color: CINZA, align: 'right' });
+      text(papel.toUpperCase(), x0, yl + fs(7.2), { size: fs(6), bold: true, color: PETROLEO });
+    });
+    y += h;
+  }
 
   // ----- faixa do cabeçalho: empresa prestadora (dinâmica) + título -----
   const hBand = fs(19);
@@ -222,6 +250,9 @@ function render({ jsPDF, autoTable, txt, formatOf }, { uniqueId, data: d, compan
     });
   }
 
+  // ----- assinaturas: técnico responsável e fiscal / representante do cliente (ancoradas no fim da página) -----
+  assinaturas();
+
   // ----- rodapé -----
   const total = pdf.getNumberOfPages();
   const gerado = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
@@ -229,7 +260,7 @@ function render({ jsPDF, autoTable, txt, formatOf }, { uniqueId, data: d, compan
     pdf.setPage(i);
     pdf.setDrawColor(...BORDA); pdf.setLineWidth(0.2);
     pdf.line(M, A4.h - M - 4, A4.w - M, A4.h - M - 4);
-    text(`${company.nome}  ·  BDO-e gerado em ${gerado}  ·  ID ${uniqueId}`, M, A4.h - M, { size: 6.2, color: CINZA });
+    text(`${company.nome}  ·  Gerado pelo BDO-e em ${gerado}  ·  ID ${uniqueId}`, M, A4.h - M, { size: 6.2, color: CINZA });
     text(`Página ${i} de ${total}`, A4.w - M, A4.h - M, { size: 6.2, color: CINZA, align: 'right' });
   }
   return pdf;

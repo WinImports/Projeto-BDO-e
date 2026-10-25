@@ -98,3 +98,18 @@ test('cabeçalho: empresa das Configurações; sem cadastro sai "Empresa Prestad
   await page.locator('#btn-preview').click();
   await expect(page.locator('dialog.modal[open] [data-empresa]')).toHaveText('WIN IMPORTS · CNPJ 12.345.678/0001-90');
 });
+
+test('bloco de assinaturas: técnico (nome e matrícula do relatório) e fiscal do cliente, sem passar de 1 página', async () => {
+  const { page } = ctx;
+  const r = await page.evaluate(async () => {
+    const { assinaturasBdo } = await import('./src/ui/bdo-pdf.js');
+    return {
+      completo: assinaturasBdo({ tecnico: 'ANDERSON SANTOS', matricula: '30882' }),
+      vazio: assinaturasBdo({})
+    };
+  });
+  expect(r.completo).toEqual([['Técnico responsável', 'ANDERSON SANTOS · Mat. 30882'], ['Fiscal / representante do cliente', '']]);
+  expect(r.vazio[0][1]).toBe('');
+  // com as assinaturas, o turno comum continua em 1 página
+  expect(await paginas(page, 8, 'Troca de válvula com teste de estanqueidade')).toBe(1);
+});

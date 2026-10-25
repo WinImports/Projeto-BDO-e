@@ -13,7 +13,7 @@ export const temLayoutProprio = (module) => module.id === 'bdo';
 
 const A4 = { w: 210, h: 297 };
 const M = 12; // margem
-const AZUL = [11, 92, 173];
+const AZUL = [0, 43, 73]; // Azul Petróleo #002B49 (identidade do app e do PDF do BDO-e)
 const CINZA = [91, 102, 118];
 const TEXTO = [15, 23, 42];
 const LINHA = [195, 204, 215];
