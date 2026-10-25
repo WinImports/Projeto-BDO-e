@@ -21,30 +21,30 @@ const PDF_CSS = `
   @page { size: A4 landscape; margin: 12mm 14mm; } /* todos os relatórios em paisagem */
   * { box-sizing: border-box; }
   body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; color: #0f172a; margin: 0; }
-  header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0b5cad; padding-bottom: 8px; margin-bottom: 6px; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #002b49; padding-bottom: 8px; margin-bottom: 6px; }
   .brand { display: flex; gap: 10px; align-items: center; }
-  .mark { width: 38px; height: 38px; border-radius: 8px; background: #0b5cad; color: #fff; font-weight: 800; font-size: 9pt; display: flex; align-items: center; justify-content: center; border-bottom: 3px solid #f2a900; }
+  .mark { width: 38px; height: 38px; border-radius: 8px; background: #002b49; color: #fff; font-weight: 800; font-size: 9pt; display: flex; align-items: center; justify-content: center; border-bottom: 3px solid #e87722; }
   h1 { font-size: 15pt; margin: 0; }
   .logo { max-height: 52px; max-width: 150px; object-fit: contain; }
   .company { margin: 0 0 1px; font-size: 10pt; font-weight: 700; }
   .company span { font-weight: 400; color: #5b6676; font-size: 8.5pt; }
   .preview__consol { margin-top: 6px; padding: 6px 8px 8px; border: 1px solid #c3ccd7; border-radius: 4px; }
   .consol__summary { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
-  .consol__chip { font-size: 8pt; padding: 1px 7px; border-radius: 10px; background: #e8f1fb; color: #0b5cad; font-weight: 600; }
+  .consol__chip { font-size: 8pt; padding: 1px 7px; border-radius: 10px; background: #e5edf4; color: #002b49; font-weight: 600; }
   .consol__block { margin-top: 6px; }
   .consol__title { break-after: avoid; margin: 0 0 3px; font-size: 8pt; text-transform: uppercase; letter-spacing: .04em; color: #334155; }
   .sub { color: #5b6676; font-size: 9pt; margin: 2px 0 0; }
   .meta { text-align: right; font-size: 8.5pt; color: #5b6676; line-height: 1.5; }
   .draft { color: #b42318; font-weight: 700; font-size: 10pt; }
   code { font-family: Consolas, monospace; font-size: 8pt; }
-  a { color: #0b5cad; }
+  a { color: #002b49; }
   .muted { color: #5b6676; } .small { font-size: 8.5pt; }
   .preview__section { padding-top: 10px; break-inside: auto; }
-  .preview__section h4 { font-size: 9pt; text-transform: uppercase; letter-spacing: .05em; color: #0b5cad; margin: 0 0 5px; break-after: avoid; }
+  .preview__section h4 { font-size: 9pt; text-transform: uppercase; letter-spacing: .05em; color: #002b49; margin: 0 0 5px; break-after: avoid; }
   .preview__grid { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; border: 1px solid #c3ccd7; border-radius: 4px; overflow: hidden; break-inside: avoid; }
   .preview__item { padding: 5px 8px; border-bottom: 1px solid #dde3ea; border-right: 1px solid #dde3ea; margin: -1px -1px 0 0; break-inside: avoid; }
   .preview__item--full { grid-column: 1 / -1; }
-  .preview__item--highlight { background: #fff4dc; border-left: 4px solid #f2a900; }
+  .preview__item--highlight { background: #fff4dc; border-left: 4px solid #e87722; }
   .preview__item dt { font-size: 7.5pt; color: #5b6676; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
   .preview__item dd { margin: 1px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
   table { width: 100%; border-collapse: collapse; font-size: 9pt; }

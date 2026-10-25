@@ -106,26 +106,33 @@ function setDraftStatus(kind, text) {
 
 // ---------- Base e abas ----------
 
+/** Rótulos curtos da barra inferior do celular (o título completo continua no aria/desktop). */
+const ROTULO_CURTO = { bdo: 'BDO-e', visita_tecnica: 'Visita', handover: 'Execução' };
+
 function renderTabs() {
   $('#tabs').innerHTML = `
     ${MODULES.map((m) => `
-      <button type="button" role="tab" class="tab" data-tab="${m.id}">
+      <button type="button" role="tab" class="tab" data-tab="${m.id}" aria-label="${esc(m.shortTitle)}">
         <span class="tab__icon">${icon(m.icon, 18)}</span>
         <span class="tab__text"><span class="tab__title">${esc(m.shortTitle)}</span><span class="tab__sub">${esc(m.subtitle)}</span></span>
+        <span class="tab__short" aria-hidden="true">${esc(ROTULO_CURTO[m.id] || m.shortTitle)}</span>
       </button>`).join('')}
     <span class="tabs__spacer"></span>
     ${souGestor() ? `
-    <button type="button" role="tab" class="tab" data-tab="${EQUIPE_TAB}">
+    <button type="button" role="tab" class="tab" data-tab="${EQUIPE_TAB}" aria-label="Gestão de Equipe">
       <span class="tab__icon">${icon('users', 18)}</span>
       <span class="tab__text"><span class="tab__title">Gestão de Equipe</span><span class="tab__sub">Técnicos e licenças do contrato</span></span>
+      <span class="tab__short" aria-hidden="true">Equipe</span>
     </button>` : ''}
-    <button type="button" role="tab" class="tab" data-tab="${OUTBOX_TAB}">
-      <span class="tab__icon">${icon('inbox', 18)}</span>
-      <span class="tab__text"><span class="tab__title">Histórico <span id="outbox-badge" class="badge" hidden>0</span></span><span class="tab__sub">Relatórios salvos e Caixa de Saída</span></span>
+    <button type="button" role="tab" class="tab" data-tab="${OUTBOX_TAB}" aria-label="Histórico">
+      <span class="tab__icon">${icon('inbox', 18)}<span id="outbox-badge" class="badge tab__badge" hidden>0</span></span>
+      <span class="tab__text"><span class="tab__title">Histórico</span><span class="tab__sub">Relatórios salvos e Caixa de Saída</span></span>
+      <span class="tab__short" aria-hidden="true">Histórico</span>
     </button>
-    <button type="button" role="tab" class="tab" data-tab="${SETTINGS_TAB}">
+    <button type="button" role="tab" class="tab" data-tab="${SETTINGS_TAB}" aria-label="Configurações">
       <span class="tab__icon">${icon('sliders', 18)}</span>
       <span class="tab__text"><span class="tab__title">Configurações</span><span class="tab__sub">Empresa, contrato e técnico</span></span>
+      <span class="tab__short" aria-hidden="true">Ajustes</span>
     </button>`;
   updateBadge();
   marcarAba(state.tab);
@@ -173,6 +180,7 @@ async function showTab(tab) {
 
   const view = $('#view');
   view.classList.toggle('view--form', !!getModule(tab));
+  view.classList.remove('is-checked'); // pendências voltam ao tom neutro até a próxima tentativa de finalizar
   delete view.dataset.ready; // marcado de novo quando a tela terminar de montar (usado nos testes E2E)
   window.scrollTo(0, 0);
   if (tab === SETTINGS_TAB) {
@@ -219,7 +227,7 @@ async function showTab(tab) {
         <header class="doc-head card">
           <div class="doc-head__main">
             ${companyChipHtml(draft.data?.contrato)}
-            <p class="eyebrow">${esc(module.subtitle)}</p>
+            ${module.subtitle && module.subtitle.toLowerCase() !== module.title.toLowerCase() ? `<p class="eyebrow doc-head__eyebrow">${esc(module.subtitle)}</p>` : ''}
             <h2 class="doc-head__title">${esc(module.title)}</h2>
             <div class="doc-head__meta">
               <span class="meta-chip">${icon('mapPin', 14)}<span id="meta-poco"></span></span>
@@ -395,6 +403,7 @@ async function finalize(module) {
 
   const errors = validate(module, draft.data);
   if (errors.length) {
+    $('#view').classList.add('is-checked'); // a partir daqui as pendências aparecem em cor de atenção
     state.formView.showErrors(errors);
     toast(`Verifique ${errors.length} campo${errors.length > 1 ? 's' : ''} antes de finalizar.`, 'error');
     return;
@@ -426,10 +435,10 @@ async function finalize(module) {
   // (o rascunho novo é criado quando ele voltar a esta aba)
   if (state.navSeq === navAntes) await showTab(module.id);
   if (choice === 'local') {
-    toast(`Relatório salvo na memória local do app (IndexedDB). Para salvar na pasta de Arquivos do seu celular, clique em 'Baixar / Compartilhar PDF' (na prévia ou em Histórico › Ver / PDF). Para enviar depois: Histórico › Enviar.`, 'success', 10000);
+    toast(`Relatório salvo na memória local deste aparelho. Para guardar o arquivo no celular, use 'Baixar / Compartilhar PDF' (na prévia ou em Histórico › Ver / PDF). Para enviar depois: Histórico › Enviar.`, 'success', 10000);
     return;
   }
-  toast(`${navigator.onLine ? 'Relatório na Caixa de Saída. Enviando ao servidor…' : 'Relatório na Caixa de Saída. Será enviado quando houver conexão.'} Relatório salvo na memória local do app (IndexedDB). Para salvar na pasta de Arquivos do seu celular, clique em 'Baixar / Compartilhar PDF' (na prévia ou em Histórico › Ver / PDF).`, 'success', 10000);
+  toast(`${navigator.onLine ? 'Relatório na Caixa de Saída. Enviando ao servidor…' : 'Relatório na Caixa de Saída. Será enviado quando houver conexão.'} Uma cópia fica na memória local deste aparelho; para guardar o arquivo no celular, use 'Baixar / Compartilhar PDF' (na prévia ou em Histórico › Ver / PDF).`, 'success', 10000);
   syncNow();
   await shareReport(module, report);
 }
@@ -593,13 +602,14 @@ async function updateBadge(n) {
 
 function updateConnection(s) {
   const el = $('#conn');
-  const [kind, text] = !s.configured ? ['local', 'Somente local']
-    : !s.online ? ['offline', 'Sem conexão']
-    : s.running ? ['syncing', 'Sincronizando']
-    : ['online', 'Online'];
+  const [kind, text, dica] = !s.configured ? ['local', 'Local', 'Sem conexão com o servidor da empresa: os relatórios ficam guardados com segurança neste aparelho.']
+    : !s.online ? ['offline', 'Sem conexão', 'Sem internet: os relatórios ficam na Caixa de Saída e são enviados quando a conexão voltar.']
+    : s.running ? ['syncing', 'Sincronizando', 'Enviando e recebendo relatórios do servidor da empresa.']
+    : ['online', 'Online', 'Conectado ao servidor da empresa.'];
   el.className = `conn conn--${kind}`;
-  el.innerHTML = `<span class="conn__dot" aria-hidden="true"></span>${text}`;
-  el.title = !s.configured ? 'Configure o Supabase em Configurações › Servidor (ou em src/config.js) para habilitar o envio' : '';
+  el.innerHTML = `<span class="conn__dot" aria-hidden="true"></span><span class="conn__text">${text}</span>`;
+  el.title = dica;
+  el.setAttribute('aria-label', `${text}. ${dica}`);
 }
 
 // ---------- PWA (navegador / celular) ----------

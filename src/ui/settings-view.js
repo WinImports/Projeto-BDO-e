@@ -30,7 +30,7 @@ function chaveSecreta(chave) {
 }
 
 const MODO_LOGIN = {
-  supabase: 'Conta confirmada no servidor (Supabase)',
+  supabase: 'Conta confirmada no servidor da empresa',
   offline: 'Acesso offline com a última senha confirmada neste aparelho',
   local: 'Usuário local deste aparelho'
 };
@@ -105,7 +105,6 @@ export class SettingsView {
         </div>
       </div>
       ${this.contaSectionHtml()}
-      ${this.servidorSectionHtml()}
       ${this.pocosSectionHtml()}
       <form class="report-form settings-form" novalidate>
         ${GROUPS.map((g) => g.logo && porContrato ? this.empresaContratoHtml(g) : `
@@ -146,6 +145,17 @@ export class SettingsView {
             </div>
           </section>`).join('')}
       </form>
+      <details class="card advanced" id="servidor-avancado">
+        <summary class="advanced__summary">
+          <span class="form-section__icon">${icon('shield', 20)}</span>
+          <span class="advanced__titles">
+            <strong>Avançado (administrador)</strong>
+            <span class="muted small">Conexão com o servidor da empresa. Já vem configurada na instalação; altere só com orientação do administrador.</span>
+          </span>
+          <span class="advanced__chevron" aria-hidden="true">${icon('chevronDown', 18)}</span>
+        </summary>
+        ${this.servidorSectionHtml()}
+      </details>
       <div class="action-bar">
         <span class="save-status">${icon('info', 16)}<span>Salvas neste computador e enviadas ao servidor · ID do computador <code>${esc(getDeviceId().slice(0, 8))}</code></span></span>
         <div class="action-bar__buttons">
@@ -215,12 +225,12 @@ export class SettingsView {
     const cfg = supabaseConfig();
     const local = cfg.origem === 'aparelho';
     return `
-      <section class="card form-section" id="servidor-section">
+      <section class="form-section advanced__body" id="servidor-section">
         <header class="form-section__head">
           <span class="form-section__icon">${icon('cloud', 20)}</span>
           <div class="form-section__titles">
-            <h3 class="form-section__title">Servidor (Supabase)</h3>
-            <p class="form-section__hint">Login, envio dos relatórios (BDO-e, Visitas e Execuções), fotos e links do WhatsApp. Supabase › Project Settings › API: copie a Project URL e a chave anon / publishable. Nunca use a chave service_role / secret.</p>
+            <h3 class="form-section__title">Servidor da empresa</h3>
+            <p class="form-section__hint">Login, envio dos relatórios, fotos e links do WhatsApp. Dados técnicos fornecidos pelo administrador (Supabase › Project Settings › API: Project URL e chave anon / publishable). Nunca use a chave secreta (service_role).</p>
           </div>
         </header>
         <div class="form-grid">

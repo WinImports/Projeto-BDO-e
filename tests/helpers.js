@@ -80,4 +80,10 @@ async function preencherVisita(page, poco = 'FBM-89') {
   ]) await fill(page, f, v);
 }
 
-module.exports = { launchApp, newUserData, fill, openTab, preencherVisita, cell, entrar, vincularContratos };
+/** Configurações › "Avançado (administrador)": abre a área recolhida do servidor da empresa. */
+async function abrirAvancado(page) {
+  const area = page.locator('#servidor-avancado');
+  if (!(await area.evaluate((el) => el.open))) await area.locator('summary').click();
+}
+
+module.exports = { launchApp, newUserData, fill, openTab, preencherVisita, cell, entrar, vincularContratos, abrirAvancado };

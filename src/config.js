@@ -62,3 +62,6 @@ export function saveSupabaseOverride(url, anonKey) {
   if (!u && !k) localStorage.removeItem(OVERRIDE_KEY);
   else localStorage.setItem(OVERRIDE_KEY, JSON.stringify({ url: u, anonKey: k }));
 }
+
+/** Versão exibida nas telas de acesso (manter igual à "version" do package.json). */
+export const APP_VERSAO = '2.1.0';

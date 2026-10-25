@@ -84,7 +84,7 @@ export class OutboxView {
 
   statusLine() {
     const s = this.sync;
-    if (!s.configured) return { kind: 'warn', text: 'Supabase não configurado — os relatórios ficam guardados com segurança neste aparelho até a configuração (Configurações › Servidor).' };
+    if (!s.configured) return { kind: 'info', text: 'Os relatórios ficam guardados com segurança neste aparelho até a conexão com o servidor da empresa.' };
     if (!s.online) return { kind: 'warn', text: 'Sem conexão — os relatórios serão enviados automaticamente quando a internet voltar.' };
     if (s.running) return { kind: 'info', text: 'Sincronizando com o servidor…' };
     if (s.lastError) return { kind: 'error', text: `Última tentativa falhou: ${s.lastError}` };
@@ -123,7 +123,7 @@ export class OutboxView {
             ? `${this.items.length} relatório${this.items.length > 1 ? 's' : ''} salvo${this.items.length > 1 ? 's' : ''} neste aparelho · ${pending ? `${pending} pendente${pending > 1 ? 's' : ''} de envio` : 'nenhum pendente de envio'}${locais ? ` · ${locais} não enviado${locais > 1 ? 's' : ''}` : ''}`
             : 'Nenhum relatório finalizado neste aparelho'}</p>
         </div>
-        <button type="button" class="btn btn--primary" data-action="sync"${canSync ? '' : ' disabled'}>
+        <button type="button" class="btn btn--primary" data-action="sync"${canSync ? '' : ` disabled title="${esc(status.text)}"`}>
           ${s.running ? '<span class="spinner" aria-hidden="true"></span> Sincronizando…' : `${icon('refresh', 17)} Sincronizar agora`}
         </button>
       </div>

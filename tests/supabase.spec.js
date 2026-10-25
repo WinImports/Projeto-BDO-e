@@ -2,7 +2,7 @@
 // login no Supabase Auth, fila offline ("Pendente de Envio" → "Sincronizado" ao voltar a internet),
 // tabela por tipo no servidor, fotos no Storage e link do report-share na mensagem do WhatsApp.
 const { test, expect } = require('@playwright/test');
-const { launchApp, openTab, preencherVisita, entrar } = require('./helpers');
+const { launchApp, openTab, preencherVisita, entrar, abrirAvancado } = require('./helpers');
 
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 const URL_TESTE = 'https://projeto-teste.supabase.co';
@@ -50,6 +50,7 @@ async function supabaseFalso(page) {
 
 async function configurarServidor(page, key = 'chave-anon-de-teste') {
   await openTab(page, 'settings');
+  await abrirAvancado(page);
   await page.locator('[data-server=url]').fill(URL_TESTE);
   await page.locator('[data-server=key]').fill(key);
   await page.locator('[data-action=save-server]').click();

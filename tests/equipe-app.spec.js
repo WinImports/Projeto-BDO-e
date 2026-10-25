@@ -2,7 +2,7 @@
 // aba "Gestão de Equipe" só para gestor (cota "X de Y liberados", cadastro pela Edge Function, ativar/desativar),
 // busca sem limite no histórico do servidor e mensagem clara quando o servidor recusa um envio.
 const { test, expect } = require('@playwright/test');
-const { launchApp, openTab, entrar } = require('./helpers');
+const { launchApp, openTab, entrar, abrirAvancado } = require('./helpers');
 
 const URL_TESTE = 'https://projeto-teste.supabase.co';
 const CONTRATO = { id: '11111111-1111-4111-8111-111111111111', nome: 'OS-Mans' };
@@ -82,6 +82,7 @@ async function supabaseFalso(page, cfg) {
 
 async function configurarServidor(page) {
   await openTab(page, 'settings');
+  await abrirAvancado(page);
   await page.locator('[data-server=url]').fill(URL_TESTE);
   await page.locator('[data-server=key]').fill('chave-anon-de-teste');
   await page.locator('[data-action=save-server]').click();

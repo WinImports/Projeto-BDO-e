@@ -1,6 +1,6 @@
 {
   "name": "bdo-e-app",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "BDO-e & Inspeção Técnica — Boletim Diário de Operações Eletrônico (desktop, offline-first)",
   "main": "main.js",
   "author": "Win App Digital",
@@ -56,7 +56,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "icons/icon-512.png"
+      "icon": "icons/icon.ico"
     },
     "nsis": {
       "oneClick": false,

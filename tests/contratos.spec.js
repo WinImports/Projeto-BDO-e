@@ -3,7 +3,7 @@
 // 1 contrato (já vem selecionado), vários (padrão das Configurações), nenhum (desabilitado + aviso, salva
 // mesmo assim), offline (lista guardada) e edição de relatório antigo (valor fora da lista é mantido).
 const { test, expect } = require('@playwright/test');
-const { launchApp, openTab, entrar } = require('./helpers');
+const { launchApp, openTab, entrar, abrirAvancado } = require('./helpers');
 
 const URL_TESTE = 'https://projeto-teste.supabase.co';
 const AVISO = 'Nenhum contrato vinculado à sua conta. Peça ao administrador para cadastrar.';
@@ -40,6 +40,7 @@ async function supabaseFalso(page, contratos) {
 /** Configura o servidor e entra de novo com a conta (login no Supabase → baixa my_contracts). */
 async function entrarComConta(page) {
   await openTab(page, 'settings');
+  await abrirAvancado(page);
   await page.locator('[data-server=url]').fill(URL_TESTE);
   await page.locator('[data-server=key]').fill('chave-anon-de-teste');
   await page.locator('[data-action=save-server]').click();

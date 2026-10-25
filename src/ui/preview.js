@@ -161,7 +161,7 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
         </div>
         <div class="finalize-ask">
           <strong>Deseja enviar este relatório?</strong>
-          <span class="muted small">Ao salvar, o relatório fica na memória local do app (IndexedDB). Para guardar o arquivo na pasta de Arquivos do celular, use "Baixar / Compartilhar PDF". Ao enviar, ele vai para o banco de dados e o WhatsApp abre com o link.</span>
+          <span class="muted small">Ao salvar, o relatório fica guardado neste aparelho. Para guardar o arquivo no celular, use "Baixar / Compartilhar PDF". Ao enviar, ele vai para o servidor da empresa e o WhatsApp abre com o link.</span>
         </div>
         <div class="finalize-ask__buttons">
           <button type="button" class="btn btn--ghost" data-local>${icon('save', 17)} Não, só salvar no aparelho</button>

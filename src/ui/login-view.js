@@ -4,43 +4,52 @@ import { isSupabaseConfigured } from '../config.js';
 import { icon } from './icons.js';
 import { $, esc } from './dom.js';
 import { toast } from './toast.js';
+import { authShellHtml, authHeadHtml, botaoVerSenha, ligarMostrarSenha } from './auth-shell.js';
 
+// Linha discreta abaixo do botão Entrar (sem caixa de alerta: é informação, não erro)
 function modoTexto() {
-  if (!isSupabaseConfigured()) return { kind: 'warn', text: 'Servidor não configurado: o acesso é feito com um usuário local deste aparelho.' };
-  if (!navigator.onLine) return { kind: 'warn', text: 'Sem internet: o acesso usa a última senha confirmada neste aparelho (ou cria um usuário local).' };
-  return { kind: 'info', text: 'Entre com o e-mail ou a matrícula funcional e a senha. Depois do primeiro acesso, o app entra mesmo sem sinal.' };
+  if (!isSupabaseConfigured()) return 'Modo offline: o acesso usa um usuário local deste aparelho.';
+  if (!navigator.onLine) return 'Sem internet: o acesso usa a última senha confirmada neste aparelho.';
+  return 'Depois do primeiro acesso, o app entra mesmo sem sinal.';
 }
+
+const AJUDA_SENHA = 'Para redefinir a senha, fale com o gestor do seu contrato ou com o administrador do sistema. Por segurança, a senha não é enviada por mensagem.';
 
 /** Mostra a tela de login e resolve com o usuário depois de entrar. */
 export function showLogin() {
   return new Promise((resolve) => {
     document.body.classList.add('is-login');
     const root = document.createElement('div');
-    root.className = 'login';
+    root.className = 'login auth';
     root.id = 'login';
-    const modo = modoTexto();
-    root.innerHTML = `
-      <form class="login__card card" id="login-form" novalidate aria-labelledby="login-title">
-        <div class="login__brand">
-          <div class="brand__mark" aria-hidden="true">BDO</div>
-          <div>
-            <h1 class="login__title" id="login-title">Entrar no BDO-e</h1>
-            <p class="muted small">&amp; Inspeção Técnica</p>
-          </div>
-        </div>
+    root.innerHTML = authShellHtml(`
+      <form class="login__card" id="login-form" novalidate aria-labelledby="login-title">
+        ${authHeadHtml('login-title', 'Entrar', 'Acesse com o e-mail ou a matrícula funcional.')}
         <div class="field">
           <label class="field__label-wrap" for="login-email"><span class="field__label">E-mail ou matrícula</span></label>
-          <input id="login-email" name="email" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required placeholder="nome@empresa.com.br ou matrícula funcional">
+          <input id="login-email" name="email" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required placeholder="nome@empresa.com.br ou matrícula">
         </div>
         <div class="field">
-          <label class="field__label-wrap" for="login-senha"><span class="field__label">Senha</span></label>
-          <input id="login-senha" name="senha" type="password" autocomplete="current-password" required minlength="6" placeholder="Mínimo de 6 caracteres">
+          <div class="auth__label-row">
+            <label class="field__label-wrap" for="login-senha"><span class="field__label">Senha</span></label>
+            <button type="button" class="link-btn auth__forgot" data-esqueci>Esqueci minha senha</button>
+          </div>
+          <div class="password-field">
+            <input id="login-senha" name="senha" type="password" autocomplete="current-password" required minlength="6" placeholder="Sua senha">
+            ${botaoVerSenha()}
+          </div>
         </div>
+        <p class="notice notice--info auth__help" data-ajuda-senha hidden>${esc(AJUDA_SENHA)}</p>
         <p class="login__error" id="login-error" role="alert" hidden></p>
-        <button type="submit" class="btn btn--primary btn--lg btn--block" id="login-submit">${icon('user', 18)} Entrar</button>
-        <p class="notice notice--${modo.kind} login__mode" data-login-mode>${esc(modo.text)}</p>
-      </form>`;
+        <button type="submit" class="btn btn--primary btn--lg btn--block" id="login-submit">Entrar</button>
+        <p class="login__mode" data-login-mode>${icon('info', 14)}<span>${esc(modoTexto())}</span></p>
+      </form>`);
     document.body.append(root);
+    ligarMostrarSenha(root);
+    $('[data-esqueci]', root).addEventListener('click', () => {
+      const ajuda = $('[data-ajuda-senha]', root);
+      ajuda.hidden = !ajuda.hidden;
+    });
     const form = $('#login-form', root);
     const erro = $('#login-error', root);
     const botao = $('#login-submit', root);
@@ -61,7 +70,7 @@ export function showLogin() {
         erro.textContent = err.message || 'Não foi possível entrar.';
         erro.hidden = false;
         botao.disabled = false;
-        botao.innerHTML = `${icon('user', 18)} Entrar`;
+        botao.textContent = 'Entrar';
       }
     });
   });
@@ -75,31 +84,32 @@ export function showTrocaSenha() {
   return new Promise((resolve) => {
     document.body.classList.add('is-login');
     const root = document.createElement('div');
-    root.className = 'login';
+    root.className = 'login auth';
     root.id = 'troca-senha';
     const user = currentUser();
-    root.innerHTML = `
-      <form class="login__card card" id="troca-senha-form" novalidate aria-labelledby="troca-senha-title">
-        <div class="login__brand">
-          <div class="brand__mark" aria-hidden="true">BDO</div>
-          <div>
-            <h1 class="login__title" id="troca-senha-title">Crie a sua senha</h1>
-            <p class="muted small">${esc(displayName(user))} · primeiro acesso</p>
-          </div>
-        </div>
-        <p class="notice notice--info login__mode">A senha inicial foi definida pelo gestor. Por segurança, crie agora uma senha só sua (mínimo de ${SENHA_MIN} caracteres).</p>
+    root.innerHTML = authShellHtml(`
+      <form class="login__card" id="troca-senha-form" novalidate aria-labelledby="troca-senha-title">
+        ${authHeadHtml('troca-senha-title', 'Crie a sua senha', `${displayName(user)} · primeiro acesso`)}
+        <p class="notice notice--info auth__help">A senha inicial foi definida pelo gestor. Por segurança, crie agora uma senha só sua (mínimo de ${SENHA_MIN} caracteres).</p>
         <div class="field">
           <label class="field__label-wrap" for="nova-senha"><span class="field__label">Nova senha</span></label>
-          <input id="nova-senha" name="nova" type="password" autocomplete="new-password" required minlength="${SENHA_MIN}">
+          <div class="password-field">
+            <input id="nova-senha" name="nova" type="password" autocomplete="new-password" required minlength="${SENHA_MIN}" placeholder="Mínimo de ${SENHA_MIN} caracteres">
+            ${botaoVerSenha()}
+          </div>
         </div>
         <div class="field">
           <label class="field__label-wrap" for="nova-senha-2"><span class="field__label">Repita a nova senha</span></label>
-          <input id="nova-senha-2" name="confirmacao" type="password" autocomplete="new-password" required minlength="${SENHA_MIN}">
+          <div class="password-field">
+            <input id="nova-senha-2" name="confirmacao" type="password" autocomplete="new-password" required minlength="${SENHA_MIN}">
+            ${botaoVerSenha()}
+          </div>
         </div>
         <p class="login__error" id="troca-senha-erro" role="alert" hidden></p>
         <button type="submit" class="btn btn--primary btn--lg btn--block" id="troca-senha-submit">${icon('shield', 18)} Salvar nova senha</button>
-      </form>`;
+      </form>`);
     document.body.append(root);
+    ligarMostrarSenha(root);
     const form = $('#troca-senha-form', root);
     const erro = $('#troca-senha-erro', root);
     const botao = $('#troca-senha-submit', root);

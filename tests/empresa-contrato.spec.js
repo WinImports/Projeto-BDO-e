@@ -3,7 +3,7 @@
 // definida não mostra a logo de outro contrato; nas Configurações a empresa fica só para consulta; o gestor grava
 // a empresa do contrato (team_set_company). Servidor sem a migração → continua valendo a das Configurações.
 const { test, expect } = require('@playwright/test');
-const { launchApp, openTab, entrar } = require('./helpers');
+const { launchApp, openTab, entrar, abrirAvancado } = require('./helpers');
 
 const URL_TESTE = 'https://projeto-teste.supabase.co';
 const LOGO_A = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -51,6 +51,7 @@ async function supabaseFalso(page, { acesso, empresas }) {
 
 async function entrarComConta(page) {
   await openTab(page, 'settings');
+  await abrirAvancado(page);
   await page.locator('[data-server=url]').fill(URL_TESTE);
   await page.locator('[data-server=key]').fill('chave-anon-de-teste');
   await page.locator('[data-action=save-server]').click();

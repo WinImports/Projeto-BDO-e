@@ -32,7 +32,7 @@ function build() {
   for (const f of list) {
     const buf = fs.readFileSync(path.join(ROOT, f));
     // texto: ignora CRLF x LF (mesma versão em qualquer sistema); binários (png) entram como estão
-    hash.update(f).update(/\.(png|jpg|ico)$/.test(f) ? buf : buf.toString('utf8').replace(/\r\n/g, '\n'));
+    hash.update(f).update(/\.(png|jpg|ico|woff2)$/.test(f) ? buf : buf.toString('utf8').replace(/\r\n/g, '\n'));
   }
   const version = hash.digest('hex').slice(0, 12);
   const block = `// <precache> — gerado por \`npm run pwa\`; não editar à mão

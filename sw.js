@@ -8,12 +8,14 @@
 // - Supabase e mapas (outros domínios) vão direto para a rede.
 
 // <precache> — gerado por `npm run pwa`; não editar à mão
-const VERSION = 'a1a5122205d4';
+const VERSION = 'f1bae654cae3';
 const PRECACHE = [
   './',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
+  './icons/icon.ico',
+  './icons/logo.svg',
   './index.html',
   './manifest.json',
   './src/app.js',
@@ -43,6 +45,11 @@ const PRECACHE = [
   './src/core/sync.js',
   './src/core/telefone.js',
   './src/env.js',
+  './src/fonts/OFL-Barlow.txt',
+  './src/fonts/barlow-bold.woff2',
+  './src/fonts/barlow-medium.woff2',
+  './src/fonts/barlow-regular.woff2',
+  './src/fonts/barlow-semibold.woff2',
   './src/modules/bdo.js',
   './src/modules/common.js',
   './src/modules/handover.js',
@@ -52,6 +59,7 @@ const PRECACHE = [
   './src/shared/flangeTable.js',
   './src/shared/pocos-parser.js',
   './src/styles.css',
+  './src/ui/auth-shell.js',
   './src/ui/bdo-pdf.js',
   './src/ui/cabecalho.js',
   './src/ui/camera.js',

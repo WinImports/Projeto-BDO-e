@@ -3,6 +3,7 @@ import { ativarLicenca, nomeDoAparelho, LICENCA } from '../core/licenca.js';
 import { icon } from './icons.js';
 import { $, esc } from './dom.js';
 import { toast } from './toast.js';
+import { authShellHtml, authHeadHtml } from './auth-shell.js';
 
 let aberta = null;
 
@@ -16,19 +17,13 @@ export function showLicenca({ motivo = '', chave = '' } = {}) {
     const tinhaLogin = document.body.classList.contains('is-login');
     document.body.classList.add('is-login');
     const root = document.createElement('div');
-    root.className = 'login';
+    root.className = 'login auth';
     root.id = 'licenca';
     const bloqueada = Boolean(motivo);
     const rotulo = bloqueada ? 'Validar licença' : 'Ativar licença';
-    root.innerHTML = `
-      <form class="login__card card" id="licenca-form" novalidate aria-labelledby="licenca-title">
-        <div class="login__brand">
-          <div class="brand__mark" aria-hidden="true">BDO</div>
-          <div>
-            <h1 class="login__title" id="licenca-title">${bloqueada ? 'Acesso bloqueado' : 'Ativar o BDO-e'}</h1>
-            <p class="muted small">Licença de uso deste aparelho</p>
-          </div>
-        </div>
+    root.innerHTML = authShellHtml(`
+      <form class="login__card" id="licenca-form" novalidate aria-labelledby="licenca-title">
+        ${authHeadHtml('licenca-title', bloqueada ? 'Acesso bloqueado' : 'Ativar o BDO-e', 'Licença de uso deste aparelho')}
         <p class="login__error" id="licenca-erro" role="alert"${bloqueada ? '' : ' hidden'}>${esc(motivo)}</p>
         <div class="field">
           <label class="field__label-wrap" for="licenca-chave"><span class="field__label">Chave da licença</span></label>
@@ -36,10 +31,10 @@ export function showLicenca({ motivo = '', chave = '' } = {}) {
                  required placeholder="Digite a chave recebida" value="${esc(chave)}">
         </div>
         <button type="submit" class="btn btn--primary btn--lg btn--block" id="licenca-submit">${icon('shield', 18)} ${rotulo}</button>
-        <p class="notice notice--info login__mode">A ativação precisa de internet. Depois dela, o app abre sem conexão por até
-          ${LICENCA.toleranciaOfflineDias} dias desde a última validação.</p>
+        <p class="login__mode">${icon('info', 14)}<span>A ativação precisa de internet. Depois dela, o app abre sem conexão por até
+          ${LICENCA.toleranciaOfflineDias} dias desde a última validação.</span></p>
         <p class="muted small" data-licenca-aparelho>Aparelho: ${esc(nomeDoAparelho())}</p>
-      </form>`;
+      </form>`);
     document.body.append(root);
     const form = $('#licenca-form', root);
     const erro = $('#licenca-erro', root);

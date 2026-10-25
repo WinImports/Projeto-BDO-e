@@ -145,7 +145,7 @@ test('"Salvar e Finalizar": só salvar fica no Histórico; "Enviar" depois vai p
   await expect(modal.locator('.finalize-ask')).toContainText('Deseja enviar este relatório?');
   await expect(modal.locator('[data-pdf]')).toBeVisible();
   await modal.getByRole('button', { name: 'Não, só salvar no aparelho' }).click();
-  await expect(page.locator('#toasts')).toContainText('memória local do app (IndexedDB)');
+  await expect(page.locator('#toasts')).toContainText('memória local deste aparelho');
   await expect(page.locator('#outbox-badge')).toBeHidden(); // não foi para a fila de envio
 
   await openTab(page, 'outbox');
