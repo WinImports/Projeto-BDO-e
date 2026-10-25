@@ -46,6 +46,11 @@ export function indicadoresBdo(d) {
   ];
 }
 
+/** Técnico de segurança do turno (SMS): "NOME · Mat. 123", ou '' se não informado. */
+export function tecnicoSeguranca(d) {
+  return [d.tst_nome, d.tst_matricula ? `Mat. ${d.tst_matricula}` : ''].filter((v) => !vazio(v)).join(' · ');
+}
+
 /** Bloco de assinaturas do PDF: [papel, nome já preenchido] — o fiscal do cliente assina e escreve o nome à mão. */
 export function assinaturasBdo(d) {
   return [
@@ -218,12 +223,16 @@ function render({ jsPDF, autoTable, txt, formatOf }, { uniqueId, data: d, compan
   titulo('SMS & Segurança');
   const ocorreu = d.ocorrencia_sms === 'Sim';
   const sim = (v) => (vazio(v) ? '—' : v);
+  const tst = tecnicoSeguranca(d);
   tabela({
-    body: [[
-      { content: txt(`RPT / APR realizada: ${sim(d.rpt)}`), styles: { fontStyle: 'bold' } },
-      { content: txt(`Ocorrência de SMS: ${sim(d.ocorrencia_sms)}`), styles: { fontStyle: 'bold', fillColor: ocorreu ? [255, 244, 220] : [255, 255, 255] } },
-      { content: txt(vazio(d.descricao_sms) ? (ocorreu ? 'Descrição não informada.' : 'Sem ocorrências de SMS no turno.') : d.descricao_sms) }
-    ]],
+    body: [
+      [
+        { content: txt(`RPT / APR realizada: ${sim(d.rpt)}`), styles: { fontStyle: 'bold' } },
+        { content: txt(`Ocorrência de SMS: ${sim(d.ocorrencia_sms)}`), styles: { fontStyle: 'bold', fillColor: ocorreu ? [255, 244, 220] : [255, 255, 255] } },
+        { content: txt(vazio(d.descricao_sms) ? (ocorreu ? 'Descrição não informada.' : 'Sem ocorrências de SMS no turno.') : d.descricao_sms) }
+      ],
+      ...(tst ? [[{ content: txt(`Técnico de segurança: ${tst}`), colSpan: 3 }]] : [])
+    ],
     alternateRowStyles: {},
     columnStyles: { 0: { cellWidth: fs(44) }, 1: { cellWidth: fs(42) } }
   });

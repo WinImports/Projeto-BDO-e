@@ -232,7 +232,7 @@ async function showTab(tab) {
             <div class="doc-head__meta">
               <span class="meta-chip">${icon('mapPin', 14)}<span id="meta-poco"></span></span>
               <span class="meta-chip">${icon('hash', 14)}<span>ID <code>${esc(draft.uniqueId.slice(0, 8))}</code></span></span>
-              <span class="meta-chip">${icon('calendar', 14)}<span>${draft.isNew ? 'Novo relatório' : 'Rascunho recuperado'}</span></span>
+              <span class="meta-chip"${Number(draft.data?._revisao) > 1 ? ' data-atualizando' : ''}>${icon('calendar', 14)}<span>${Number(draft.data?._revisao) > 1 ? `Atualizando · versão ${Number(draft.data._revisao)}` : draft.isNew ? 'Novo relatório' : 'Rascunho recuperado'}</span></span>
             </div>
           </div>
           <div class="doc-head__side">
@@ -447,7 +447,7 @@ async function finalize(module) {
 function publicarDocumentos(module, report) {
   return publishReportDocuments(module, report.uniqueId, () => reportFiles({
     module, uniqueId: report.uniqueId, data: report.data, photos: report.photos, company: report.data._empresa
-  }));
+  }), report.data?._revisao);
 }
 
 /**
@@ -537,10 +537,42 @@ async function newReport(module) {
 // Campos que não fazem sentido copiar para um relatório novo
 const NOT_REUSED = new Set(['date', 'datetime', 'time', 'signature', 'photos', 'consolidation', 'visitaNota']);
 
-/** Histórico → novo rascunho (novo ID) preenchido com os dados de um relatório salvo. */
+/**
+ * Histórico › Reutilizar.
+ * Relatório do próprio aparelho: abre para ATUALIZAÇÃO com o MESMO ID (dados, datas e fotos), e ao
+ * finalizar a versão nova substitui a anterior no Histórico e no servidor — não duplica.
+ * Relatório de outro técnico (equipe / servidor): não é nosso para alterar → vira um rascunho novo (novo ID).
+ */
 async function reuseReport(rec) {
   const module = getModule(rec.module);
   if (!module) return;
+  const proprio = !rec.remote && rec.status !== 'team' && rec.status !== 'server';
+  if (proprio) return atualizarRelatorio(module, rec);
+  return reutilizarComoNovo(module, rec);
+}
+
+/** Abre o relatório salvo para atualização, com o mesmo ID (data._revisao conta as versões). */
+async function atualizarRelatorio(module, rec) {
+  const draft = (await hasDraft(module.id)) ? await loadDraft(module.id) : null;
+  if (draft && draft.uniqueId !== rec.uniqueId) {
+    const ok = await confirmDialog({
+      title: 'Substituir o rascunho atual?',
+      message: `Já existe um rascunho de "${module.shortTitle}" em andamento. Ele será substituído pelo relatório escolhido, que abre para atualização.`,
+      confirmLabel: 'Substituir e atualizar', danger: true
+    });
+    if (!ok) return;
+  }
+  const data = rehydrate(module, structuredClone(rec.data));
+  data._revisao = (Number(rec.data?._revisao) || 1) + 1;
+  await flushSave();
+  await restoreDraft({ uniqueId: rec.uniqueId, module: module.id, photos: rec.photos || [] }, data);
+  await showTab(module.id);
+  window.scrollTo(0, 0);
+  toast('Relatório aberto para atualização. Ao finalizar, a versão nova substitui a anterior no Histórico e no servidor (sem duplicar).', 'success', 7000);
+}
+
+/** Relatório de outro técnico → rascunho novo (novo ID) preenchido com os dados dele. */
+async function reutilizarComoNovo(module, rec) {
   if (await hasDraft(module.id)) {
     const ok = await confirmDialog({
       title: 'Substituir o rascunho atual?',

@@ -10,7 +10,7 @@ import { confirmDialog, infoDialog } from './confirm.js';
 import { comprimirFoto } from './compress.js';
 import { kmEstrada, posicaoAtual } from '../core/distancia.js';
 import { isTravel, resolverDestino } from '../core/deslocamento.js';
-import { loadPocos, searchPocos, findPoco } from '../core/pocos.js';
+import { loadPocos, searchPocos, findPoco, listaPocos, incluirPoco } from '../core/pocos.js';
 import { consolidateFromHistory, hasConsolidation } from '../core/consolidar.js';
 import { consolidationHtml } from './consolidacao-view.js';
 import { routeLinks, showRoutePrompt } from './route-prompt.js';
@@ -663,7 +663,8 @@ export class FormView {
   routeTarget() {
     const d = this.draft.data;
     const geo = [...this.fields.values()].find((f) => f.type === 'geo');
-    const poco = this.pocos && d.poco ? findPoco(this.pocos, d.poco) : null;
+    // vários poços no dia: a rota vai para o mais recente (último da lista) que estiver na base
+    const poco = this.pocos && d.poco ? listaPocos(d.poco).reverse().map((n) => findPoco(this.pocos, n)).find(Boolean) || null : null;
     if (poco) return { lat: poco.lat, lng: poco.lng, nome: poco.nome, origem: 'cadastro' };
     const v = geo ? d[geo.id] : null;
     const c = parseCoords(v);
@@ -675,8 +676,8 @@ export class FormView {
     const t = this.routeTarget();
     if (!t) return '';
     const links = routeLinks(t);
-    const d = 0.004;
-    const bbox = [t.lng - d, t.lat - d, t.lng + d, t.lat + d].map((n) => n.toFixed(6)).join(',');
+    // sem a imagem do mapa: a navegação abre direto no Google Maps / Waze (e pelos avisos ao escolher o poço
+    // e nos deslocamentos da apropriação)
     return `
       <div class="geo__route" data-route-target="${t.lat.toFixed(6)},${t.lng.toFixed(6)}">
         <p class="geo__route-title">${icon('navigation', 16)} Rota até ${t.nome ? `a locação <strong>${esc(t.nome)}</strong>` : 'o ponto registrado'}
@@ -687,10 +688,6 @@ export class FormView {
           <a class="btn btn--ghost btn--sm" data-route-link="waze" href="${links.waze}" target="_blank" rel="noopener">Waze</a>
           <a class="btn btn--ghost btn--sm" data-route-link="osm" href="${links.osm}" target="_blank" rel="noopener">${icon('map', 15)} OpenStreetMap</a>
         </div>
-        ${navigator.onLine
-          ? `<iframe class="geo__map" title="Mapa da locação" loading="lazy" referrerpolicy="no-referrer"
-               src="https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${t.lat},${t.lng}"></iframe>`
-          : '<div class="geo__map geo__map--offline">Mapa indisponível sem internet. Os botões de rota funcionam quando houver conexão.</div>'}
       </div>`;
   }
 
@@ -1085,7 +1082,7 @@ export class FormView {
 
   openCombo(input) {
     const list = input.closest('.combo').querySelector('.combo__list');
-    const query = input.value.trim();
+    const query = (input.value.split(/[,;]/).at(-1) || '').trim(); // vários poços: busca o que está sendo digitado
     this.comboItems = query.length >= 2 ? searchPocos(this.pocos, query) : [];
     this.comboActive = -1;
     if (!this.comboItems.length) {
@@ -1140,8 +1137,10 @@ export class FormView {
 
   async pickWell(input, poco) {
     if (!poco) return;
-    input.value = poco.nome;
-    this.draft.data[input.dataset.field] = poco.nome;
+    // vários poços ("FBM-89, FBM-1"): troca só o trecho que está sendo digitado
+    const anteriores = listaPocos(input.value.split(/[,;]/).slice(0, -1).join(','));
+    input.value = [...anteriores, poco.nome].join(', ');
+    this.draft.data[input.dataset.field] = input.value;
     this.closeCombo(input);
     this.changed(input.dataset.field);
     await this.applyWellCoords(poco);
@@ -1151,7 +1150,7 @@ export class FormView {
 
   // Digitou o nome exato de um poço da base sem escolher na lista: coordenadas (se vazias) + convite à rota
   async acceptExactWell(input) {
-    const poco = findPoco(this.pocos, input.value);
+    const poco = findPoco(this.pocos, listaPocos(input.value).at(-1));
     const geo = [...this.fields.values()].find((f) => f.type === 'geo');
     if (!poco || !geo) return;
     if (!parseCoords(this.draft.data[geo.id])) await this.applyWellCoords(poco);
@@ -1209,13 +1208,15 @@ export class FormView {
     const origem = d._km?.ultimo || (geo && parseCoords(d[geo.id])) || null;
 
     // 1) cabeçalho: poço → Poço / Locação (+ coordenadas); cidade / base → Cidade / Estado
-    if (dest.tipo === 'poco' && this.fields.has('poco') && String(d.poco || '').trim() !== dest.nome) {
-      const antes = d.poco;
-      this.setFieldValue('poco', dest.nome);
+    // 1a) poço novo no dia: entra no FIM da lista do Poço / Locação ("FBM-89, FBM-12"), sem apagar os anteriores
+    const novoPoco = dest.tipo === 'poco' && this.fields.has('poco') ? incluirPoco(d.poco, dest.nome) : null;
+    if (novoPoco !== null && novoPoco !== String(d.poco || '').trim()) {
+      const antes = String(d.poco || '').trim();
+      this.setFieldValue('poco', novoPoco);
       d._km = { ...d._km, poco: dest.nome }; // não reestimar o KM ao sair do campo Poço
       const poco = findPoco(this.pocos, dest.nome);
       if (poco) await this.applyWellCoords(poco);
-      toast(`Cabeçalho atualizado: Poço / Locação = ${dest.nome}${antes ? ` (antes: ${antes})` : ''}.`, 'info', 5000);
+      toast(antes ? `Poço ${dest.nome} incluído no Poço / Locação: ${novoPoco}.` : `Cabeçalho atualizado: Poço / Locação = ${dest.nome}.`, 'info', 5000);
     } else if (dest.tipo === 'cidade' && this.fields.has('cidade_uf')) {
       const valor = dest.uf ? `${dest.nome} - ${dest.uf}` : dest.nome;
       if (d.cidade_uf !== valor) {

@@ -34,10 +34,12 @@ export function shareMessage(module, data, uniqueId, link, wordLink = null) {
  * Sobe uma cópia do relatório (PDF ou Word .docx) para o bucket público de links.
  * Caminho fixo pelo uniqueId (não adivinhável) → reenviar não duplica. Devolve a URL pública ou null.
  */
-export async function uploadShareCopy(module, uniqueId, file) {
+export async function uploadShareCopy(module, uniqueId, file, revisao = 1) {
   if (!isSupabaseConfigured() || !navigator.onLine) return null;
   const client = getClient();
-  const path = `${module.id}/${uniqueId}.${file.ext}`;
+  // relatório atualizado (Reutilizar no Histórico): cada versão tem o seu arquivo, o link nunca mostra a antiga
+  const versao = Number(revisao) > 1 ? `-v${Number(revisao)}` : '';
+  const path = `${module.id}/${uniqueId}${versao}.${file.ext}`;
   const { error } = await client.storage.from(SYNC.shareBucket)
     .upload(path, file.blob, { contentType: file.blob.type, upsert: false });
   if (error && !/already exists|duplicate|409/i.test(`${error.message} ${error.statusCode}`)) throw error;
@@ -54,16 +56,17 @@ const publicando = new Map();
  * Gera (makeFiles → [{ blob, ext }]) e sobe as cópias do relatório para o report-share, nos caminhos
  * fixos <módulo>/<uniqueId>.pdf e .docx. Devolve { pdf, docx } com as URLs públicas (null sem servidor/internet).
  */
-export function publishReportDocuments(module, uniqueId, makeFiles) {
+export function publishReportDocuments(module, uniqueId, makeFiles, revisao = 1) {
   if (!isSupabaseConfigured() || !navigator.onLine) return Promise.resolve(null);
-  if (!publicando.has(uniqueId)) {
+  const chave = `${uniqueId}#${Number(revisao) || 1}`; // uma geração por versão do relatório
+  if (!publicando.has(chave)) {
     const job = (async () => {
       const urls = {};
-      for (const file of await makeFiles()) urls[file.ext] = await uploadShareCopy(module, uniqueId, file);
+      for (const file of await makeFiles()) urls[file.ext] = await uploadShareCopy(module, uniqueId, file, revisao);
       return urls;
     })();
-    publicando.set(uniqueId, job);
-    job.catch(() => publicando.delete(uniqueId));
+    publicando.set(chave, job);
+    job.catch(() => publicando.delete(chave));
   }
-  return publicando.get(uniqueId);
+  return publicando.get(chave);
 }

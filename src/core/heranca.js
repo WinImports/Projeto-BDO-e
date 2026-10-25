@@ -7,6 +7,7 @@
 // campos vazios (ou ainda com esse valor) acompanham o BDO-e.
 
 import { STORES, get, getAll } from './db.js';
+import { ultimoPoco } from './pocos.js';
 
 const vazio = (v) => v == null || v === '' || (typeof v === 'object' && !Object.keys(v).length);
 const igual = (a, b) => JSON.stringify(a ?? '') === JSON.stringify(b ?? '');
@@ -43,7 +44,8 @@ export function herdar(module, draft, bdo) {
   const herdado = {};
   const preenchidos = [];
   for (const [destino, origem] of Object.entries(mapa)) {
-    const valor = bdo.data[origem];
+    // BDO-e com vários poços no dia ("FBM-89, FBM-12"): a Visita / Execução é do poço atual (o último)
+    const valor = origem === 'poco' ? ultimoPoco(bdo.data[origem]) : bdo.data[origem];
     if (vazio(valor)) continue;
     const campo = campos.get(destino);
     const novo = converter(campo, valor, d[destino]);

@@ -61,7 +61,9 @@ async function uploadPhotos(client, rec) {
     const photo = rec.photos[i];
     if (photo.path) continue;
     const prefix = photo.category ? `${safeName(photo.category)}-` : '';
-    const path = `${rec.module}/${rec.uniqueId}/${String(i + 1).padStart(2, '0')}-${prefix}${safeName(photo.name)}`;
+    // relatório atualizado (versão 2+): fotos em caminho próprio, sem colidir com as da versão anterior
+    const rev = Number(rec.data?._revisao) > 1 ? `v${Number(rec.data._revisao)}-` : '';
+    const path = `${rec.module}/${rec.uniqueId}/${rev}${String(i + 1).padStart(2, '0')}-${prefix}${safeName(photo.name)}`;
     await withRetry(async () => {
       const { error } = await client.storage.from(SYNC.photoBucket)
         .upload(path, photo.blob, { contentType: photo.type, upsert: false });

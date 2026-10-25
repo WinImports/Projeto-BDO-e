@@ -66,6 +66,20 @@ export function searchPocos(base, query, limit = 8) {
   return [...exact, ...loose, ...contains].slice(0, limit);
 }
 
+/**
+ * Poço / Locação com vários poços no mesmo dia ("FBM-89, FBM-12"): lista na ordem em que foram atendidos.
+ * Separador: vírgula ou ponto e vírgula (nomes de poço podem ter hífen e espaço).
+ */
+export const listaPocos = (texto) => String(texto || '').split(/\s*[,;]\s*/).map((s) => s.trim()).filter(Boolean);
+/** Último poço da lista (o atual / mais recente). */
+export const ultimoPoco = (texto) => listaPocos(texto).at(-1) || '';
+/** Inclui o poço no fim da lista, se ainda não estiver nela (mesma comparação da base). */
+export function incluirPoco(texto, nome) {
+  const lista = listaPocos(texto);
+  if (lista.some((p) => normalizeWell(p) === normalizeWell(nome))) return lista.join(', ');
+  return [...lista, nome].join(', ');
+}
+
 export function findPoco(base, name) {
   const key = normalizeWell(name);
   if (!key) return null;

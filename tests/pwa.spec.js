@@ -205,7 +205,7 @@ test('PWA: relatório finalizado fica no Histórico do navegador, reabre na pré
     await expect.poll(() => page.evaluate(() => window.__printed || null)).not.toBeNull();
     expect((await page.evaluate(() => window.__printed)).text).toContain('FBM-89');
 
-    await preview.getByRole('button', { name: 'Reutilizar / Editar como novo' }).click();
+    await preview.getByRole('button', { name: 'Reutilizar / Atualizar' }).click();
     await page.locator('#view[data-ready=visita_tecnica]').waitFor();
     await expect(page.locator('[data-table=equipe][data-row="0"][data-col=nome]')).toHaveValue('João');
     expect(errors).toEqual([]);

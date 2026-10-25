@@ -93,7 +93,10 @@ export default {
       fields: [
         { id: 'rpt', label: 'RPT / APR realizada?', type: 'yesno', required: true },
         { id: 'ocorrencia_sms', label: 'Ocorrência de SMS?', type: 'yesno', required: true },
-        { id: 'descricao_sms', label: 'Descrição de SMS', type: 'textarea', placeholder: 'Obrigatório se houve ocorrência de SMS' }
+        { id: 'descricao_sms', label: 'Descrição de SMS', type: 'textarea', placeholder: 'Obrigatório se houve ocorrência de SMS' },
+        { type: 'divider', label: 'Técnico de segurança', icon: 'user' },
+        { id: 'tst_nome', label: 'Nome do técnico de segurança', type: 'text', span: 6, placeholder: 'Ex.: MARIA OLIVEIRA' },
+        { id: 'tst_matricula', label: 'Matrícula do técnico de segurança', type: 'text', span: 3, placeholder: 'Ex.: 41207' }
       ]
     },
     {

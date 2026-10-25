@@ -113,3 +113,19 @@ test('bloco de assinaturas: técnico (nome e matrícula do relatório) e fiscal 
   // com as assinaturas, o turno comum continua em 1 página
   expect(await paginas(page, 8, 'Troca de válvula com teste de estanqueidade')).toBe(1);
 });
+
+test('SMS & Segurança: nome e matrícula do técnico de segurança no formulário e no PDF', async () => {
+  const { page } = ctx;
+  await openTab(page, 'bdo');
+  await fill(page, 'tst_nome', 'MARIA OLIVEIRA');
+  await fill(page, 'tst_matricula', '41207');
+  const sec = page.locator('.form-section', { hasText: 'SMS & Segurança' });
+  await expect(sec.locator('[data-field=tst_nome]')).toHaveValue('MARIA OLIVEIRA');
+  const r = await page.evaluate(async () => {
+    const { tecnicoSeguranca } = await import('./src/ui/bdo-pdf.js');
+    return [tecnicoSeguranca({ tst_nome: 'MARIA OLIVEIRA', tst_matricula: '41207' }), tecnicoSeguranca({})];
+  });
+  expect(r).toEqual(['MARIA OLIVEIRA · Mat. 41207', '']);
+  // o PDF continua em 1 página com a linha do técnico de segurança
+  expect(await paginas(page, 8, 'Troca de válvula com teste de estanqueidade')).toBe(1);
+});

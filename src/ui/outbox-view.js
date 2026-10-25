@@ -19,11 +19,41 @@ const STATUS = {
   server: { cls: 'team', label: 'No servidor' }
 };
 
+/** Relatório deste aparelho (pode ser atualizado no lugar) x recebido de outro técnico (vira um novo). */
+const proprio = (r) => !r.remote && r.status !== 'team' && r.status !== 'server';
+
 /** Data do relatório (primeiro campo de data preenchido), em pt-BR. */
 function reportDate(module, data) {
   const f = module?.sections.flatMap((s) => s.fields).find((x) => x.type === 'date' && data[x.id]);
   const v = f && data[f.id];
   return v && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10).split('-').reverse().join('/') : '';
+}
+
+/** Dia do relatório (AAAA-MM-DD): o campo de data / data e hora do relatório; sem ele, o dia em que foi finalizado. */
+export function diaDoRelatorio(r) {
+  const mod = getModule(r.module);
+  const f = mod?.sections.flatMap((s) => s.fields).find((x) => (x.type === 'date' || x.type === 'datetime') && r.data?.[x.id]);
+  const v = f && r.data[f.id];
+  if (v && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+  const d = new Date(r.createdAt || Date.now());
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+const TIPO_CURTO = { bdo: 'BDO-e', visita_tecnica: 'Visita', handover: 'Execução' };
+
+const SEMANA = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+
+/** "Sexta-feira, 24/10/2026" + "Hoje" / "Ontem" quando for o caso. */
+function rotuloDoDia(dia) {
+  const [a, m, d] = dia.split('-').map(Number);
+  const data = new Date(a, m - 1, d);
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const dif = Math.round((hoje - data) / 86400000);
+  return {
+    titulo: `${SEMANA[data.getDay()]}, ${dia.split('-').reverse().join('/')}`,
+    relativo: dif === 0 ? 'Hoje' : dif === 1 ? 'Ontem' : ''
+  };
 }
 
 /** Texto sem acentos e em minúsculas (busca "pocos" acha "Poços"). */
@@ -60,10 +90,22 @@ export class OutboxView {
     this.filter = getPref('historyFilter', 'all');
     this.sync = { running: false, online: navigator.onLine, configured: false };
     this.query = '';
+    this.dia = ''; // filtro por data (AAAA-MM-DD), vazio = todas
+    this.diasAbertos = new Map(); // gaveta aberta / fechada pelo técnico (sobrevive aos redesenhos da sincronização)
+    // "toggle" não sobe na árvore: escuta na captura
+    root.addEventListener('toggle', (e) => {
+      const dia = e.target?.dataset?.historyDay;
+      if (dia) this.diasAbertos.set(dia, e.target.open);
+    }, true);
     this.limparServidor();
     root.addEventListener('click', (e) => this.handleClick(e));
     // busca rápida: atualiza só a lista a cada tecla (o campo não é redesenhado e não perde o foco)
     root.addEventListener('input', (e) => {
+      if (e.target.matches('[data-history-date]')) {
+        this.dia = e.target.value;
+        this.root.querySelector('[data-history-date-clear]')?.toggleAttribute('hidden', !this.dia);
+        return this.renderResults();
+      }
       if (!e.target.matches('[data-history-search]')) return;
       this.query = e.target.value;
       this.limparServidor();
@@ -130,10 +172,17 @@ export class OutboxView {
       <div class="notice notice--${status.kind}" role="status">${esc(status.text)}</div>
       ${equipe ? `<div class="notice notice--${equipe.kind}" data-equipe-status>${esc(equipe.text)}</div>` : ''}
       ${this.items.length || podeBuscarNoServidor() ? `
-        <div class="history-search">
-          <span class="history-search__icon" aria-hidden="true">${icon('search', 18)}</span>
-          <input type="search" class="history-search__input" data-history-search value="${esc(this.query)}"
-            placeholder="Buscar por poço, data ou tipo..." aria-label="Buscar por poço, data ou tipo" autocomplete="off" enterkeyhint="search">
+        <div class="history-tools">
+          <div class="history-search">
+            <span class="history-search__icon" aria-hidden="true">${icon('search', 18)}</span>
+            <input type="search" class="history-search__input" data-history-search value="${esc(this.query)}"
+              placeholder="Buscar por poço, cliente ou tipo..." aria-label="Buscar por poço, cliente ou tipo" autocomplete="off" enterkeyhint="search">
+          </div>
+          <div class="history-date">
+            <label class="history-date__label" for="history-date">${icon('calendar', 16)}<span>Data</span></label>
+            <input type="date" id="history-date" class="history-date__input" data-history-date value="${esc(this.dia)}" aria-label="Filtrar pela data do relatório">
+            <button type="button" class="btn btn--text btn--sm" data-action="clear-date" data-history-date-clear${this.dia ? '' : ' hidden'} aria-label="Limpar a data">${icon('x', 15)}</button>
+          </div>
         </div>
         <div class="history-filter" role="group" aria-label="Filtrar por tipo de relatório">
           <button type="button" class="chip${this.filter === 'all' ? ' is-active' : ''}" data-action="filter" data-filter="all" aria-pressed="${this.filter === 'all'}">Todos <span class="chip__n">${this.items.length}</span></button>
@@ -159,12 +208,48 @@ export class OutboxView {
     const box = this.root.querySelector('[data-history-results]');
     if (!box) return;
     const doTipo = this.filter === 'all' ? this.items : this.items.filter((r) => r.module === this.filter);
-    const shown = doTipo.filter((r) => matchesQuery(r, this.query));
+    const shown = doTipo.filter((r) => matchesQuery(r, this.query) && (!this.dia || diaDoRelatorio(r) === this.dia));
     const q = this.query.trim();
-    box.innerHTML = shown.length
-      ? `${q ? `<p class="muted small" data-history-count>${shown.length} relatório${shown.length > 1 ? 's' : ''} encontrado${shown.length > 1 ? 's' : ''} para "${esc(q)}"</p>` : ''}
-        <ul class="outbox-list" data-history>${shown.map((r) => this.itemHtml(r)).join('')}</ul>`
-      : `<p class="muted" data-history-empty>${q ? `Nenhum relatório encontrado para "${esc(q)}"${podeBuscarNoServidor() ? ' neste aparelho' : ''}.` : this.items.length ? 'Nenhum relatório deste tipo.' : 'Nenhum relatório neste aparelho.'}</p>`;
+    const filtrando = Boolean(q || this.dia);
+    const criterio = [q ? `"${esc(q)}"` : '', this.dia ? `o dia ${esc(this.dia.split('-').reverse().join('/'))}` : ''].filter(Boolean).join(' em ');
+    if (!shown.length) {
+      box.innerHTML = `<p class="muted" data-history-empty>${filtrando ? `Nenhum relatório encontrado para ${criterio}${podeBuscarNoServidor() ? ' neste aparelho' : ''}.` : this.items.length ? 'Nenhum relatório deste tipo.' : 'Nenhum relatório neste aparelho.'}</p>`;
+      return;
+    }
+    // gavetas por dia (mais recente primeiro): abertas a do dia mais recente, as que pedem atenção
+    // (pendente / não enviado) e todas quando há busca ou data escolhida
+    const dias = new Map();
+    for (const r of shown) {
+      const dia = diaDoRelatorio(r);
+      if (!dias.has(dia)) dias.set(dia, []);
+      dias.get(dia).push(r);
+    }
+    const ordem = [...dias.keys()].sort().reverse();
+    box.innerHTML = `
+      ${filtrando ? `<p class="muted small" data-history-count>${shown.length} relatório${shown.length > 1 ? 's' : ''} encontrado${shown.length > 1 ? 's' : ''} para ${criterio}</p>` : ''}
+      <div class="history-days" data-history>
+        ${ordem.map((dia, i) => this.diaHtml(dia, dias.get(dia), i === 0, filtrando)).join('')}
+      </div>`;
+  }
+
+  /** Gaveta de um dia: resumo (data, quantos de cada tipo, pendências) e a lista recolhível. */
+  diaHtml(dia, itens, maisRecente, filtrando) {
+    const { titulo, relativo } = rotuloDoDia(dia);
+    const atencao = itens.filter((r) => r.status === 'pending' || r.status === 'error' || r.status === 'local').length;
+    const tipos = MODULES.map((m) => [m, itens.filter((r) => r.module === m.id).length]).filter(([, n]) => n);
+    return `
+      <details class="history-day card" data-history-day="${esc(dia)}"${filtrando || (this.diasAbertos.get(dia) ?? (maisRecente || atencao > 0)) ? ' open' : ''}>
+        <summary class="history-day__summary">
+          <span class="history-day__when">
+            <strong>${esc(titulo)}</strong>
+            ${relativo ? `<span class="history-day__rel">${relativo}</span>` : ''}
+          </span>
+          <span class="history-day__tipos">${tipos.map(([m, n]) => `<span class="history-day__tipo">${n} ${esc(TIPO_CURTO[m.id] || m.shortTitle)}</span>`).join('')}</span>
+          ${atencao ? `<span class="history-day__pend">${atencao} a enviar</span>` : ''}
+          <span class="history-day__chevron" aria-hidden="true">${icon('chevronDown', 18)}</span>
+        </summary>
+        <ul class="outbox-list history-day__list">${itens.map((r) => this.itemHtml(r)).join('')}</ul>
+      </details>`;
   }
 
   // ---------- Busca no servidor: todo o histórico dos contratos (core/busca.js) ----------
@@ -254,7 +339,8 @@ export class OutboxView {
           </span>
           <span class="outbox-item__meta muted small">
             ${date ? `Relatório de ${date} · ` : ''}Finalizado em ${formatDateTime(r.createdAt)}
-            · ${nPhotos} foto${nPhotos === 1 ? '' : 's'} · ID <code>${esc(r.uniqueId.slice(0, 8))}</code>
+            ${nPhotos ? `· ${nPhotos} foto${nPhotos === 1 ? '' : 's'}` : ''} · ID <code>${esc(r.uniqueId.slice(0, 8))}</code>
+            ${Number(r.data?._revisao) > 1 ? ` · <span data-versao>versão ${Number(r.data._revisao)}</span>` : ''}
             ${r.status === 'sent' && r.sentAt ? ` · sincronizado em ${formatDateTime(r.sentAt)}` : ''}
             ${r.status === 'team' ? ` · <span data-autor>por ${esc(r.autor || 'técnico da equipe')}</span>` : ''}
           </span>
@@ -272,8 +358,7 @@ export class OutboxView {
             ${q ? (editable
               ? `<button type="button" class="btn btn--ghost btn--sm" data-action="edit" data-id="${id}" title="Voltar para rascunho e corrigir">${icon('pen', 15)} Editar</button>`
               : `<button type="button" class="btn btn--ghost btn--sm" disabled title="Já houve tentativa de envio ao servidor; não pode mais ser editado">${icon('pen', 15)} Editar</button>`) : ''}
-            <button type="button" class="btn btn--ghost btn--sm" data-action="view" data-id="${id}">${icon('fileText', 15)} Ver / PDF</button>
-            <button type="button" class="btn btn--ghost btn--sm" data-action="reuse" data-id="${id}" title="Novo relatório preenchido com estes dados">${icon('copy', 15)} Reutilizar</button>
+            <button type="button" class="btn btn--ghost btn--sm" data-action="reuse" data-id="${id}" title="${proprio(r) ? 'Abrir este relatório para atualizar (mesmo relatório, sem duplicar)' : 'Novo relatório preenchido com estes dados'}">${icon('copy', 15)} Reutilizar</button>
           </div>
         </div>
       </li>`;
@@ -292,7 +377,8 @@ export class OutboxView {
       notice: lostPhotos ? `Este relatório tinha ${rec.photosCount} foto(s), mas foi finalizado numa versão anterior do app, que não guardava as fotos depois do envio. O PDF sai sem elas.`
         : fotosABaixar && rec.status === 'server' ? `${rec.fotosPendentes} foto(s) não puderam ser baixadas agora; abra de novo com internet para tentar outra vez.`
         : fotosABaixar ? `${rec.fotosPendentes} foto(s) deste relatório da equipe ainda não foram baixadas; elas vêm na próxima sincronização com internet.` : '',
-      onReuse: () => this.onReuse?.(rec)
+      onReuse: () => this.onReuse?.(rec),
+      reuseLabel: proprio(rec) ? 'Reutilizar / Atualizar' : 'Reutilizar como novo'
     });
   }
 
@@ -307,6 +393,13 @@ export class OutboxView {
         setPref('historyFilter', this.filter);
         this.limparServidor();
         return this.render();
+      case 'clear-date': {
+        this.dia = '';
+        const campo = this.root.querySelector('[data-history-date]');
+        if (campo) campo.value = '';
+        btn.hidden = true;
+        return this.renderResults();
+      }
       case 'server-search': return this.buscarServidor(false);
       case 'server-more': return this.buscarServidor(true);
       case 'edit': return rec?.outbox && this.onEdit?.(rec.outbox);

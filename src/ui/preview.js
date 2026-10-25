@@ -102,7 +102,7 @@ const EYEBROW = {
  * @param {object} o
  * @param {Array<{field,message}>} [o.pending] campos obrigatórios ainda pendentes (avisados no topo)
  * @param {() => void} [o.onNewReport] botão "Início / Novo relatório" (chamado depois de fechar a prévia)
- * @param {() => void} [o.onReuse] botão "Reutilizar / Editar como novo" (idem)
+ * @param {() => void} [o.onReuse] botão de reutilizar (idem); o rótulo vem de o.reuseLabel
  * @param {string} [o.notice] aviso informativo no topo do corpo
  * @returns {Promise<false|'send'|'local'>} modo "confirm": 'send' (salvar e enviar) | 'local' (só salvar no aparelho)
  */
@@ -116,7 +116,7 @@ async function exportarJson({ module, uniqueId, data, photos, createdAt }) {
   return { saved: true, sheet: true };
 }
 
-export function openPreview({ module, uniqueId, data, photos = [], mode = 'confirm', meta = '', pending = [], onNewReport, onReuse, notice = '', createdAt = null }) {
+export function openPreview({ module, uniqueId, data, photos = [], mode = 'confirm', meta = '', pending = [], onNewReport, onReuse, reuseLabel = 'Reutilizar / Atualizar', notice = '', createdAt = null }) {
   // Relatório finalizado usa a empresa "congelada" no envio; rascunho usa a atual (a do contrato do relatório)
   const company = data._empresa || companyInfo(data.contrato);
   assignPhotoFields(module, photos); // cada foto no bloco do seu componente (antigas → "Outras fotos")
@@ -129,7 +129,7 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
       <div class="modal__nav" role="toolbar" aria-label="Navegação da prévia">
         <button type="button" class="btn btn--ghost btn--sm" data-close data-back>${icon('arrowLeft', 16)} ${backLabel}</button>
         ${onNewReport ? `<button type="button" class="btn btn--ghost btn--sm" data-new>${icon('home', 16)} Início / Novo relatório</button>` : ''}
-        ${onReuse ? `<button type="button" class="btn btn--ghost btn--sm" data-reuse>${icon('copy', 16)} Reutilizar / Editar como novo</button>` : ''}
+        ${onReuse ? `<button type="button" class="btn btn--ghost btn--sm" data-reuse>${icon('copy', 16)} ${esc(reuseLabel)}</button>` : ''}
       </div>
       <div class="modal__header">
         <div>

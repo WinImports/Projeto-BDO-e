@@ -1255,3 +1255,58 @@ button.company-chip--empty:hover { border-color: var(--primary-line); color: var
   .conn__text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .conn { width: 32px; height: 32px; padding: 0; justify-content: center; }
 }
+
+/* =====================================================================
+   Histórico em gavetas por dia (2.2) — lista limpa, filtro por data
+   ===================================================================== */
+.history-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
+.history-tools .history-search { flex: 1 1 280px; margin-top: 0; }
+.history-date { display: flex; align-items: center; gap: 6px; flex: 0 1 auto; }
+.history-date__label { display: inline-flex; align-items: center; gap: 6px; font-size: .86rem; font-weight: 600; color: var(--text-2); }
+.history-date__label .icon { color: var(--text-muted); }
+.history-date__input { width: auto !important; min-width: 168px; }
+
+.history-days { display: flex; flex-direction: column; gap: 10px; }
+.history-day { overflow: hidden; }
+.history-day__summary {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 14px 18px;
+  cursor: pointer; list-style: none; user-select: none;
+}
+.history-day__summary::-webkit-details-marker { display: none; }
+.history-day__summary:hover { background: var(--surface-2); }
+.history-day__summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.history-day__when { display: flex; align-items: baseline; gap: 8px; flex: 1 1 220px; min-width: 0; }
+.history-day__when strong { font-size: 1rem; }
+.history-day__rel { font-size: .74rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--accent-strong); }
+.history-day__tipos { display: flex; flex-wrap: wrap; gap: 6px; }
+.history-day__tipo { padding: 2px 9px; border-radius: 999px; background: var(--surface-3); color: var(--text-2); font-size: .76rem; font-weight: 600; }
+.history-day__pend { padding: 2px 9px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); font-size: .76rem; font-weight: 700; }
+.history-day__chevron { display: grid; place-items: center; color: var(--text-muted); transition: transform .2s; }
+.history-day[open] .history-day__chevron { transform: rotate(180deg); }
+.history-day[open] > .history-day__summary { border-bottom: 1px solid var(--border); }
+.history-day__list { padding: 8px; gap: 6px; }
+
+/* itens dentro da gaveta: linhas compactas, sem cartão dentro de cartão */
+.history-day .outbox-item {
+  border: 1px solid transparent; border-left-width: 4px; box-shadow: none; border-radius: var(--radius-sm);
+  padding: 10px 12px; background: var(--surface);
+}
+.history-day .outbox-item:hover { background: var(--surface-2); border-color: var(--border); }
+.history-day .outbox-item--sent { border-left-color: var(--ok); }
+.history-day .outbox-item__meta { margin-top: 2px; }
+.history-day .outbox-item__side { gap: 6px; }
+.history-day .outbox-item__actions .btn--sm { height: 32px; min-height: 32px; padding: 0 10px; font-size: .8rem; }
+@media (pointer: coarse), (max-width: 640px) {
+  .history-day .outbox-item__actions .btn--sm { height: 44px; min-height: 44px; }
+  .history-date { flex: 1 1 100%; }
+  .history-date__input { flex: 1; }
+  .history-day__summary { padding: 12px 14px; }
+}
+/* busca: o texto começa depois do ícone (a regra geral de input tem mais especificidade) */
+.history-search input.history-search__input { padding-left: 42px; }
+@media (max-width: 640px) {
+  .history-filter { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-right: -16px; padding-right: 16px; }
+  .history-filter::-webkit-scrollbar { display: none; }
+  .history-filter .chip { flex: none; }
+  .page-head .btn[data-action=sync] { width: 100%; }
+}

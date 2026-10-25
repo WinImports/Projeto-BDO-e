@@ -37,7 +37,7 @@ function locais(d, linhas) {
   const pocos = [];
   const cidades = [];
   const add = (lista, nome) => { const n = limpar(nome); if (n && !lista.some((x) => x.toUpperCase() === n.toUpperCase())) lista.push(n); };
-  add(pocos, d.poco);
+  for (const p of String(d.poco || '').split(/\s*[,;]\s*/)) add(pocos, p); // vários poços no dia ("FBM-89, FBM-12")
   for (const r of linhas) {
     const [tipo, nome] = String(r._desloc?.key || '').split(/:(.*)/s);
     if (tipo === 'poco') add(pocos, nome);

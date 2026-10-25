@@ -89,6 +89,34 @@ test('BDO: atividade de deslocamento oferece a rota até o poço do cabeçalho',
   await expect(page.locator('.route-prompt')).toHaveCount(0);
 });
 
+test('BDO: deslocamento para OUTRO poço inclui o poço no mesmo campo (todos os poços do dia); rota e Visita vão para o atual', async () => {
+  const { page } = ctx;
+  await openTab(page, 'bdo');
+  await pickWell(page, 'TST-001');
+  await page.locator('.route-prompt [data-route-close]').first().click();
+
+  await activity(page).fill('Deslocando para o poço TST-002');
+  await activity(page).press('Tab');
+  const poco = page.locator('[data-field=poco]');
+  await expect(poco).toHaveValue('TST-001, TST-002');
+  await expect(page.locator('#toasts')).toContainText('Poço TST-002 incluído no Poço / Locação');
+  await expect(page.locator('.route-prompt[data-route-prompt=deslocamento]')).toContainText('TST-002');
+  // a navegação do cabeçalho segue para o poço atual (o último da lista), sem imagem de mapa
+  await expect(page.locator('.geo__route')).toHaveAttribute('data-route-target', '-12.360000,-38.390000');
+  await expect(page.locator('iframe')).toHaveCount(0);
+
+  // voltar ao mesmo poço não repete o nome
+  await page.locator('[data-action=add-row][data-table=atividades]').click();
+  await activity(page, 1).fill('Retornando para o poço TST-001');
+  await activity(page, 1).press('Tab');
+  await page.waitForTimeout(600);
+  await expect(poco).toHaveValue('TST-001, TST-002');
+
+  // Visita Técnica herda o poço atual (o último), não a lista
+  await openTab(page, 'visita_tecnica');
+  await expect(page.locator('[data-field=poco]')).toHaveValue('TST-002');
+});
+
 test('BDO: "mobilização" sem poço informado pede o Poço / Locação', async () => {
   const { page } = ctx;
   await openTab(page, 'bdo');

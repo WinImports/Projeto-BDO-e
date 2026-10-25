@@ -1,5 +1,5 @@
 // Histórico de relatórios: lista com tipo/poço/data/status, reabrir na prévia, gerar PDF,
-// "Reutilizar / Editar como novo" e botões de navegação da prévia ("Voltar e editar", "Início / Novo relatório").
+// "Reutilizar / Atualizar" (mesmo relatório, sem duplicar), gavetas por dia, filtro por data e botões de navegação da prévia ("Voltar e editar", "Início / Novo relatório").
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
@@ -87,7 +87,7 @@ test('tocar no relatório salvo abre a prévia completa (com fotos) e gera o PDF
   await expect(preview.locator('.modal__body')).toContainText('João');
   await expect(preview.locator('.photo-grid img')).toHaveCount(1);
   await expect(preview.getByRole('button', { name: 'Voltar ao histórico' })).toBeVisible();
-  await expect(preview.getByRole('button', { name: 'Reutilizar / Editar como novo' })).toBeVisible();
+  await expect(preview.getByRole('button', { name: 'Reutilizar / Atualizar' })).toBeVisible();
 
   await preview.getByRole('button', { name: 'Baixar / Compartilhar PDF' }).click();
   await expect(toast(page)).toContainText('PDF salvo', { timeout: 15_000 });
@@ -98,30 +98,81 @@ test('tocar no relatório salvo abre a prévia completa (com fotos) e gera o PDF
   await expect(page.locator('#view[data-ready=outbox]')).toBeVisible();
 });
 
-test('"Reutilizar / Editar como novo" abre um rascunho novo com os dados (sem datas, fotos e assinatura)', async () => {
+test('"Reutilizar / Atualizar" abre o MESMO relatório (mesmo ID, dados e fotos); ao finalizar substitui a versão anterior, sem duplicar', async () => {
   const { page } = ctx;
   const idOriginal = await finalizarVisita(page);
   await openTab(page, 'outbox');
   await page.locator('[data-history] .outbox-item__main').click();
-  await page.locator('dialog.modal[open]').getByRole('button', { name: 'Reutilizar / Editar como novo' }).click();
+  await page.locator('dialog.modal[open]').getByRole('button', { name: 'Reutilizar / Atualizar' }).click();
 
   await page.locator('#view[data-ready=visita_tecnica]').waitFor();
+  await expect(page.locator('.doc-head__meta code')).toHaveText(idOriginal); // mesmo ID: atualiza, não cria outro
+  await expect(page.locator('[data-atualizando]')).toContainText('versão 2');
   await expect(page.locator('[data-field=poco]')).toHaveValue('FBM-89');
   await expect(page.locator('[data-table=equipe][data-row="0"][data-col=nome]')).toHaveValue('João');
-  await expect(page.locator('[data-field=data]')).toHaveValue(hojeISO()); // data volta ao padrão (hoje)
-  await expect(page.locator('.photo-grid img')).toHaveCount(0);
-  await expect(page.locator('.doc-head__meta code')).not.toHaveText(idOriginal); // novo ID: não sobrescreve o original
-  await expect(toast(page)).toContainText('Confira datas');
+  await expect(page.locator('.photo-grid img')).toHaveCount(1); // as fotos vêm junto
+  await expect(toast(page)).toContainText('substitui a anterior');
 
-  // o original continua intacto no histórico
+  // corrige um dado e finaliza de novo: continua UM relatório no Histórico, agora na versão 2
+  await fill(page, 'campo', 'Campo de Buracica');
+  await page.locator('#btn-finalize').click();
+  await page.locator('dialog.modal[open] [data-confirm]').click();
+  await expect(page.locator('.doc-head__meta code')).not.toHaveText(idOriginal);
   await openTab(page, 'outbox');
-  await expect(page.locator('[data-history] .outbox-item')).toHaveCount(1);
+  const itens = page.locator('[data-history] .outbox-item');
+  await expect(itens).toHaveCount(1);
+  await expect(itens).toContainText(idOriginal);
+  await expect(itens.locator('[data-versao]')).toHaveText('versão 2');
+  const fila = await page.evaluate(async () => (await import('./src/core/outbox.js')).list());
+  expect(fila).toHaveLength(1);
+  expect(fila[0].data.campo).toBe('Campo de Buracica');
 
-  // botão direto na lista também reutiliza (com confirmação, pois já há rascunho)
+  // botão direto na lista: com outro rascunho em andamento, pede confirmação antes de substituir
+  await openTab(page, 'visita_tecnica');
+  await fill(page, 'poco', 'RASCUNHO-NOVO');
+  await openTab(page, 'outbox');
   await page.locator('[data-history] [data-action=reuse]').click();
-  await page.locator('dialog.modal--confirm[open]').getByRole('button', { name: 'Substituir e reutilizar' }).click();
+  await page.locator('dialog.modal--confirm[open]').getByRole('button', { name: 'Substituir e atualizar' }).click();
   await page.locator('#view[data-ready=visita_tecnica]').waitFor();
-  await expect(page.locator('[data-field=poco]')).toHaveValue('FBM-89');
+  await expect(page.locator('.doc-head__meta code')).toHaveText(idOriginal);
+  await expect(page.locator('[data-atualizando]')).toContainText('versão 3');
+});
+
+test('Histórico em gavetas por dia: a do dia mais recente aberta, as antigas recolhidas; filtro por data', async () => {
+  const { page } = ctx;
+  await finalizarVisita(page, 'FBM-89');
+  // um relatório antigo (outro dia) direto no histórico do aparelho
+  await page.evaluate(async () => {
+    const { saveLocalOnly } = await import('./src/core/outbox.js');
+    await saveLocalOnly({ uniqueId: crypto.randomUUID(), module: 'bdo', data: { poco: 'RCB-34', data: '2026-01-15' }, photos: [] });
+  });
+  await openTab(page, 'outbox');
+  const dias = page.locator('[data-history] .history-day');
+  await expect(dias).toHaveCount(2);
+  await expect(dias.first()).toHaveAttribute('data-history-day', hojeISO());
+  await expect(dias.first()).toHaveAttribute('open', '');
+  await expect(dias.first().locator('.history-day__rel')).toHaveText('Hoje');
+  // o antigo não foi enviado: a gaveta abre sozinha para chamar atenção
+  const antigo = page.locator('[data-history-day="2026-01-15"]');
+  await expect(antigo).toHaveAttribute('open', '');
+  await expect(antigo.locator('.history-day__pend')).toHaveText('1 a enviar');
+  await expect(antigo.locator('summary')).toContainText('15/01/2026');
+
+  // fechar a gaveta: fica fechada mesmo quando a lista é redesenhada
+  await antigo.locator('summary').click();
+  await expect(antigo).not.toHaveAttribute('open', '');
+  await page.evaluate(async () => (await import('./src/core/outbox.js')).notifyHistory());
+  await expect(page.locator('[data-history-day="2026-01-15"]')).not.toHaveAttribute('open', '');
+
+  // filtro por data: só o dia escolhido, com a gaveta aberta
+  await page.locator('[data-history-date]').fill('2026-01-15');
+  await expect(dias).toHaveCount(1);
+  await expect(page.locator('[data-history-day="2026-01-15"]')).toHaveAttribute('open', '');
+  await expect(page.locator('[data-history-count]')).toContainText('15/01/2026');
+  await page.locator('[data-history-date]').fill('2025-12-31');
+  await expect(page.locator('[data-history-empty]')).toContainText('31/12/2025');
+  await page.locator('[data-action=clear-date]').click();
+  await expect(dias).toHaveCount(2);
 });
 
 test('prévia: "Voltar e editar" mantém os dados; "Início / Novo relatório" limpa e volta ao topo', async () => {

@@ -2,7 +2,7 @@
 // Fonte: histórico local de relatórios finalizados (IndexedDB "history"), funciona offline.
 
 import { STORES, getAll } from './db.js';
-import { normalizeWell } from './pocos.js';
+import { normalizeWell, listaPocos } from './pocos.js';
 import { ANTEPOCO, VALVULAS_CABECA, FLANGES } from '../modules/common.js';
 
 export const listHistory = () => getAll(STORES.history);
@@ -48,7 +48,8 @@ const inPeriod = (date, ini, fim) => Boolean(date) && date >= ini && date <= fim
  */
 export function consolidate(history, { poco, inicio, fim }) {
   const key = normalizeWell(poco);
-  const samePoco = (r) => normalizeWell(r.data?.poco) === key;
+  // BDO-e com vários poços no dia entra na quinzena de cada um deles
+  const samePoco = (r) => listaPocos(r.data?.poco).some((p) => normalizeWell(p) === key);
 
   const bdos = history
     .filter((r) => r.module === 'bdo' && samePoco(r) && inPeriod(r.data.data, inicio, fim))

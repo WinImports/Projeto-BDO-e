@@ -1,6 +1,6 @@
 {
   "name": "bdo-e-app",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "BDO-e & Inspeção Técnica — Boletim Diário de Operações Eletrônico (desktop, offline-first)",
   "main": "main.js",
   "author": "Win App Digital",

@@ -200,6 +200,30 @@ test('envio: só logado; relatório do próprio contrato (ou sem contrato) é gr
   expect(de_novo).toEqual(ok.filter((r) => r.unique_id === meu.unique_id));
 });
 
+test('relatório atualizado (Reutilizar): mesmo unique_id com conteúdo novo substitui a versão anterior, sem duplicar; só o autor atualiza', async () => {
+  const { db, tec1, gestorA } = await cenario();
+  const enviar = (q, lista) => como(db, q, () => rpc(db, 'select * from public.submit_reports($1)', [JSON.stringify(lista)]));
+  const uid = crypto.randomUUID();
+  const versao = (n, poco) => ({
+    unique_id: uid, module: 'bdo', content_hash: `h${n}`, client_created_at: new Date().toISOString(),
+    payload: { poco, data: '2026-10-22', contrato: 'OS-Mans', _revisao: n }
+  });
+  const [v1] = await enviar(tec1, [versao(1, 'FBM-89')]);
+  const [v2] = await enviar(tec1, [versao(2, 'FBM-89, FBM-12')]);
+  expect(v2).toEqual(v1); // mesma linha, mesmo id
+  const linha = () => um(db, "select count(*)::int as n, max(poco) as poco, max(payload->>'_revisao') as rev, bool_or(updated_at is not null) as atualizado from public.bdo_reports where unique_id = $1", [uid]);
+  expect(await linha()).toEqual({ n: 1, poco: 'FBM-89, FBM-12', rev: '2', atualizado: true });
+
+  // outro usuário (mesmo contrato) não sobrescreve nem recebe confirmação
+  expect(await enviar(gestorA, [versao(3, 'OUTRO')])).toEqual([]);
+  expect((await linha()).poco).toBe('FBM-89, FBM-12');
+
+  // o mesmo relatório duas vezes no mesmo lote: vale a última versão (sem erro de linha afetada duas vezes)
+  const lote = await enviar(tec1, [versao(4, 'A'), versao(5, 'B')]);
+  expect(lote).toEqual([v1]);
+  expect((await linha()).poco).toBe('B');
+});
+
 test('isolamento: pela API ninguém lê as tabelas direto (RLS sem políticas); dados só pelas funções', async () => {
   const { db, tec1, gestorA } = await cenario();
   await relatorio(db, 'bdo_reports', { contrato: 'OS-Mans', poco: 'FBM-89' });

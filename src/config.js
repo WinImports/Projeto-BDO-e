@@ -64,4 +64,4 @@ export function saveSupabaseOverride(url, anonKey) {
 }
 
 /** Versão exibida nas telas de acesso (manter igual à "version" do package.json). */
-export const APP_VERSAO = '2.1.0';
+export const APP_VERSAO = '2.2.0';
