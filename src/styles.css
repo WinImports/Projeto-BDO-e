@@ -1303,7 +1303,8 @@ button.company-chip--empty:hover { border-color: var(--primary-line); color: var
   .history-day__summary { padding: 12px 14px; }
 }
 /* busca: o texto começa depois do ícone (a regra geral de input tem mais especificidade) */
-.history-search input.history-search__input { padding-left: 42px; }
+/* mais específico que a regra geral input:not([type=…]):not(…):not(…) (0,3,1), senão a lupa cobre o texto */
+.history-search input.history-search__input:not([type="checkbox"]):not([type="radio"]) { padding-left: 42px; }
 @media (max-width: 640px) {
   .history-filter { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-right: -16px; padding-right: 16px; }
   .history-filter::-webkit-scrollbar { display: none; }
@@ -1315,4 +1316,10 @@ button.company-chip--empty:hover { border-color: var(--primary-line); color: var
 @media (max-width: 640px) {
   .geo__actions { width: 100%; }
   .geo__actions .geo__btn, .geo__actions .geo__route { flex: 1 1 100%; justify-content: center; }
+}
+
+/* Histórico: "Excluir do aparelho" (só ícone, discreto) */
+.outbox-item__actions .outbox-item__del { color: var(--text-muted); padding: 0 8px; }
+@media (pointer: coarse), (max-width: 640px) {
+  .outbox-item__actions .btn.outbox-item__del { flex: 0 0 44px; min-width: 44px; padding: 0; }
 }

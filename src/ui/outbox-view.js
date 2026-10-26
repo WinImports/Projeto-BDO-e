@@ -9,6 +9,7 @@ import { getPref, setPref } from '../core/prefs.js';
 import { pullInfo, PULL_DIAS } from '../core/pull.js';
 import { podeBuscarNoServidor, buscarNoServidor, baixarFotosDoServidor } from '../core/busca.js';
 import { toast } from './toast.js';
+import { confirmDialog } from './confirm.js';
 
 const STATUS = {
   local: { cls: 'local', label: 'Salvo no aparelho (não enviado)' },
@@ -365,6 +366,7 @@ export class OutboxView {
               ? `<button type="button" class="btn btn--ghost btn--sm" data-action="edit" data-id="${id}" title="Abrir este relatório para corrigir ou completar (mesmo relatório: a versão nova substitui a anterior, sem duplicar)">${icon('pen', 15)} Editar</button>`
               : `<button type="button" class="btn btn--ghost btn--sm" data-action="reuse" data-id="${id}" title="Relatório de outro técnico: abre um relatório NOVO preenchido com estes dados">${icon('copy', 15)} Reutilizar como novo</button>`}
             ${r.status === 'local' ? `<button type="button" class="btn btn--primary btn--sm" data-action="send" data-id="${id}" title="Enviar ao servidor e abrir o WhatsApp">${icon('send', 15)} Enviar</button>` : ''}
+            ${proprio(r) ? `<button type="button" class="btn btn--text btn--danger-text btn--sm outbox-item__del" data-action="delete" data-id="${id}" aria-label="Excluir do aparelho" title="Excluir do aparelho">${icon('trash', 16)}</button>` : ''}
           </div>
         </div>
       </li>`;
@@ -386,6 +388,23 @@ export class OutboxView {
       onReuse: () => this.onReuse?.(rec),
       reuseLabel: proprio(rec) ? 'Editar este relatório' : 'Reutilizar como novo'
     });
+  }
+
+  /** "Excluir do aparelho": só relatórios do próprio técnico, com confirmação que diz o que acontece com o envio. */
+  async excluir(rec) {
+    if (!proprio(rec)) return;
+    const mod = getModule(rec.module);
+    const nome = `${mod?.shortTitle || 'Relatório'}${rec.data?.poco ? ` — ${rec.data.poco}` : ''}`;
+    const naoEnviado = rec.status === 'local' || rec.status === 'pending' || rec.status === 'error';
+    const ok = await confirmDialog({
+      title: 'Excluir do aparelho?',
+      message: naoEnviado
+        ? `${nome}: este relatório ainda NÃO foi enviado ao servidor. Ao excluir, ele será perdido e não será mais enviado.`
+        : `${nome}: o relatório sai só deste aparelho. A cópia já enviada continua no servidor da empresa.`,
+      confirmLabel: 'Excluir', danger: true, iconName: 'trash'
+    });
+    if (!ok) return;
+    if (await outbox.excluirDoAparelho(rec.uniqueId)) toast('Relatório excluído do aparelho.', 'success');
   }
 
   handleClick(e) {
@@ -411,6 +430,7 @@ export class OutboxView {
       case 'edit':
       case 'reuse': return rec && this.onReuse?.(rec); // app.js decide: próprio → atualiza o mesmo; equipe → novo
       case 'send': return rec && this.onSend?.(rec);
+      case 'delete': return rec && this.excluir(rec);
       case 'view': return rec && (rec.status === 'server' ? this.abrirDoServidor(rec) : this.open(rec));
       default:
     }

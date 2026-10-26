@@ -136,6 +136,20 @@ export async function pausarEnvio(uniqueId) {
   return true;
 }
 
+/**
+ * "Excluir do aparelho" (Histórico): apaga o relatório do PRÓPRIO técnico deste aparelho — do histórico e,
+ * se ainda estiver, da fila (não será mais enviado). A cópia já enviada continua no servidor.
+ * Relatórios da equipe (remote) não são apagados aqui: voltariam na próxima sincronização.
+ */
+export async function excluirDoAparelho(uniqueId) {
+  const hist = await get(STORES.history, uniqueId);
+  if (hist?.remote) return false;
+  await remove(STORES.outbox, uniqueId);
+  await remove(STORES.history, uniqueId);
+  await notify();
+  return true;
+}
+
 export const canEdit = (rec) => rec.attempts === 0 && !rec.lastAttemptAt && !rec.photos.some((p) => p.path);
 
 /** Retira o item da fila para voltar a ser rascunho. Devolve o registro (ou null se não puder). */

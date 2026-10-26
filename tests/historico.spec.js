@@ -233,3 +233,45 @@ test('filtro por tipo de relatório no Histórico', async () => {
   await expect(page.locator('[data-history] .outbox-item')).toHaveCount(2);
   await page.locator('[data-filter=all]').click();
 });
+
+test('"Excluir do aparelho": só nos relatórios próprios, com confirmação; o não enviado avisa que será perdido', async () => {
+  const { page } = ctx;
+  const id = await page.evaluate(async () => {
+    const { saveLocalOnly } = await import('./src/core/outbox.js');
+    const uniqueId = crypto.randomUUID();
+    await saveLocalOnly({ uniqueId, module: 'bdo', data: { poco: 'DEL-77', data: '2026-02-03' }, photos: [] });
+    return uniqueId;
+  });
+  await openTab(page, 'outbox');
+  const dia = page.locator('[data-history-day="2026-02-03"]');
+  if (!(await dia.evaluate((d) => d.open))) await dia.locator('summary').click();
+  const del = dia.locator(`[data-action=delete][data-id="${id}"]`);
+  await expect(del).toHaveAttribute('aria-label', 'Excluir do aparelho');
+
+  // cancelar não apaga
+  await del.click();
+  const dlg = page.locator('dialog.modal--confirm[open]');
+  await expect(dlg).toContainText('NÃO foi enviado');
+  await dlg.locator('[data-cancel]').click();
+  await expect(del).toBeVisible();
+
+  await del.click();
+  await page.locator('dialog.modal--confirm[open] [data-ok]').click();
+  await expect(page.locator('[data-history-day="2026-02-03"]')).toHaveCount(0);
+  const resta = await page.evaluate(async (u) => {
+    const { reports } = await import('./src/core/outbox.js');
+    return (await reports()).some((r) => r.uniqueId === u);
+  }, id);
+  expect(resta).toBe(false);
+
+  // relatório da equipe não tem o botão
+  await page.evaluate(async () => {
+    const { STORES, put } = await import('./src/core/db.js');
+    await put(STORES.history, { uniqueId: crypto.randomUUID(), module: 'bdo', data: { poco: 'EQP-1', data: '2026-02-04' }, photos: [], createdAt: new Date().toISOString(), remote: true, autor: 'outro@x.com' });
+    (await import('./src/core/outbox.js')).notifyHistory();
+  });
+  const eqp = page.locator('[data-history-day="2026-02-04"]');
+  if (!(await eqp.evaluate((d) => d.open))) await eqp.locator('summary').click();
+  await expect(eqp.locator('[data-action=reuse]')).toBeVisible();
+  await expect(eqp.locator('[data-action=delete]')).toHaveCount(0);
+});
