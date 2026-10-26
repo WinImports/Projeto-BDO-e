@@ -7,11 +7,13 @@
 //                    "fotos": [ { "field", "fase", "legenda", "category", "name", "dataUrl": "data:image/jpeg;base64,..." } ] } }
 //
 // Também lê: lista de relatórios ([...] ou { "relatorios": [...] }) e a linha do banco
-// ({ "module", "payload", "photos" } — fotos só com dataUrl; caminhos do Storage são ignorados).
+// ({ "module", "payload", "photos" } — fotos só com dataUrl; caminhos do Storage são ignorados) e o rascunho de
+// visita do app anterior (core/rascunho-visita.js), convertido para Visita Técnica.
 
 import { getModule } from '../modules/index.js';
 import { photoMeta } from './fotos.js';
 import { newUniqueId } from './ids.js';
+import { ehRascunhoVisita, rascunhoVisitaParaRelatorio } from './rascunho-visita.js';
 
 export const FORMATO = 'bdo-e/relatorio';
 export const VERSAO = 1;
@@ -74,7 +76,10 @@ export function lerRelatoriosJson(texto) {
   if (j.formato && j.formato !== FORMATO) throw new Error(`Formato não reconhecido ("${j.formato}"). Use um JSON exportado pelo BDO-e.`);
   if (Number(j.versao) > VERSAO) throw new Error('Este arquivo foi gerado por uma versão mais nova do app. Atualize o app para importar.');
 
-  const brutos = Array.isArray(j) ? j : Array.isArray(j.relatorios) ? j.relatorios : j.relatorio ? [j.relatorio] : [j];
+  // rascunho de visita do app anterior (Rascunho_Visita_<poço>.json): convertido para Visita Técnica
+  const brutos = ehRascunhoVisita(j) ? [rascunhoVisitaParaRelatorio(j)]
+    : Array.isArray(j) ? j.map((x) => (ehRascunhoVisita(x) ? rascunhoVisitaParaRelatorio(x) : x))
+      : Array.isArray(j.relatorios) ? j.relatorios : j.relatorio ? [j.relatorio] : [j];
   if (!brutos.length) throw new Error('O arquivo não contém nenhum relatório.');
   let fotosIgnoradas = 0;
   const relatorios = brutos.map((r, i) => {

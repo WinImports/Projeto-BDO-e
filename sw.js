@@ -8,7 +8,7 @@
 // - Supabase e mapas (outros domínios) vão direto para a rede.
 
 // <precache> — gerado por `npm run pwa`; não editar à mão
-const VERSION = '0e63536b1c4d';
+const VERSION = '9597587695f2';
 const PRECACHE = [
   './',
   './icons/icon-192.png',
@@ -38,6 +38,7 @@ const PRECACHE = [
   './src/core/pocos.js',
   './src/core/prefs.js',
   './src/core/pull.js',
+  './src/core/rascunho-visita.js',
   './src/core/relatorio-json.js',
   './src/core/settings.js',
   './src/core/share.js',

@@ -169,3 +169,59 @@ test('botão de upload só na Execução', async () => {
   await openTab(page, 'handover');
   await expect(page.locator('#btn-import-json')).toContainText('Upload de Relatório (JSON)');
 });
+
+test('rascunho de visita do app anterior (Rascunho_Visita_<poço>.json) é convertido para Visita Técnica e importado com as fotos nos componentes', async () => {
+  const { page } = ctx;
+  const rascunho = {
+    poco: 'BA-253', locacao: 'Buracica', data: '2026-10-19', resp1: 'Anderson', resp2: 'Adinailson',
+    pColuna: '84', pSup: '84', pInf: '', anularInterm: 'Não', pressTodos: 'Não', justPress: 'Antepoço cheio de óleo', obsIniciais: '',
+    comp: {
+      VC: { condicao: 'Válvula esfera de 3” LP', abertura: 'OK', estanque: 'Sim', intervencao: 'Não' },
+      VA1A: { condicao: 'Válvula esfera rosqueada de 2” LP', abertura: 'OK', estanque: 'Não', intervencao: 'Sim', obs: 'Necessária a substituição' },
+      VA2A: { condicao: 'Esfera flangeada 1 13/16”', estanque: 'Não foi possível verificar', justEstanque: 'Flange sem suporte para o teste', intervencao: 'Não' },
+      FLREV: { parafusos: '16', tamanho: '1 1/4 x 9”', corrosao: 'Sem corrosão', prisioneiro: 'Não', intervencao: 'Não' }
+    },
+    compExtra: { VC: [], FLREV: ['ph_abc'] }, outraExtra: [],
+    ante: { sugador: 'Sim', quimica: 'Sim', limpMec: 'Não', quebra: 'Não' }, anteObs: 'Grade parafusada', r_recom: '',
+    caps: { fotoGeral: 'Placa de identificação do poço', comp_VA1A_2: 'Teste da válvula VA-1', ph_abc: 'Flange Inferior — foto 1', man_coluna: 'Manômetro da coluna' },
+    photos: { fotoGeral: PNG, comp_VA1A_2: PNG, ph_abc: PNG, man_coluna: PNG }
+  };
+  await openTab(page, 'handover');
+  await page.locator('[data-import-json]').setInputFiles(arquivo('Rascunho_Visita_BA-253.json', JSON.stringify(rascunho)));
+  const dlg = page.locator('dialog[data-importar-json][open]');
+  await expect(dlg.locator('[data-importado="0"]')).toContainText('Visita Técnica');
+  await expect(dlg.locator('[data-importado="0"]')).toContainText('BA-253');
+  await expect(dlg.locator('[data-importado="0"]')).toContainText('4 fotos');
+  await dlg.locator('[data-imp-local]').click();
+  await expect(dlg).toHaveCount(0);
+
+  const salvo = await page.evaluate(async () => {
+    const { STORES, getAll } = await import('./src/core/db.js');
+    const h = (await getAll(STORES.history)).find((r) => r.data?.poco === 'BA-253');
+    return {
+      module: h.module, campo: h.data.campo, equipe: h.data.equipe.map((e) => e.nome), coluna: h.data.pressoes[0].valor,
+      vc: h.data.vc_estanqueidade, va1: [h.data.va1_estanqueidade, h.data.va1_intervencao], va2: [h.data.va2_estanqueidade, h.data.va2_obs],
+      fl: [h.data.flange_inf_parafusos, h.data.flange_inf_corrosao], sugador: h.data.antepoco_checklist[0].situacao,
+      fotos: h.photos.map((p) => `${p.field}|${p.category}|${p.legenda}`).sort()
+    };
+  });
+  expect(salvo).toEqual({
+    module: 'visita_tecnica', campo: 'Buracica', equipe: ['Anderson', 'Adinailson'], coluna: '84',
+    vc: 'Estanque', va1: ['Sem estanqueidade (vazamento)', 'Sim'], va2: ['Não testada', 'Estanqueidade: Flange sem suporte para o teste'],
+    fl: ['16', 'Sem corrosão'], sugador: 'Sim',
+    fotos: [
+      'fotos_chegada|Placa do poço|Placa de identificação do poço',
+      'fotos_flange_inf|Vista do flange|Flange Inferior — foto 1',
+      'fotos_manometros|Manômetro da coluna|Manômetro da coluna',
+      'fotos_va1|Teste de estanqueidade|Teste da válvula VA-1'
+    ]
+  });
+  // importar o mesmo rascunho de novo não duplica a Visita
+  await page.locator('[data-import-json]').setInputFiles(arquivo('Rascunho_Visita_BA-253.json', JSON.stringify(rascunho)));
+  await page.locator('dialog[data-importar-json][open] [data-imp-local]').click();
+  const n = await page.evaluate(async () => {
+    const { STORES, getAll } = await import('./src/core/db.js');
+    return (await getAll(STORES.history)).filter((r) => r.data?.poco === 'BA-253').length;
+  });
+  expect(n).toBe(1);
+});
