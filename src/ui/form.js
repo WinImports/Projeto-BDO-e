@@ -648,11 +648,11 @@ export class FormView {
           <output class="sr-only" data-geo="${id}" data-part="lng">${c ? c.lng.toFixed(6) : ''}</output>
           <div class="geo__actions">
             <button type="button" class="btn btn--primary geo__btn" data-action="gps" data-target="${id}">${icon('crosshair', 17)} Obter Localização Atual</button>
+            ${this.routeHtml()}
             ${c ? `<button type="button" class="btn btn--text btn--sm" data-action="clear-geo" data-target="${id}">${icon('x', 15)} Limpar</button>` : ''}
           </div>
         </div>
         <p class="geo__meta muted small">${esc(meta)}</p>
-        ${this.routeHtml()}
       </div>`;
   }
 
@@ -672,23 +672,30 @@ export class FormView {
     return { ...c, nome: (v.source === 'base' && v.poco) || d.poco || '', origem: v.source === 'base' ? 'cadastro' : 'relatorio', gps: v.source === 'gps' };
   }
 
+  /**
+   * Botão compacto "Navegar até X" ao lado de "Obter Localização Atual": abre o mesmo aviso de navegação
+   * (Google Maps / Waze) dos gatilhos — sem caixa de rota nem mapa ocupando o formulário.
+   */
   routeHtml() {
     const t = this.routeTarget();
     if (!t) return '';
-    const links = routeLinks(t);
-    // sem a imagem do mapa: a navegação abre direto no Google Maps / Waze (e pelos avisos ao escolher o poço
-    // e nos deslocamentos da apropriação)
-    return `
-      <div class="geo__route" data-route-target="${t.lat.toFixed(6)},${t.lng.toFixed(6)}">
-        <p class="geo__route-title">${icon('navigation', 16)} Rota até ${t.nome ? `a locação <strong>${esc(t.nome)}</strong>` : 'o ponto registrado'}
-          <span class="muted small">(${t.lat.toFixed(5)}, ${t.lng.toFixed(5)})</span></p>
-        ${t.gps ? '<p class="geo__route-warn small">Poço não encontrado na base: o destino é a posição capturada pelo GPS do aparelho.</p>' : ''}
-        <div class="geo__links">
-          <a class="btn btn--primary btn--sm" data-route-link="google" href="${links.google}" target="_blank" rel="noopener">${icon('navigation', 15)} Iniciar rota (Google Maps)</a>
-          <a class="btn btn--ghost btn--sm" data-route-link="waze" href="${links.waze}" target="_blank" rel="noopener">Waze</a>
-          <a class="btn btn--ghost btn--sm" data-route-link="osm" href="${links.osm}" target="_blank" rel="noopener">${icon('map', 15)} OpenStreetMap</a>
-        </div>
-      </div>`;
+    const destino = t.nome ? t.nome : 'o ponto registrado';
+    return `<button type="button" class="btn btn--ghost geo__route" data-action="navigate" data-route-target="${t.lat.toFixed(6)},${t.lng.toFixed(6)}"
+      title="${esc(t.gps ? 'Poço não encontrado na base: o destino é a posição capturada pelo GPS do aparelho.' : `Abrir a navegação até ${destino}`)}">${icon('navigation', 17)} Navegar até ${esc(destino)}</button>`;
+  }
+
+  /** "Navegar até X": mostra o aviso com os botões do Google Maps e do Waze. */
+  openNavigation() {
+    const t = this.routeTarget();
+    if (!t) return;
+    showRoutePrompt({
+      kind: 'navegar',
+      title: 'Navegação até a locação',
+      message: t.gps
+        ? 'Poço não encontrado na base: a rota vai até a posição capturada pelo GPS do aparelho.'
+        : `Abrir a navegação GPS até ${t.nome ? `a locação ${t.nome}` : 'o ponto registrado'}?`,
+      target: t
+    });
   }
 
   refreshGeo() {
@@ -1043,6 +1050,8 @@ export class FormView {
       if (input) input.value = this.draft.data[f.id];
       this.changed(f.id);
       toast('Resumo gerado de novo a partir da apropriação.', 'info', 3000);
+    } else if (action === 'navigate') {
+      this.openNavigation();
     } else if (action === 'clear-geo') {
       this.draft.data[btn.dataset.target] = {};
       this.refreshField(btn.dataset.target);

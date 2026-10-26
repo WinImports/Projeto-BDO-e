@@ -41,12 +41,15 @@ for (const tab of ['bdo']) {
     await expect(prompt.locator('[data-route-link=google]')).toHaveAttribute('href', GOOGLE_TST001);
     await expect(prompt.locator('[data-route-link=waze]')).toHaveAttribute('href', WAZE_TST001);
 
-    // o botão de rota do formulário fica pronto com o mesmo destino
-    await expect(page.locator('.geo__route [data-route-link=google]')).toHaveAttribute('href', GOOGLE_TST001);
-    await expect(page.locator('.geo__route')).toContainText('TST-001');
-
     await prompt.getByRole('button', { name: 'Agora não' }).click();
     await expect(prompt).toHaveCount(0);
+
+    // depois de fechar o aviso, o botão "Navegar até TST-001" do formulário abre a navegação de novo
+    const navegar = page.locator('.geo__route[data-action=navigate]');
+    await expect(navegar).toHaveText(/Navegar até TST-001/);
+    await expect(page.locator('.geo__links, [data-route-link=osm]')).toHaveCount(0); // sem a caixa antiga
+    await navegar.click();
+    await expect(page.locator('.route-prompt[data-route-prompt=navegar] [data-route-link=google]')).toHaveAttribute('href', GOOGLE_TST001);
   });
 }
 

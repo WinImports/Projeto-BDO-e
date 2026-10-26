@@ -51,7 +51,9 @@ test('"Obter Localização Atual" preenche as coordenadas e mostra a rota com de
   await expect(page.locator('[data-geo-badge=coordenadas]')).toHaveText('Localização capturada');
   await expect(page.locator('.geo__meta')).toContainText('Capturado pelo GPS');
   await expect(page.locator('.geo__meta')).toContainText('±8 m');
-  await expect(page.locator('.geo__route [data-route-link=google]')).toHaveAttribute('href', 'https://www.google.com/maps/dir/?api=1&destination=-12.352412,-38.379146&travelmode=driving');
+  // botão compacto "Navegar até…" (sem caixa de rota nem mapa): abre o aviso com Google Maps / Waze
+  await page.locator('.geo__route[data-action=navigate]').click();
+  await expect(page.locator('.route-prompt[data-route-prompt=navegar] [data-route-link=google]')).toHaveAttribute('href', 'https://www.google.com/maps/dir/?api=1&destination=-12.352412,-38.379146&travelmode=driving');
   await expect(toast(page)).toContainText('Coordenadas capturadas');
 });
 
