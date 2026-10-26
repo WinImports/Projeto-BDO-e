@@ -92,10 +92,20 @@ export class OutboxView {
     this.query = '';
     this.dia = ''; // filtro por data (AAAA-MM-DD), vazio = todas
     this.diasAbertos = new Map(); // gaveta aberta / fechada pelo técnico (sobrevive aos redesenhos da sincronização)
+    // só guarda o que o TÉCNICO abriu / fechou (toque ou teclado no resumo da gaveta). O "toggle" também dispara
+    // quando a lista é redesenhada com gavetas abertas (ex.: durante a busca, todas abrem) — isso não pode virar
+    // preferência, senão ao limpar a busca tudo ficava aberto e a lista desorganizada.
+    root.addEventListener('click', (e) => {
+      const sum = e.target.closest?.('.history-day__summary');
+      this.toqueDia = sum?.parentElement?.dataset?.historyDay || null;
+    }, true);
     // "toggle" não sobe na árvore: escuta na captura
     root.addEventListener('toggle', (e) => {
       const dia = e.target?.dataset?.historyDay;
-      if (dia) this.diasAbertos.set(dia, e.target.open);
+      if (!dia || dia !== this.toqueDia) return;
+      this.toqueDia = null;
+      if (this.query.trim() || this.dia) return; // durante a busca tudo fica aberto; não muda o normal
+      this.diasAbertos.set(dia, e.target.open);
     }, true);
     this.limparServidor();
     root.addEventListener('click', (e) => this.handleClick(e));

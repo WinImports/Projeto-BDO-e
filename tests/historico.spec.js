@@ -175,6 +175,16 @@ test('Histórico em gavetas por dia: a do dia mais recente aberta, as antigas re
   await expect(page.locator('[data-history-empty]')).toContainText('31/12/2025');
   await page.locator('[data-action=clear-date]').click();
   await expect(dias).toHaveCount(2);
+  // depois da busca, a lista volta como estava (a gaveta fechada pelo técnico continua fechada)
+  await expect(page.locator('[data-history-day="2026-01-15"]')).not.toHaveAttribute('open', '');
+  const busca = page.locator('[data-history-search]');
+  await busca.fill('RCB');
+  await expect(dias).toHaveCount(1);
+  await expect(page.locator('[data-history-day="2026-01-15"]')).toHaveAttribute('open', '');
+  await busca.fill('');
+  await expect(dias).toHaveCount(2);
+  await expect(dias.first()).toHaveAttribute('open', '');
+  await expect(page.locator('[data-history-day="2026-01-15"]')).not.toHaveAttribute('open', '');
 });
 
 test('prévia: "Voltar e editar" mantém os dados; "Início / Novo relatório" limpa e volta ao topo', async () => {
