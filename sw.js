@@ -8,7 +8,7 @@
 // - Supabase e mapas (outros domínios) vão direto para a rede.
 
 // <precache> — gerado por `npm run pwa`; não editar à mão
-const VERSION = 'bdfc6ea44259';
+const VERSION = '813b98127de9';
 const PRECACHE = [
   './',
   './icons/icon-192.png',

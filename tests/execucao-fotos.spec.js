@@ -162,14 +162,14 @@ test('Execução no formato do relatório pós-serviço: tempos de operação, c
   const { page } = ctx;
   await openTab(page, 'handover');
   const view = page.locator('#view');
-  // tempos de operação: chegada / saída por dia, tempo no poço calculado
+  // tempos de operação: atividade com início / fim, duração calculada (linha manual)
   const tempos = view.locator('.form-section', { hasText: 'Tempos de operação' });
-  await tempos.getByRole('button', { name: /Adicionar dia/ }).click();
   const linha = tempos.locator('tbody tr').first();
-  await linha.locator('[data-col=chegada]').fill('08:30');
-  await linha.locator('[data-col=saida]').fill('15:50');
-  await linha.locator('[data-col=saida]').blur();
-  await expect(linha.locator('.cell--computed')).toHaveText(/7h ?20/);
+  await linha.locator('[data-col=atividade]').fill('Retirada dos parafusos de 1 3/8"');
+  await linha.locator('[data-col=inicio]').fill('08:30');
+  await linha.locator('[data-col=fim]').fill('10:00');
+  await linha.locator('[data-col=fim]').blur();
+  await expect(linha.locator('.cell--computed')).toHaveText('1h30');
   // condições encontradas e pressões na chegada
   await expect(view.locator('[data-field=condicao_geral]')).toBeVisible();
   await expect(view.locator('.form-section', { hasText: 'Pressões encontradas na chegada' })).toBeVisible();

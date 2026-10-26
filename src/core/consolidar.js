@@ -1,7 +1,7 @@
 // Consolidação da quinzena (revezamento 14x14) para o Relatório de Execução / Handover.
 // Fonte: histórico local de relatórios finalizados (IndexedDB "history"), funciona offline.
 
-import { STORES, getAll } from './db.js';
+import { STORES, getAll, get } from './db.js';
 import { normalizeWell, listaPocos } from './pocos.js';
 import { isTravel } from './deslocamento.js';
 import { ANTEPOCO, VALVULAS_CABECA, FLANGES } from '../modules/common.js';
@@ -41,15 +41,15 @@ function resumoVisita(d) {
 }
 
 /**
- * Chegada e saída no poço num BDO (Tempos de operação da Execução): o início da primeira e o fim da última
- * atividade NO poço. Deslocamentos ficam de fora; num dia com vários poços, vale só o trecho deste poço
- * (depois do deslocamento até ele e antes do deslocamento para outro lugar).
- * @returns {{ chegada, saida, visita }|null} visita: alguma atividade no poço fala em "visita"
+ * Atividades feitas NO poço num BDO: deslocamentos ficam de fora e, num dia com vários poços, vale só o trecho
+ * deste poço (depois do deslocamento até ele e antes do deslocamento para outro lugar). Sem poço: o dia todo.
+ * @returns {Array<{ indice, atividade }>} indice = posição da atividade no BDO
  */
-export function tempoNoPoco(d, poco) {
+export function atividadesNoPoco(d, poco) {
   const alvo = normalizeWell(poco);
   const pocos = listaPocos(d.poco).map(normalizeWell).filter(Boolean);
-  const ativ = (d.atividades || []).filter((a) => a.hora_inicio || a.hora_fim || String(a.atividade || '').trim());
+  const ativ = (d.atividades || []).map((a, indice) => ({ indice, a }))
+    .filter(({ a }) => a.hora_inicio || a.hora_fim || String(a.atividade || '').trim());
   // destino de um deslocamento: poço da lista citado (ou reconhecido ao digitar); outro lugar → null
   const destino = (a) => {
     const [tipo, nome] = String(a._desloc?.key || '').split(/:(.*)/s);
@@ -57,19 +57,48 @@ export function tempoNoPoco(d, poco) {
     const texto = normalizeWell(a.atividade);
     return pocos.filter((p) => texto.includes(p)).sort((x, y) => y.length - x.length)[0] || null;
   };
-  const viagens = ativ.filter((a) => isTravel(a.atividade));
+  const viagens = ativ.filter(({ a }) => isTravel(a.atividade));
   // antes do 1º deslocamento: se ele vai para um poço, a equipe estava na base; senão, no 1º poço do dia
-  let atual = viagens.length && destino(viagens[0]) ? null : pocos[0] || null;
-  const noPoco = [];
-  for (const a of ativ) {
-    if (isTravel(a.atividade)) { atual = destino(a); continue; }
-    if (atual === alvo) noPoco.push(a);
+  let atual = viagens.length && destino(viagens[0].a) ? null : pocos[0] || null;
+  const out = [];
+  for (const x of ativ) {
+    if (isTravel(x.a.atividade)) { atual = destino(x.a); continue; }
+    if (!alvo || atual === alvo) out.push({ indice: x.indice, atividade: x.a });
   }
-  if (!noPoco.length) return null;
-  const chegada = noPoco.find((a) => a.hora_inicio)?.hora_inicio || '';
-  const saida = [...noPoco].reverse().find((a) => a.hora_fim)?.hora_fim || '';
-  if (!chegada && !saida) return null;
-  return { chegada, saida, visita: noPoco.some((a) => /\bvisita\b/i.test(a.atividade || '')) };
+  return out;
+}
+
+const semAcento = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+/** Logística que não é execução: separação / carregamento / descarregamento de material. */
+export const ehLogistica = (texto) => /\b(separ|carreg|descarreg)\w*\b.*\bmateria/.test(semAcento(texto));
+/** Atividade de execução (o que entra no Relatório de Execução): nem deslocamento, nem logística de material. */
+export const ehExecucao = (texto) => Boolean(String(texto || '').trim()) && !isTravel(texto) && !ehLogistica(texto);
+
+/**
+ * Execução do dia para o Relatório de Execução: do(s) BDO(s) do MESMO dia (e do mesmo poço, se informado),
+ * só as atividades de execução, em ordem de horário.
+ */
+export function execucaoDoDia(history, { poco, dia }) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dia || '')) return [];
+  const key = normalizeWell(poco);
+  return history
+    .filter((r) => r.module === 'bdo' && r.data?.data === dia && (!key || listaPocos(r.data.poco).some((p) => normalizeWell(p) === key)))
+    .flatMap((r) => atividadesNoPoco(r.data, key ? poco : '')
+      .filter(({ atividade: a }) => ehExecucao(a.atividade))
+      .map(({ indice, atividade: a }) => ({
+        bdo: r.uniqueId, indice, data: a.data_inicio || dia, atividade: String(a.atividade).trim(),
+        inicio: a.hora_inicio || '', fim: a.hora_fim || '', duracao: a.duracao || ''
+      })))
+    .sort((a, b) => `${a.data} ${a.inicio}`.localeCompare(`${b.data} ${b.inicio}`));
+}
+
+/** Histórico + o BDO-e em andamento (rascunho): a Execução costuma ser feita antes de finalizar o BDO do dia. */
+export async function execucaoDoDiaFromHistory(params) {
+  const historico = await listHistory();
+  const rascunho = await get(STORES.drafts, 'bdo').catch(() => null);
+  const ja = rascunho && historico.some((r) => r.uniqueId === rascunho.uniqueId);
+  const lista = rascunho?.data && !ja ? [...historico, { uniqueId: rascunho.uniqueId || 'rascunho-bdo', module: 'bdo', data: rascunho.data }] : historico;
+  return execucaoDoDia(lista, params);
 }
 
 /** Datas no formato AAAA-MM-DD; o fim é inclusivo. */
@@ -89,7 +118,6 @@ export function consolidate(history, { poco, inicio, fim }) {
     .sort((a, b) => String(a.data.data).localeCompare(String(b.data.data)) || String(a.createdAt).localeCompare(String(b.createdAt)));
 
   const atividades = [];
-  const tempos = [];
   const paradas = [];
   const sms = [];
   let minAtiv = 0;
@@ -97,8 +125,6 @@ export function consolidate(history, { poco, inicio, fim }) {
   let rptSim = 0;
   for (const r of bdos) {
     const d = r.data;
-    const t = tempoNoPoco(d, poco);
-    if (t) tempos.push({ bdo: r.uniqueId, data: d.data, ...t });
     for (const a of d.atividades || []) {
       minAtiv += toMin(a.duracao);
       atividades.push({ data: br(a.data_inicio || d.data), inicio: a.hora_inicio || '', fim: a.hora_fim || '', atividade: a.atividade || '', duracao: a.duracao || '' });
@@ -127,7 +153,6 @@ export function consolidate(history, { poco, inicio, fim }) {
     horasParadas: fmtMin(minParadas),
     rpt: bdos.length ? `${rptSim} de ${bdos.length}` : '',
     atividades,
-    tempos,
     paradas,
     sms,
     visita: visita ? {

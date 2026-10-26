@@ -77,13 +77,11 @@ export function resumoIntervencoes(d = {}) {
     .join('\n');
 }
 
-export const ETAPAS_OPERACAO = ['Visita', 'Operação'];
-
-/** Tempos de operação vindos dos BDOs do poço (consolidação): uma linha por BDO, com chegada e saída no poço. */
-export function temposDosBdos(d) {
-  return (d.consolidacao?.tempos || []).map((t) => ({
-    _auto: `bdo:${t.bdo}`, data: t.data, etapa: t.visita ? 'Visita' : 'Operação',
-    chegada: t.chegada, saida: t.saida, tempo: duracao(t.chegada, t.saida)
+/** Execução do dia vinda do BDO (data._execucao_bdo, preenchido pelo formulário): uma linha por atividade. */
+export function execucaoDosBdos(d) {
+  return (d._execucao_bdo || []).map((t) => ({
+    _auto: `bdo:${t.bdo}:${t.indice}`, data: t.data, atividade: t.atividade,
+    inicio: t.inicio, fim: t.fim, duracao: t.duracao || duracao(t.inicio, t.fim)
   }));
 }
 
@@ -136,16 +134,17 @@ export default {
       title: 'Tempos de operação',
       short: 'Tempos de operação',
       icon: 'clock',
-      hint: 'Preenchido com os BDOs do poço no período da consolidação: chegada = início da primeira atividade no poço, saída = fim da última (deslocamentos ficam de fora). Dá para corrigir ou acrescentar dias à mão.',
+      hint: 'Vem do BDO do mesmo dia (data da passagem) e do mesmo poço: só as atividades de execução, com início, fim e duração. Deslocamento e separação de material ficam de fora. Dá para corrigir ou acrescentar à mão.',
       fields: [{
-        id: 'tempos_operacao', type: 'table', addLabel: 'Adicionar dia',
-        newRow: () => ({ etapa: 'Operação' }),
+        id: 'tempos_operacao', type: 'table', addLabel: 'Adicionar atividade',
+        newRow: (data) => ({ data: String(data.data_hora || '').slice(0, 10) }),
+        chain: [['fim', 'inicio']],
         columns: [
-          { id: 'data', label: 'Data', type: 'date', width: 'date' },
-          { id: 'etapa', label: 'Etapa', type: 'select', options: ETAPAS_OPERACAO, aux: true },
-          { id: 'chegada', label: 'Chegada', type: 'time', width: 'time' },
-          { id: 'saida', label: 'Saída', type: 'time', width: 'time' },
-          { id: 'tempo', label: 'Tempo no poço', width: 'narrow', computed: (r) => duracao(r.chegada, r.saida) }
+          { id: 'data', label: 'Data', type: 'date', width: 'date', aux: true },
+          { id: 'atividade', label: 'Atividade executada', width: 'wide', placeholder: 'Ex.: Retirada dos parafusos de 1 3/8"' },
+          { id: 'inicio', label: 'Início', type: 'time', width: 'time' },
+          { id: 'fim', label: 'Fim', type: 'time', width: 'time' },
+          { id: 'duracao', label: 'Duração', width: 'narrow', computed: (r) => duracao(r.inicio, r.fim) }
         ]
       }]
     },
@@ -271,11 +270,13 @@ export default {
     }
   ],
   notasDaVisita,
+  // Tempos de operação: atividades de execução do BDO do mesmo dia (core/consolidar.js → data._execucao_bdo)
+  execucaoDoBdo: { campoData: 'data_hora' },
   herdaDoBdo: herancaBdo('data_hora'),
   autoRows: [
     { table: 'pendencias', col: 'descricao', label: 'Pendências', defaults: { prioridade: 'Alta' }, rows: pendenciasAutomaticas },
-    { table: 'tempos_operacao', col: 'data', label: 'Tempos de operação', aviso: false, rows: temposDosBdos,
-      ordenar: (a, b) => String(a.data || '9999').localeCompare(String(b.data || '9999')) }
+    { table: 'tempos_operacao', col: 'atividade', label: 'Tempos de operação', aviso: false, descartarVazias: true, rows: execucaoDosBdos,
+      ordenar: (a, b) => `${a.data || '9999'} ${a.inicio || '99'}`.localeCompare(`${b.data || '9999'} ${b.inicio || '99'}`) }
   ],
   validate(data) {
     if (data.periodo_inicio && data.periodo_fim && data.periodo_inicio > data.periodo_fim) {

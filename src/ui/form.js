@@ -11,7 +11,7 @@ import { comprimirFoto } from './compress.js';
 import { kmEstrada, posicaoAtual } from '../core/distancia.js';
 import { isTravel, resolverDestino } from '../core/deslocamento.js';
 import { loadPocos, searchPocos, findPoco, listaPocos, incluirPoco } from '../core/pocos.js';
-import { consolidateFromHistory, hasConsolidation } from '../core/consolidar.js';
+import { consolidateFromHistory, hasConsolidation, execucaoDoDiaFromHistory } from '../core/consolidar.js';
 import { consolidationHtml } from './consolidacao-view.js';
 import { routeLinks, showRoutePrompt } from './route-prompt.js';
 import { assignPhotoFields, photoFields, photosOf, photoMeta, rotuloFotos, TITULO_EXECUCAO } from '../core/fotos.js';
@@ -266,6 +266,26 @@ export class FormView {
     const cf = this.consolField();
     // refaz ao abrir: BDOs finalizados depois entram sem precisar clicar em "Atualizar"
     if (cf && draft.data.poco && draft.data.periodo_inicio && draft.data.periodo_fim) this.scheduleConsolidation();
+    if (this.module.execucaoDoBdo) this.scheduleExecucaoBdo();
+  }
+
+  // ---------- Execução: atividades do BDO do mesmo dia (module.execucaoDoBdo) ----------
+
+  scheduleExecucaoBdo() {
+    clearTimeout(this.execTimer);
+    this.execTimer = setTimeout(() => this.syncExecucaoBdo(), 350);
+  }
+
+  /** Lê o histórico e guarda em data._execucao_bdo as atividades de execução do BDO do dia (vira linhas _auto). */
+  async syncExecucaoBdo() {
+    const cfg = this.module.execucaoDoBdo;
+    const d = this.draft.data;
+    const dia = String(d[cfg.campoData] || '').slice(0, 10);
+    const lista = await execucaoDoDiaFromHistory({ poco: String(d.poco || '').trim(), dia });
+    if (!this.el?.isConnected) return;
+    if (JSON.stringify(lista) === JSON.stringify(d._execucao_bdo || [])) return;
+    d._execucao_bdo = lista;
+    this.changed('_execucao_bdo');
   }
 
   status() {
@@ -1423,7 +1443,11 @@ export class FormView {
     });
     const assinatura = (lista) => JSON.stringify(lista.map((r) => [r._auto, r._sig]));
     if (assinatura([...atuais.values()]) === assinatura(novas)) return;
-    const juntas = [...rows.filter((r) => !r._auto), ...novas];
+    // descartarVazias: com linhas automáticas, a linha em branco do quadro (nenhum campo preenchido) sai
+    const tf = this.fields.get(cfg.table);
+    const emBranco = (r) => (tf?.columns || []).filter((c) => !c.aux && !c.computed).every((c) => isBlank(r[c.id]));
+    const manuais = rows.filter((r) => !r._auto && !(cfg.descartarVazias && novas.length && emBranco(r)));
+    const juntas = [...manuais, ...novas];
     d[cfg.table] = cfg.ordenar ? juntas.sort(cfg.ordenar) : juntas;
     this.refreshField(cfg.table);
     const adicionadas = novas.filter((r) => !atuais.has(r._auto));
@@ -1537,6 +1561,7 @@ export class FormView {
     this.updateAutoTexts(fieldId);
     this.syncAutoRows(fieldId);
     if (['poco', 'periodo_inicio', 'periodo_fim'].includes(fieldId) && this.consolField()) this.scheduleConsolidation();
+    if (this.module.execucaoDoBdo && (fieldId === 'poco' || fieldId === this.module.execucaoDoBdo.campoData)) this.scheduleExecucaoBdo();
     if (fieldId === 'poco') { clearTimeout(this.routeRefreshTimer); this.routeRefreshTimer = setTimeout(() => this.refreshGeo(), 300); }
     this.clearError(fieldId);
     this.updateComputed();

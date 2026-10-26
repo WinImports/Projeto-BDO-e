@@ -141,41 +141,48 @@ test('BDO finalizado pelo app entra na consolidação (inclusive depois de sair 
   await expect(page.locator('[data-consol]')).toContainText('Hot bolt na VA2-B');
 });
 
-test('Tempos de operação vêm dos BDOs do poço: chegada = 1ª atividade no poço, saída = última; deslocamentos e outros poços ficam de fora', async () => {
+test('Tempos de operação: só as atividades de execução do BDO do MESMO dia e poço (sem deslocamento nem separação de material)', async () => {
   const { page } = ctx;
+  const hoje = ymd(0);
   await seedHistory(page, [
-    // dia simples: sai da base, trabalha no poço, volta
-    { uniqueId: 'bdo-a', module: 'bdo', data: { poco: 'AR-182', data: ymd(3), atividades: [
-      { hora_inicio: '07:00', hora_fim: '07:45', atividade: 'DDS na base' },
-      { hora_inicio: '07:45', hora_fim: '08:30', atividade: 'Deslocamento para o poço AR-182' },
-      { hora_inicio: '08:30', hora_fim: '12:00', atividade: 'Substituição dos parafusos do flange superior' },
-      { hora_inicio: '12:00', hora_fim: '15:50', atividade: 'Instalação de kerotest na VA-2' },
+    { uniqueId: 'bdo-hoje', module: 'bdo', data: { poco: 'AR-182', data: hoje, atividades: [
+      { hora_inicio: '07:00', hora_fim: '07:40', atividade: 'Separação de material na base' },
+      { hora_inicio: '07:40', hora_fim: '08:30', atividade: 'Deslocamento para o poço AR-182' },
+      { hora_inicio: '08:30', hora_fim: '10:00', atividade: 'Retirada dos parafusos de 1 3/8"' },
+      { hora_inicio: '10:00', hora_fim: '12:00', atividade: 'Instalação dos parafusos de 1 3/8"' },
+      { hora_inicio: '13:00', hora_fim: '14:10', atividade: 'Retirada da válvula esfera rosqueada' },
+      { hora_inicio: '14:10', hora_fim: '15:50', atividade: 'Instalação da válvula esfera rosqueada' },
       { hora_inicio: '15:50', hora_fim: '16:40', atividade: 'Retornando para a base' }
     ] } },
-    // dia com dois poços: só o trecho do AR-182 conta
-    { uniqueId: 'bdo-b', module: 'bdo', data: { poco: 'AR-100, AR-182', data: ymd(1), atividades: [
-      { hora_inicio: '07:00', hora_fim: '09:00', atividade: 'Reaperto de flange' },
-      { hora_inicio: '09:00', hora_fim: '09:40', atividade: 'Deslocando para AR-182' },
-      { hora_inicio: '09:40', hora_fim: '10:55', atividade: 'Visita técnica: teste de estanqueidade' },
-      { hora_inicio: '10:55', hora_fim: '11:30', atividade: 'Retornando para a base' }
-    ] } },
-    { uniqueId: 'bdo-c', module: 'bdo', data: { poco: 'AR-100', data: ymd(2), atividades: [{ hora_inicio: '08:00', hora_fim: '09:00', atividade: 'Outro poço' }] } }
+    // outro dia do mesmo poço e outro poço no mesmo dia: não entram
+    { uniqueId: 'bdo-ontem', module: 'bdo', data: { poco: 'AR-182', data: ymd(1), atividades: [{ hora_inicio: '08:00', hora_fim: '09:00', atividade: 'Troca de flange (ontem)' }] } },
+    { uniqueId: 'bdo-outro', module: 'bdo', data: { poco: 'AR-100', data: hoje, atividades: [{ hora_inicio: '08:00', hora_fim: '09:00', atividade: 'Serviço em outro poço' }] } }
   ]);
   const r = await page.evaluate(async () => {
-    const { tempoNoPoco } = await import('./src/core/consolidar.js');
-    return tempoNoPoco({ poco: 'AR-182', atividades: [{ hora_inicio: '06:00', hora_fim: '18:00', atividade: 'Troca de válvula' }] }, 'AR-182');
+    const { ehExecucao } = await import('./src/core/consolidar.js');
+    return ['Separando materiais para a operação', 'Carregamento de material no caminhão', 'Deslocando para AR-182', 'Retirada da válvula'].map(ehExecucao);
   });
-  expect(r).toEqual({ chegada: '06:00', saida: '18:00', visita: false });
+  expect(r).toEqual([false, false, false, true]);
 
   await openTab(page, 'handover');
+  await page.locator('[data-field=data_hora]').fill(`${hoje}T08:00`);
   await fill(page, 'poco', 'AR-182');
   await page.locator('[data-field=poco]').press('Tab');
-  const linhas = page.locator('[data-table=tempos_operacao][data-col=chegada]');
-  await expect(linhas.first()).toHaveValue('08:30');
-  const col = (c) => page.locator(`[data-table=tempos_operacao][data-col=${c}]`).evaluateAll((els) => els.map((e) => e.value));
-  expect((await col('data')).slice(0, 2)).toEqual([ymd(3), ymd(1)]);
-  expect((await col('chegada')).slice(0, 2)).toEqual(['08:30', '09:40']);
-  expect((await col('saida')).slice(0, 2)).toEqual(['15:50', '10:55']);
-  expect((await col('etapa')).slice(0, 2)).toEqual(['Operação', 'Visita']);
-  await expect(page.locator('[data-computed="tempos_operacao:0:tempo"]')).toHaveText('7h20');
+  const col = (c) => page.locator(`[data-table=tempos_operacao][data-col=${c}]`).evaluateAll((els) => els.map((e) => e.value).filter(Boolean));
+  await expect.poll(() => col('atividade')).toEqual([
+    'Retirada dos parafusos de 1 3/8"', 'Instalação dos parafusos de 1 3/8"',
+    'Retirada da válvula esfera rosqueada', 'Instalação da válvula esfera rosqueada'
+  ]);
+  expect(await col('inicio')).toEqual(['08:30', '10:00', '13:00', '14:10']);
+  expect(await col('fim')).toEqual(['10:00', '12:00', '14:10', '15:50']);
+  await expect(page.locator('[data-computed="tempos_operacao:0:duracao"]')).toHaveText('1h30');
+  // BDO do dia ainda em rascunho (não finalizado) também entra
+  const doRascunho = await page.evaluate(async (dia) => {
+    const { STORES, put } = await import('./src/core/db.js');
+    await put(STORES.drafts, { key: 'bdo', module: 'bdo', uniqueId: 'rascunho-1', data: { poco: 'AR-300', data: dia, atividades: [
+      { hora_inicio: '09:00', hora_fim: '11:00', atividade: 'Substituição da VA-1' }, { hora_inicio: '11:00', hora_fim: '11:30', atividade: 'Deslocando para a base' }] } });
+    const { execucaoDoDiaFromHistory } = await import('./src/core/consolidar.js');
+    return (await execucaoDoDiaFromHistory({ poco: 'AR-300', dia })).map((r) => r.atividade);
+  }, hoje);
+  expect(doRascunho).toEqual(['Substituição da VA-1']);
 });
