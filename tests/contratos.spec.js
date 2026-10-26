@@ -199,7 +199,7 @@ test('edição de relatório antigo: contrato fora da lista continua como opçã
   });
 
   await openTab(page, 'outbox');
-  await page.locator('.outbox-item', { hasText: 'ANT-01' }).locator('[data-action=edit-local]').click();
+  await page.locator('.outbox-item', { hasText: 'ANT-01' }).locator('[data-action=edit]').click();
   const substituir = page.locator('dialog.modal--confirm[open] [data-ok]');
   if (await substituir.isVisible().catch(() => false)) await substituir.click();
   await page.locator('#view[data-ready=visita_tecnica]').waitFor();
@@ -210,7 +210,7 @@ test('edição de relatório antigo: contrato fora da lista continua como opçã
   expect(rascunho).toBe('CONTRATO-ANTIGO 2024');
 
   await openTab(page, 'outbox');
-  await page.locator('.outbox-item', { hasText: 'ANT-02' }).locator('[data-action=edit-local]').click();
+  await page.locator('.outbox-item', { hasText: 'ANT-02' }).locator('[data-action=edit]').click();
   if (await substituir.isVisible().catch(() => false)) await substituir.click();
   await page.locator('#view[data-ready=handover]').waitFor();
   await expect(campo(page)).toHaveValue('OS-Mans');

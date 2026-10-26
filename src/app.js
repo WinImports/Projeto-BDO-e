@@ -3,7 +3,7 @@
 import { MODULES, getModule } from './modules/index.js';
 import { openDb, requestPersistence } from './core/db.js';
 import { loadDraft, saveDraft, discardDraft, hasDraft, restoreDraft } from './core/drafts.js';
-import { enqueue, pendingCount, onOutboxChange, takeBack, saveLocalOnly, sendFromHistory, takeBackLocal } from './core/outbox.js';
+import { enqueue, pendingCount, onOutboxChange, takeBack, saveLocalOnly, sendFromHistory, takeBackLocal, pausarEnvio } from './core/outbox.js';
 import { shareMessage, waUrl, publishReportDocuments, whatsappConfigurado } from './core/share.js';
 import { reportFiles } from './ui/report-pdf.js';
 import { showSharePrompt } from './ui/share-prompt.js';
@@ -232,7 +232,7 @@ async function showTab(tab) {
             <div class="doc-head__meta">
               <span class="meta-chip">${icon('mapPin', 14)}<span id="meta-poco"></span></span>
               <span class="meta-chip">${icon('hash', 14)}<span>ID <code>${esc(draft.uniqueId.slice(0, 8))}</code></span></span>
-              <span class="meta-chip"${Number(draft.data?._revisao) > 1 ? ' data-atualizando' : ''}>${icon('calendar', 14)}<span>${Number(draft.data?._revisao) > 1 ? `Atualizando · versão ${Number(draft.data._revisao)}` : draft.isNew ? 'Novo relatório' : 'Rascunho recuperado'}</span></span>
+              <span class="meta-chip"${Number(draft.data?._revisao) > 1 ? ' data-atualizando' : ''}>${icon('calendar', 14)}<span>${Number(draft.data?._revisao) > 1 ? `Editando · versão ${Number(draft.data._revisao)}` : draft.isNew ? 'Novo relatório' : 'Rascunho recuperado'}</span></span>
             </div>
           </div>
           <div class="doc-head__side">
@@ -565,10 +565,11 @@ async function atualizarRelatorio(module, rec) {
   const data = rehydrate(module, structuredClone(rec.data));
   data._revisao = (Number(rec.data?._revisao) || 1) + 1;
   await flushSave();
+  await pausarEnvio(rec.uniqueId); // versão antiga ainda não enviada não sai enquanto o técnico corrige
   await restoreDraft({ uniqueId: rec.uniqueId, module: module.id, photos: rec.photos || [] }, data);
   await showTab(module.id);
   window.scrollTo(0, 0);
-  toast('Relatório aberto para atualização. Ao finalizar, a versão nova substitui a anterior no Histórico e no servidor (sem duplicar).', 'success', 7000);
+  toast('Relatório aberto para edição. Ao finalizar, a versão nova substitui a anterior no Histórico e no servidor (sem duplicar).', 'success', 7000);
 }
 
 /** Relatório de outro técnico → rascunho novo (novo ID) preenchido com os dados dele. */

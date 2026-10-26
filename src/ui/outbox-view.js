@@ -329,7 +329,6 @@ export class OutboxView {
     const date = reportDate(mod, r.data);
     const nPhotos = r.photos.length || r.photosCount || 0;
     const id = esc(r.uniqueId);
-    const editable = q && outbox.canEdit(q) && !this.sync.running;
     return `
       <li class="outbox-item card outbox-item--${st.cls}" data-report="${id}" data-module="${esc(r.module)}">
         <button type="button" class="outbox-item__main" data-action="view" data-id="${id}" aria-label="Abrir ${esc(mod?.shortTitle || r.module)} ${esc(r.data.poco || '')}">
@@ -352,13 +351,10 @@ export class OutboxView {
         <div class="outbox-item__side">
           <span class="status status--${st.cls}">${st.label}</span>
           <div class="outbox-item__actions">
-            ${r.status === 'local' ? `
-              <button type="button" class="btn btn--ghost btn--sm" data-action="edit-local" data-id="${id}" title="Voltar para rascunho e corrigir">${icon('pen', 15)} Editar</button>
-              <button type="button" class="btn btn--primary btn--sm" data-action="send" data-id="${id}" title="Enviar ao banco e abrir o WhatsApp">${icon('send', 15)} Enviar</button>` : ''}
-            ${q ? (editable
-              ? `<button type="button" class="btn btn--ghost btn--sm" data-action="edit" data-id="${id}" title="Voltar para rascunho e corrigir">${icon('pen', 15)} Editar</button>`
-              : `<button type="button" class="btn btn--ghost btn--sm" disabled title="Já houve tentativa de envio ao servidor; não pode mais ser editado">${icon('pen', 15)} Editar</button>`) : ''}
-            <button type="button" class="btn btn--ghost btn--sm" data-action="reuse" data-id="${id}" title="${proprio(r) ? 'Abrir este relatório para atualizar (mesmo relatório, sem duplicar)' : 'Novo relatório preenchido com estes dados'}">${icon('copy', 15)} Reutilizar</button>
+            ${proprio(r)
+              ? `<button type="button" class="btn btn--ghost btn--sm" data-action="edit" data-id="${id}" title="Abrir este relatório para corrigir ou completar (mesmo relatório: a versão nova substitui a anterior, sem duplicar)">${icon('pen', 15)} Editar</button>`
+              : `<button type="button" class="btn btn--ghost btn--sm" data-action="reuse" data-id="${id}" title="Relatório de outro técnico: abre um relatório NOVO preenchido com estes dados">${icon('copy', 15)} Reutilizar como novo</button>`}
+            ${r.status === 'local' ? `<button type="button" class="btn btn--primary btn--sm" data-action="send" data-id="${id}" title="Enviar ao servidor e abrir o WhatsApp">${icon('send', 15)} Enviar</button>` : ''}
           </div>
         </div>
       </li>`;
@@ -378,7 +374,7 @@ export class OutboxView {
         : fotosABaixar && rec.status === 'server' ? `${rec.fotosPendentes} foto(s) não puderam ser baixadas agora; abra de novo com internet para tentar outra vez.`
         : fotosABaixar ? `${rec.fotosPendentes} foto(s) deste relatório da equipe ainda não foram baixadas; elas vêm na próxima sincronização com internet.` : '',
       onReuse: () => this.onReuse?.(rec),
-      reuseLabel: proprio(rec) ? 'Reutilizar / Atualizar' : 'Reutilizar como novo'
+      reuseLabel: proprio(rec) ? 'Editar este relatório' : 'Reutilizar como novo'
     });
   }
 
@@ -402,10 +398,9 @@ export class OutboxView {
       }
       case 'server-search': return this.buscarServidor(false);
       case 'server-more': return this.buscarServidor(true);
-      case 'edit': return rec?.outbox && this.onEdit?.(rec.outbox);
-      case 'reuse': return rec && this.onReuse?.(rec);
+      case 'edit':
+      case 'reuse': return rec && this.onReuse?.(rec); // app.js decide: próprio → atualiza o mesmo; equipe → novo
       case 'send': return rec && this.onSend?.(rec);
-      case 'edit-local': return rec && this.onEditLocal?.(rec);
       case 'view': return rec && (rec.status === 'server' ? this.abrirDoServidor(rec) : this.open(rec));
       default:
     }

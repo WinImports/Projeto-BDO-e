@@ -1,5 +1,5 @@
 // Histórico de relatórios: lista com tipo/poço/data/status, reabrir na prévia, gerar PDF,
-// "Reutilizar / Atualizar" (mesmo relatório, sem duplicar), gavetas por dia, filtro por data e botões de navegação da prévia ("Voltar e editar", "Início / Novo relatório").
+// "Editar" (mesmo relatório, sem duplicar), gavetas por dia, filtro por data e botões de navegação da prévia ("Voltar e editar", "Início / Novo relatório").
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
@@ -58,7 +58,9 @@ test('relatório finalizado fica no Histórico mesmo depois de enviado, com tipo
   await confirmarEnvio(page);
   await expect(page.locator('#outbox-badge')).toBeHidden();
   await expect(item.locator('.status')).toHaveText('Sincronizado');
-  await expect(item.locator('[data-action=edit]')).toHaveCount(0);
+  // relatório enviado continua editável: a versão nova substitui a anterior (sem duplicar)
+  await expect(item.locator('[data-action=edit]')).toHaveCount(1);
+  await expect(item.locator('[data-action=reuse]')).toHaveCount(0); // um botão só nos relatórios do aparelho
 
   // persiste ao reabrir o app
   await ctx.close({ keepData: true });
@@ -87,7 +89,7 @@ test('tocar no relatório salvo abre a prévia completa (com fotos) e gera o PDF
   await expect(preview.locator('.modal__body')).toContainText('João');
   await expect(preview.locator('.photo-grid img')).toHaveCount(1);
   await expect(preview.getByRole('button', { name: 'Voltar ao histórico' })).toBeVisible();
-  await expect(preview.getByRole('button', { name: 'Reutilizar / Atualizar' })).toBeVisible();
+  await expect(preview.getByRole('button', { name: 'Editar este relatório' })).toBeVisible();
 
   await preview.getByRole('button', { name: 'Baixar / Compartilhar PDF' }).click();
   await expect(toast(page)).toContainText('PDF salvo', { timeout: 15_000 });
@@ -98,12 +100,12 @@ test('tocar no relatório salvo abre a prévia completa (com fotos) e gera o PDF
   await expect(page.locator('#view[data-ready=outbox]')).toBeVisible();
 });
 
-test('"Reutilizar / Atualizar" abre o MESMO relatório (mesmo ID, dados e fotos); ao finalizar substitui a versão anterior, sem duplicar', async () => {
+test('"Editar" abre o MESMO relatório (mesmo ID, dados e fotos); ao finalizar substitui a versão anterior, sem duplicar', async () => {
   const { page } = ctx;
   const idOriginal = await finalizarVisita(page);
   await openTab(page, 'outbox');
   await page.locator('[data-history] .outbox-item__main').click();
-  await page.locator('dialog.modal[open]').getByRole('button', { name: 'Reutilizar / Atualizar' }).click();
+  await page.locator('dialog.modal[open]').getByRole('button', { name: 'Editar este relatório' }).click();
 
   await page.locator('#view[data-ready=visita_tecnica]').waitFor();
   await expect(page.locator('.doc-head__meta code')).toHaveText(idOriginal); // mesmo ID: atualiza, não cria outro
@@ -131,7 +133,7 @@ test('"Reutilizar / Atualizar" abre o MESMO relatório (mesmo ID, dados e fotos)
   await openTab(page, 'visita_tecnica');
   await fill(page, 'poco', 'RASCUNHO-NOVO');
   await openTab(page, 'outbox');
-  await page.locator('[data-history] [data-action=reuse]').click();
+  await page.locator('[data-history] [data-action=edit]').click();
   await page.locator('dialog.modal--confirm[open]').getByRole('button', { name: 'Substituir e atualizar' }).click();
   await page.locator('#view[data-ready=visita_tecnica]').waitFor();
   await expect(page.locator('.doc-head__meta code')).toHaveText(idOriginal);

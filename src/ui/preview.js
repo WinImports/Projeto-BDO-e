@@ -116,7 +116,7 @@ async function exportarJson({ module, uniqueId, data, photos, createdAt }) {
   return { saved: true, sheet: true };
 }
 
-export function openPreview({ module, uniqueId, data, photos = [], mode = 'confirm', meta = '', pending = [], onNewReport, onReuse, reuseLabel = 'Reutilizar / Atualizar', notice = '', createdAt = null }) {
+export function openPreview({ module, uniqueId, data, photos = [], mode = 'confirm', meta = '', pending = [], onNewReport, onReuse, reuseLabel = 'Editar este relatório', notice = '', createdAt = null }) {
   // Relatório finalizado usa a empresa "congelada" no envio; rascunho usa a atual (a do contrato do relatório)
   const company = data._empresa || companyInfo(data.contrato);
   assignPhotoFields(module, photos); // cada foto no bloco do seu componente (antigas → "Outras fotos")

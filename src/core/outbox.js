@@ -121,6 +121,21 @@ export async function reports() {
  * Um item pode voltar para edição somente se NUNCA houve tentativa de envio:
  * depois disso o servidor pode já ter gravado esse uniqueId e ignoraria a versão editada.
  */
+/**
+ * Editar (Histórico): a versão anterior ainda na fila e NUNCA tentada sai da fila para não ser enviada
+ * enquanto o técnico corrige; no histórico fica como "Salvo no aparelho" até finalizar de novo.
+ * Já tentada (o servidor pode ter gravado): continua na fila — a versão nova substitui no servidor (migração 005).
+ */
+export async function pausarEnvio(uniqueId) {
+  const rec = await get(STORES.outbox, uniqueId);
+  if (!rec || !canEdit(rec)) return false;
+  await remove(STORES.outbox, uniqueId);
+  const hist = await get(STORES.history, uniqueId);
+  if (hist) await put(STORES.history, { ...hist, localOnly: true });
+  await notify();
+  return true;
+}
+
 export const canEdit = (rec) => rec.attempts === 0 && !rec.lastAttemptAt && !rec.photos.some((p) => p.path);
 
 /** Retira o item da fila para voltar a ser rascunho. Devolve o registro (ou null se não puder). */
