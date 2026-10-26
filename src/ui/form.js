@@ -19,6 +19,7 @@ import { STORES, get } from '../core/db.js';
 import { getModule } from '../modules/index.js';
 import { meusContratos, valorContrato } from '../core/contratos.js';
 import { contratoSelectHtml } from './contrato-campo.js';
+import { abrirEditorTexto, usarEditorAmpliado } from './texto-expandido.js';
 import { analisar, aplicarSugestao, opcoesDe, sugestoes, rotuloLinha, escolherLinha, limparCampo, NOTA_TORQUE, ROTULOS, CAMPOS, FLANGE_TABLE } from '../core/flange.js';
 
 const INPUT_TYPES = { text: 'text', number: 'number', date: 'date', time: 'time', datetime: 'datetime-local' };
@@ -243,7 +244,15 @@ export class FormView {
     this.el.addEventListener('change', (e) => this.handleInput(e));
     this.el.addEventListener('click', (e) => this.handleClick(e));
     this.el.addEventListener('submit', (e) => e.preventDefault());
-    this.el.addEventListener('keydown', (e) => this.handleComboKey(e));
+    this.el.addEventListener('keydown', (e) => {
+      if (e.target.matches?.('input[data-expand][readonly]') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); this.expandirCelula(e.target); return; }
+      this.handleComboKey(e);
+    });
+    // celular: a célula de texto longo fica só leitura antes do toque (sem teclado nem página pulando);
+    // o clique abre o editor ampliado. No computador continua um campo comum.
+    this.el.addEventListener('pointerdown', (e) => {
+      if (e.target.matches?.('input[data-expand]')) e.target.readOnly = usarEditorAmpliado();
+    });
     this.el.addEventListener('focusout', (e) => {
       if (e.target.dataset.combo && !e.relatedTarget?.closest?.('.combo')) this.closeCombo(e.target);
     });
@@ -763,10 +772,37 @@ export class FormView {
         </select></td>`;
       case 'checkbox':
         return `<td class="col--center"><input type="checkbox" class="cell-check" ${common}${v ? ' checked' : ''}></td>`;
-      default:
+      default: {
+        // texto longo (coluna larga): no celular o toque abre o editor ampliado (o texto aparece inteiro)
+        if (!c.type && c.width === 'wide') {
+          return `<td><input type="text" ${common} value="${esc(v)}" data-expand
+            ${c.placeholder ? `placeholder="${esc(c.placeholder)}"` : ''}></td>`;
+        }
         return `<td><input type="${INPUT_TYPES[c.type] || 'text'}" ${common} value="${esc(v)}"
           ${c.placeholder ? `placeholder="${esc(c.placeholder)}"` : ''}${c.type === 'number' ? ' step="any" inputmode="decimal"' : ''}></td>`;
+      }
     }
+  }
+
+  /** Editor ampliado de uma célula de texto (celular): grava a cada tecla e, ao concluir, age como "sair do campo". */
+  async expandirCelula(input) {
+    const { table, col } = input.dataset;
+    const row = Number(input.dataset.row);
+    const c = this.fields.get(table)?.columns.find((x) => x.id === col);
+    if (!c) return;
+    // a tabela pode ser redesenhada enquanto digita: sempre o campo atual da mesma célula
+    const celula = () => $(`[data-table="${CSS.escape(table)}"][data-row="${row}"][data-col="${CSS.escape(col)}"]`, this.el);
+    const enviar = (tipo, valor) => {
+      const el = celula();
+      if (!el) return;
+      el.value = valor;
+      el.dispatchEvent(new Event(tipo, { bubbles: true }));
+    };
+    const final = await abrirEditorTexto({
+      titulo: c.label, subtitulo: `Linha ${row + 1}`, valor: input.value, placeholder: c.placeholder || '',
+      onInput: (v) => enviar('input', v)
+    });
+    enviar('change', final);
   }
 
   photosHtml(f) {
@@ -1006,6 +1042,7 @@ export class FormView {
   }
 
   async handleClick(e) {
+    if (e.target.matches?.('input[data-expand]') && usarEditorAmpliado()) return this.expandirCelula(e.target);
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     const { action, table } = btn.dataset;

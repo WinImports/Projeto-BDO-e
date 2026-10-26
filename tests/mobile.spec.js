@@ -112,3 +112,38 @@ test('campos de data/hora com altura confortável para toque', async () => {
     expect(box.height, sel).toBeGreaterThanOrEqual(TOUCH);
   }
 });
+
+test('atividade do BDO no celular: tocar abre o editor ampliado com o texto inteiro; Enter conclui e grava na tabela', async () => {
+  const { page } = ctx;
+  await openTab(page, 'bdo');
+  const cel = page.locator('[data-table=atividades][data-row="0"][data-col=atividade]');
+  await expect(cel).toHaveAttribute('data-expand', '');
+  await expect(cel).toHaveAttribute('aria-label', /Atividade/);
+  const antes = await page.evaluate(() => window.scrollX);
+  await cel.click();
+  const editor = page.locator('dialog.modal--texto[open]');
+  await expect(editor).toContainText('Atividade executada');
+  const area = editor.locator('textarea');
+  await expect(area).toBeFocused();
+  const texto = 'Retirada dos parafusos de 1 3/8" do flange da cabeça de revestimento e limpeza das roscas';
+  await area.fill(texto);
+  // a caixa mostra o texto inteiro (quebra linha, sem rolagem lateral)
+  expect(await area.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
+  await area.press('Enter');
+  await expect(editor).toHaveCount(0);
+  await expect(cel).toHaveValue(texto);
+  expect(await page.evaluate(() => window.scrollX)).toBe(antes);
+  // gravado no rascunho (o resumo automático já usa o texto)
+  await expect(page.locator('[data-field=resumo_atividades], [data-autotext-status]').first()).toBeVisible();
+  const salvo = await page.evaluate(async () => {
+    const { STORES, get } = await import('./src/core/db.js');
+    for (let i = 0; i < 20; i++) {
+      const d = await get(STORES.drafts, 'bdo');
+      const v = d?.data?.atividades?.[0]?.atividade;
+      if (v) return v;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return '';
+  });
+  expect(salvo).toBe(texto);
+});
