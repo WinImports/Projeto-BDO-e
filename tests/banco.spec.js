@@ -224,6 +224,29 @@ test('relatório atualizado (Reutilizar): mesmo unique_id com conteúdo novo sub
   expect((await linha()).poco).toBe('B');
 });
 
+test('relatório enviado antes do login (sem dono): o autor pelo e-mail do token assume e a versão editada é gravada e confirmada', async () => {
+  const { db, tec1, gestorA } = await cenario();
+  const enviar = (q, lista) => como(db, q, () => rpc(db, 'select * from public.submit_reports($1)', [JSON.stringify(lista)]));
+  const uid = crypto.randomUUID();
+  // linha antiga: user_id nulo, só o e-mail (como as enviadas pela chave anônima)
+  const { email } = tec1;
+  await rpc(db, `insert into public.bdo_reports (unique_id, content_hash, payload, photos, poco, contrato, user_id, user_email, client_created_at)
+    values ($1, 'h1', '{"poco":"BA-253","contrato":"OS-Mans"}', '[]', 'BA-253', 'OS-Mans', null, $2, now())`, [uid, email.toUpperCase()]);
+  const versao = (n, poco, extra = {}) => ({ unique_id: uid, module: 'bdo', content_hash: `h${n}`, client_created_at: new Date().toISOString(), payload: { poco, contrato: 'OS-Mans', _revisao: n }, ...extra });
+  // outro usuário (mesmo com user_email falso no payload) não assume
+  expect(await enviar(gestorA, [versao(2, 'OUTRO', { user_email: email })])).toEqual([]);
+  // o autor assume: gravado e confirmado
+  const ok = await enviar(tec1, [versao(2, 'BA-253, BA-233')]);
+  expect(ok.map((r) => r.unique_id)).toEqual([uid]);
+  expect(await um(db, 'select count(*)::int as n, max(poco) as poco, bool_and(user_id = $2) as dono from public.bdo_reports where unique_id = $1', [uid, tec1.id]))
+    .toEqual({ n: 1, poco: 'BA-253, BA-233', dono: true });
+  // linha sem dono com o MESMO conteúdo também é confirmada (senão ficaria presa na fila)
+  const uid2 = crypto.randomUUID();
+  await rpc(db, `insert into public.bdo_reports (unique_id, content_hash, payload, photos, poco, user_id, user_email, client_created_at)
+    values ($1, 'igual', '{"poco":"X"}', '[]', 'X', null, $2, now())`, [uid2, email]);
+  expect((await enviar(tec1, [{ unique_id: uid2, module: 'bdo', content_hash: 'igual', client_created_at: new Date().toISOString(), payload: { poco: 'X' } }])).map((r) => r.unique_id)).toEqual([uid2]);
+});
+
 test('isolamento: pela API ninguém lê as tabelas direto (RLS sem políticas); dados só pelas funções', async () => {
   const { db, tec1, gestorA } = await cenario();
   await relatorio(db, 'bdo_reports', { contrato: 'OS-Mans', poco: 'FBM-89' });
