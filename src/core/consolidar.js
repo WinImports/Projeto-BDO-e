@@ -71,8 +71,13 @@ export function atividadesNoPoco(d, poco) {
 const semAcento = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 /** Logística que não é execução: separação / carregamento / descarregamento de material. */
 export const ehLogistica = (texto) => /\b(separ|carreg|descarreg)\w*\b.*\bmateria/.test(semAcento(texto));
-/** Atividade de execução (o que entra no Relatório de Execução): nem deslocamento, nem logística de material. */
-export const ehExecucao = (texto) => Boolean(String(texto || '').trim()) && !isTravel(texto) && !ehLogistica(texto);
+/**
+ * Apoio que não é serviço na cabeça de poço: DDS, refeição / intervalo, espera, reunião pré-tarefa, APR / PT
+ * (permissão de trabalho) e abastecimento.
+ */
+export const ehApoio = (texto) => /\b(dds|dss|almoco|refeicao|jantar|janta|lanche|cafe|intervalo|descanso|aguard\w*|espera|reuniao|pre[\s-]?tarefa|apr|pt|abastec\w*)\b|\bpermissao de trabalho\b/.test(semAcento(texto));
+/** Atividade de execução (o que entra no Relatório de Execução): nem deslocamento, nem logística de material, nem apoio. */
+export const ehExecucao = (texto) => Boolean(String(texto || '').trim()) && !isTravel(texto) && !ehLogistica(texto) && !ehApoio(texto);
 
 /**
  * Execução do dia para o Relatório de Execução: do(s) BDO(s) do MESMO dia (e do mesmo poço, se informado),

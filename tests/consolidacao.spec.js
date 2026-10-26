@@ -148,8 +148,10 @@ test('Tempos de operação: só as atividades de execução do BDO do MESMO dia 
     { uniqueId: 'bdo-hoje', module: 'bdo', data: { poco: 'AR-182', data: hoje, atividades: [
       { hora_inicio: '07:00', hora_fim: '07:40', atividade: 'Separação de material na base' },
       { hora_inicio: '07:40', hora_fim: '08:30', atividade: 'Deslocamento para o poço AR-182' },
+      { hora_inicio: '08:30', hora_fim: '08:30', atividade: 'DDS e reunião pré-tarefa no poço' },
       { hora_inicio: '08:30', hora_fim: '10:00', atividade: 'Retirada dos parafusos de 1 3/8"' },
       { hora_inicio: '10:00', hora_fim: '12:00', atividade: 'Instalação dos parafusos de 1 3/8"' },
+      { hora_inicio: '12:00', hora_fim: '13:00', atividade: 'Almoço' },
       { hora_inicio: '13:00', hora_fim: '14:10', atividade: 'Retirada da válvula esfera rosqueada' },
       { hora_inicio: '14:10', hora_fim: '15:50', atividade: 'Instalação da válvula esfera rosqueada' },
       { hora_inicio: '15:50', hora_fim: '16:40', atividade: 'Retornando para a base' }
@@ -160,9 +162,11 @@ test('Tempos de operação: só as atividades de execução do BDO do MESMO dia 
   ]);
   const r = await page.evaluate(async () => {
     const { ehExecucao } = await import('./src/core/consolidar.js');
-    return ['Separando materiais para a operação', 'Carregamento de material no caminhão', 'Deslocando para AR-182', 'Retirada da válvula'].map(ehExecucao);
+    return ['Separando materiais para a operação', 'Carregamento de material no caminhão', 'Deslocando para AR-182', 'Retirada da válvula',
+      'DDS', 'Almoço', 'Aguardando liberação', 'Reunião pré-tarefa', 'Emissão da PT', 'Elaboração da APR', 'Permissão de trabalho', 'Abastecimento da viatura',
+      'Troca dos parafusos de 1 3/8"', 'Substituição da válvula esfera', 'Reaperto do flange', 'Teste de estanqueidade na VA-2'].map(ehExecucao);
   });
-  expect(r).toEqual([false, false, false, true]);
+  expect(r).toEqual([false, false, false, true, false, false, false, false, false, false, false, false, true, true, true, true]);
 
   await openTab(page, 'handover');
   await page.locator('[data-field=data_hora]').fill(`${hoje}T08:00`);
