@@ -1407,9 +1407,12 @@ export class FormView {
    * da Visita a partir da inspeção. Enquanto o diagnóstico não muda, o que o técnico ajustou na linha
    * (detalhe, prioridade…) é mantido; mudou o diagnóstico, a linha é refeita (_sig).
    */
-  syncAutoRows() {
-    const cfg = this.module.autoRows;
-    if (!cfg) return;
+  syncAutoRows(skipTable) {
+    const lista = [this.module.autoRows].flat().filter(Boolean); // um quadro ou vários
+    for (const cfg of lista) if (cfg.table !== skipTable) this.syncAutoRowsDe(cfg);
+  }
+
+  syncAutoRowsDe(cfg) {
     const d = this.draft.data;
     const rows = Array.isArray(d[cfg.table]) ? d[cfg.table] : [];
     const atuais = new Map(rows.filter((r) => r._auto).map((r) => [r._auto, r]));
@@ -1420,10 +1423,11 @@ export class FormView {
     });
     const assinatura = (lista) => JSON.stringify(lista.map((r) => [r._auto, r._sig]));
     if (assinatura([...atuais.values()]) === assinatura(novas)) return;
-    d[cfg.table] = [...rows.filter((r) => !r._auto), ...novas];
+    const juntas = [...rows.filter((r) => !r._auto), ...novas];
+    d[cfg.table] = cfg.ordenar ? juntas.sort(cfg.ordenar) : juntas;
     this.refreshField(cfg.table);
     const adicionadas = novas.filter((r) => !atuais.has(r._auto));
-    if (adicionadas.length) toast(`Adicionado ${cfg.label === 'Pendências' ? 'às Pendências' : `ao ${cfg.label}`}: ${adicionadas.map((r) => r[cfg.col]).join('; ')}`, 'info', 5000);
+    if (adicionadas.length && cfg.aviso !== false) toast(`Adicionado ${cfg.label === 'Pendências' ? 'às Pendências' : `ao ${cfg.label}`}: ${adicionadas.map((r) => r[cfg.col]).join('; ')}`, 'info', 5000);
   }
 
   /** Tabela com chain: ao preencher o fim de uma linha, a próxima começa nesse horário (se estava vazia). */
@@ -1531,7 +1535,7 @@ export class FormView {
 
   changed(fieldId) {
     this.updateAutoTexts(fieldId);
-    if (fieldId !== this.module.autoRows?.table) this.syncAutoRows();
+    this.syncAutoRows(fieldId);
     if (['poco', 'periodo_inicio', 'periodo_fim'].includes(fieldId) && this.consolField()) this.scheduleConsolidation();
     if (fieldId === 'poco') { clearTimeout(this.routeRefreshTimer); this.routeRefreshTimer = setTimeout(() => this.refreshGeo(), 300); }
     this.clearError(fieldId);

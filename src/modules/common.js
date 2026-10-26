@@ -25,7 +25,8 @@
 // table.chain: [['hora_fim','hora_inicio']] → a linha seguinte herda o fim da anterior como início
 // table.defaultRows(settings): linhas de um relatório novo (ex.: equipe com o técnico padrão)
 // number.kmAuto: KM rodado estimado ao escolher o poço e somado a cada captura de GPS
-// módulo.autoRows: { table, rows(data) } → linhas automáticas (_auto) num quadro (ex.: ações da Visita)
+// módulo.autoRows: { table, rows(data) } (ou uma lista deles) → linhas automáticas (_auto) num quadro (ex.: ações da
+//            Visita); aviso: false não mostra o toast; ordenar(a, b) ordena manuais + automáticas
 // Seção legacy: true → não aparece no formulário; só na prévia/PDF de relatórios antigos que tenham esses dados
 // formHidden: true (campo) → não aparece no formulário, mas sai na prévia/PDF/Word se tiver dado (formato anterior)
 // reportAlways: true → sai na prévia/PDF/Word sempre que a seção tiver algum dado ("—" quando vazio);

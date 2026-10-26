@@ -79,6 +79,14 @@ export function resumoIntervencoes(d = {}) {
 
 export const ETAPAS_OPERACAO = ['Visita', 'Operação'];
 
+/** Tempos de operação vindos dos BDOs do poço (consolidação): uma linha por BDO, com chegada e saída no poço. */
+export function temposDosBdos(d) {
+  return (d.consolidacao?.tempos || []).map((t) => ({
+    _auto: `bdo:${t.bdo}`, data: t.data, etapa: t.visita ? 'Visita' : 'Operação',
+    chegada: t.chegada, saida: t.saida, tempo: duracao(t.chegada, t.saida)
+  }));
+}
+
 const componente = ({ p, nome, short, fotos }, n, situacao) => ({
   title: `${n}. ${nome}`,
   short: short || nome,
@@ -128,7 +136,7 @@ export default {
       title: 'Tempos de operação',
       short: 'Tempos de operação',
       icon: 'clock',
-      hint: 'Um registro por ida ao poço (visitas e dias de operação): chegada e saída. O tempo no poço é calculado.',
+      hint: 'Preenchido com os BDOs do poço no período da consolidação: chegada = início da primeira atividade no poço, saída = fim da última (deslocamentos ficam de fora). Dá para corrigir ou acrescentar dias à mão.',
       fields: [{
         id: 'tempos_operacao', type: 'table', addLabel: 'Adicionar dia',
         newRow: () => ({ etapa: 'Operação' }),
@@ -264,7 +272,11 @@ export default {
   ],
   notasDaVisita,
   herdaDoBdo: herancaBdo('data_hora'),
-  autoRows: { table: 'pendencias', col: 'descricao', label: 'Pendências', defaults: { prioridade: 'Alta' }, rows: pendenciasAutomaticas },
+  autoRows: [
+    { table: 'pendencias', col: 'descricao', label: 'Pendências', defaults: { prioridade: 'Alta' }, rows: pendenciasAutomaticas },
+    { table: 'tempos_operacao', col: 'data', label: 'Tempos de operação', aviso: false, rows: temposDosBdos,
+      ordenar: (a, b) => String(a.data || '9999').localeCompare(String(b.data || '9999')) }
+  ],
   validate(data) {
     if (data.periodo_inicio && data.periodo_fim && data.periodo_inicio > data.periodo_fim) {
       return [{ field: 'periodo_fim', message: 'O fim da quinzena não pode ser antes do início' }];

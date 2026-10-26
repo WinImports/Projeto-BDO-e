@@ -3,6 +3,7 @@
 
 import { STORES, getAll } from './db.js';
 import { normalizeWell, listaPocos } from './pocos.js';
+import { isTravel } from './deslocamento.js';
 import { ANTEPOCO, VALVULAS_CABECA, FLANGES } from '../modules/common.js';
 
 export const listHistory = () => getAll(STORES.history);
@@ -39,6 +40,38 @@ function resumoVisita(d) {
   return { valvulas, fixadores };
 }
 
+/**
+ * Chegada e saída no poço num BDO (Tempos de operação da Execução): o início da primeira e o fim da última
+ * atividade NO poço. Deslocamentos ficam de fora; num dia com vários poços, vale só o trecho deste poço
+ * (depois do deslocamento até ele e antes do deslocamento para outro lugar).
+ * @returns {{ chegada, saida, visita }|null} visita: alguma atividade no poço fala em "visita"
+ */
+export function tempoNoPoco(d, poco) {
+  const alvo = normalizeWell(poco);
+  const pocos = listaPocos(d.poco).map(normalizeWell).filter(Boolean);
+  const ativ = (d.atividades || []).filter((a) => a.hora_inicio || a.hora_fim || String(a.atividade || '').trim());
+  // destino de um deslocamento: poço da lista citado (ou reconhecido ao digitar); outro lugar → null
+  const destino = (a) => {
+    const [tipo, nome] = String(a._desloc?.key || '').split(/:(.*)/s);
+    if (tipo === 'poco') return normalizeWell(nome);
+    const texto = normalizeWell(a.atividade);
+    return pocos.filter((p) => texto.includes(p)).sort((x, y) => y.length - x.length)[0] || null;
+  };
+  const viagens = ativ.filter((a) => isTravel(a.atividade));
+  // antes do 1º deslocamento: se ele vai para um poço, a equipe estava na base; senão, no 1º poço do dia
+  let atual = viagens.length && destino(viagens[0]) ? null : pocos[0] || null;
+  const noPoco = [];
+  for (const a of ativ) {
+    if (isTravel(a.atividade)) { atual = destino(a); continue; }
+    if (atual === alvo) noPoco.push(a);
+  }
+  if (!noPoco.length) return null;
+  const chegada = noPoco.find((a) => a.hora_inicio)?.hora_inicio || '';
+  const saida = [...noPoco].reverse().find((a) => a.hora_fim)?.hora_fim || '';
+  if (!chegada && !saida) return null;
+  return { chegada, saida, visita: noPoco.some((a) => /\bvisita\b/i.test(a.atividade || '')) };
+}
+
 /** Datas no formato AAAA-MM-DD; o fim é inclusivo. */
 const inPeriod = (date, ini, fim) => Boolean(date) && date >= ini && date <= fim;
 
@@ -56,6 +89,7 @@ export function consolidate(history, { poco, inicio, fim }) {
     .sort((a, b) => String(a.data.data).localeCompare(String(b.data.data)) || String(a.createdAt).localeCompare(String(b.createdAt)));
 
   const atividades = [];
+  const tempos = [];
   const paradas = [];
   const sms = [];
   let minAtiv = 0;
@@ -63,6 +97,8 @@ export function consolidate(history, { poco, inicio, fim }) {
   let rptSim = 0;
   for (const r of bdos) {
     const d = r.data;
+    const t = tempoNoPoco(d, poco);
+    if (t) tempos.push({ bdo: r.uniqueId, data: d.data, ...t });
     for (const a of d.atividades || []) {
       minAtiv += toMin(a.duracao);
       atividades.push({ data: br(a.data_inicio || d.data), inicio: a.hora_inicio || '', fim: a.hora_fim || '', atividade: a.atividade || '', duracao: a.duracao || '' });
@@ -91,6 +127,7 @@ export function consolidate(history, { poco, inicio, fim }) {
     horasParadas: fmtMin(minParadas),
     rpt: bdos.length ? `${rptSim} de ${bdos.length}` : '',
     atividades,
+    tempos,
     paradas,
     sms,
     visita: visita ? {
