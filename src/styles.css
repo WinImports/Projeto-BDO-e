@@ -1337,3 +1337,15 @@ input[data-expand] { cursor: text; text-overflow: ellipsis; }
     padding-top: env(safe-area-inset-top); padding-bottom: 0; animation: none; }
   .modal.modal--texto::before { display: none; }
 }
+
+/* Faixa "Nova versão disponível — Atualizar agora" (PWA): no topo, acima de tudo */
+.update-banner {
+  position: fixed; z-index: 9000; top: calc(env(safe-area-inset-top) + 10px); left: 50%; transform: translateX(-50%);
+  width: min(560px, calc(100vw - 24px)); display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-left: 4px solid var(--accent);
+  border-radius: 14px; box-shadow: var(--shadow-lg);
+}
+.update-banner__icon { display: flex; color: var(--accent-strong, var(--accent)); }
+.update-banner__msg { flex: 1; font-size: .9rem; line-height: 1.35; }
+.update-banner__close { display: flex; padding: 8px; border: 0; background: none; color: var(--text-muted); cursor: pointer; border-radius: 8px; }
+@media (pointer: coarse), (max-width: 640px) { .update-banner .btn { min-height: 44px; } .update-banner__close { min-width: 44px; min-height: 44px; justify-content: center; align-items: center; } }

@@ -652,10 +652,35 @@ function registerServiceWorker() {
   if (!('serviceWorker' in navigator) || !location.protocol.startsWith('http')) return;
   const hadController = Boolean(navigator.serviceWorker.controller);
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    // não recarrega sozinho para não atrapalhar quem está preenchendo (o rascunho já está salvo)
-    if (hadController) toast('Nova versão do app instalada. Ela será usada na próxima vez que você abrir o app.', 'info', 8000);
+    // não recarrega sozinho para não atrapalhar quem está preenchendo: oferece "Atualizar agora"
+    if (hadController) mostrarNovaVersao();
   });
-  navigator.serviceWorker.register('./sw.js').catch((err) => console.error('[pwa]', err));
+  navigator.serviceWorker.register('./sw.js').then((reg) => {
+    // o iPhone deixa o app "aberto" em segundo plano: ao voltar para ele, procura versão nova
+    const procurar = () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); };
+    document.addEventListener('visibilitychange', procurar);
+    window.addEventListener('online', procurar);
+  }).catch((err) => console.error('[pwa]', err));
+}
+
+/** Faixa "Nova versão disponível — Atualizar agora": salva o rascunho e recarrega com a versão nova. */
+function mostrarNovaVersao() {
+  if (document.querySelector('[data-nova-versao]')) return;
+  const el = document.createElement('div');
+  el.className = 'update-banner';
+  el.dataset.novaVersao = '';
+  el.setAttribute('role', 'status');
+  el.innerHTML = `
+    <span class="update-banner__icon">${icon('refresh', 18)}</span>
+    <span class="update-banner__msg"><strong>Nova versão disponível.</strong> O que você está preenchendo fica salvo.</span>
+    <button type="button" class="btn btn--primary btn--sm" data-atualizar>Atualizar agora</button>
+    <button type="button" class="update-banner__close" data-depois aria-label="Depois">${icon('x', 14)}</button>`;
+  el.querySelector('[data-atualizar]').addEventListener('click', async () => {
+    try { await flushSave(); } catch { /* o rascunho já é salvo a cada alteração */ }
+    location.reload();
+  });
+  el.querySelector('[data-depois]').addEventListener('click', () => el.remove());
+  document.body.appendChild(el);
 }
 
 // ---------- Usuário logado ----------
