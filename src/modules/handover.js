@@ -2,7 +2,7 @@
 // serviço executado e o bloco de fotos "Antes (Visita Técnica) x Depois (Execução)": as fotos
 // "Antes" vêm da última Visita Técnica do poço finalizada neste aparelho (ver consolidação).
 import {
-  pocoHerdado, herancaBdo, pressoes, coordenadas, fotosDe, paragrafoAbertura, equipe, PRIORIDADES,
+  pocoHerdado, herancaBdo, pressoes, coordenadas, fotosDe, paragrafoAbertura, equipe, duracao, PRIORIDADES,
   FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, FLANGES,
   ESTANQUEIDADE, CORROSAO
 } from './common.js';
@@ -65,6 +65,20 @@ export function pendenciasAutomaticas(d) {
   return out;
 }
 
+/**
+ * Resumo das intervenções realizadas (como no relatório pós-serviço): uma linha por componente com o
+ * "Serviço executado" preenchido — "VA-2: Instalação de uma kerotest". Componente sem serviço não entra.
+ */
+export function resumoIntervencoes(d = {}) {
+  return [ANTEPOCO, ...VALVULAS_CABECA, ...FLANGES]
+    .map((c) => [c.short || c.nome, String(d[`${c.p}_servico`] || '').trim()])
+    .filter(([, s]) => s)
+    .map(([nome, s]) => `${nome}: ${s}`)
+    .join('\n');
+}
+
+export const ETAPAS_OPERACAO = ['Visita', 'Operação'];
+
 const componente = ({ p, nome, short, fotos }, n, situacao) => ({
   title: `${n}. ${nome}`,
   short: short || nome,
@@ -111,6 +125,23 @@ export default {
       ]
     },
     {
+      title: 'Tempos de operação',
+      short: 'Tempos de operação',
+      icon: 'clock',
+      hint: 'Um registro por ida ao poço (visitas e dias de operação): chegada e saída. O tempo no poço é calculado.',
+      fields: [{
+        id: 'tempos_operacao', type: 'table', addLabel: 'Adicionar dia',
+        newRow: () => ({ etapa: 'Operação' }),
+        columns: [
+          { id: 'data', label: 'Data', type: 'date', width: 'date' },
+          { id: 'etapa', label: 'Etapa', type: 'select', options: ETAPAS_OPERACAO, aux: true },
+          { id: 'chegada', label: 'Chegada', type: 'time', width: 'time' },
+          { id: 'saida', label: 'Saída', type: 'time', width: 'time' },
+          { id: 'tempo', label: 'Tempo no poço', width: 'narrow', computed: (r) => duracao(r.chegada, r.saida) }
+        ]
+      }]
+    },
+    {
       title: 'Consolidação da quinzena (14x14)',
       short: 'Consolidação 14x14',
       icon: 'listChecks',
@@ -127,7 +158,8 @@ export default {
       icon: 'camera',
       fields: [
         comparar('fotos_chegada', 'Placa do poço e conjunto / árvore de natal: antes x depois', FOTOS_CHEGADA),
-        { id: 'obs_iniciais', label: 'Observações iniciais', type: 'textarea' }
+        { id: 'condicao_geral', label: 'Condição geral encontrada', type: 'select', span: 6, options: ['Boa', 'Regular', 'Ruim (requer atenção)'] },
+        { id: 'obs_iniciais', label: 'Observações iniciais (condições encontradas)', type: 'textarea' }
       ]
     },
     {
@@ -135,6 +167,7 @@ export default {
       short: 'Pressões',
       icon: 'activity',
       fields: [
+        pressoes({ id: 'pressoes_chegada', label: 'Pressões encontradas na chegada' }),
         pressoes({ label: 'Pressões no momento da entrega' }),
         comparar('fotos_manometros', 'Fotos dos manômetros: antes x depois', FOTOS_MANOMETROS)
       ]
@@ -154,7 +187,11 @@ export default {
       icon: 'activity',
       fields: [
         { id: 'status_poco', label: 'Status final', type: 'select', required: true, span: 4, options: ['Pressurizado', 'Despressurizado', 'Estanque', 'Aguardando Material'] },
-        { id: 'servico_executado', label: 'Resumo do serviço executado', type: 'textarea', required: true },
+        {
+          id: 'servico_executado', label: 'Resumo das intervenções realizadas', type: 'textarea', required: true,
+          autoText: resumoIntervencoes, autoTextFonte: 'os serviços executados nos componentes', lockEdit: 'Editar Resumo',
+          placeholder: 'Preencha o "Serviço executado" de cada componente para montar o resumo.'
+        },
         {
           id: 'condicoes_seguranca', label: 'Condição de segurança na entrega', type: 'checklist',
           options: [
@@ -169,6 +206,15 @@ export default {
       ]
     },
     {
+      title: 'Registro final do poço',
+      short: 'Registro final',
+      icon: 'camera',
+      fields: [
+        fotosDe('fotos_final', 'Visão geral do poço após o serviço', ['Visão geral do poço após serviço']),
+        { id: 'obs_finais', label: 'Observações finais', type: 'textarea' }
+      ]
+    },
+    {
       title: 'Pendências críticas para a próxima turma (14x14)',
       short: 'Pendências críticas',
       icon: 'flag',
@@ -176,7 +222,7 @@ export default {
         {
           id: 'pendencias_criticas', label: 'Pendências críticas — o que a próxima turma precisa fazer', type: 'textarea',
           required: true, highlight: true,
-          placeholder: 'Descreva com clareza o que ficou pendente. Se não houver, escreva "Nenhuma pendência".'
+          placeholder: 'Itens previstos e não executados, com o motivo. Se não houver, escreva "Nenhuma pendência".'
         },
         {
           id: 'pendencias', label: 'Detalhamento (opcional)', type: 'table', addLabel: 'Adicionar pendência',

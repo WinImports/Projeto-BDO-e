@@ -35,6 +35,7 @@
 //            (somente leitura) até o técnico tocar no botão de edição
 // textarea.autoText(data): texto gerado e refeito a cada alteração do relatório enquanto o técnico não o
 //            editar à mão (data._autoTexto guarda a última versão gerada); editado, aparece "Gerar de novo"
+//            (autoTextFonte: de onde vem o texto, nas mensagens; padrão "a apropriação")
 // módulo.herdaDoBdo: { campoDoRelatorio: 'campoDoBdo' } → copiados do BDO-e ativo (ver core/heranca.js)
 
 // autocomplete 'pocos': sugere poços da base oficial (src/data/pocos-ba.json) e, ao escolher,
@@ -126,7 +127,7 @@ export const VALVULAS_CABECA = [
 
 export const FLANGES = [
   { p: 'flange_sup', nome: 'Flange da cabeça superior', short: 'Flange superior', fotos: ['Medição com paquímetro / trena', 'Vista do flange'] },
-  { p: 'flange_inf', nome: 'Flange inferior', short: 'Flange inferior', fotos: ['Medição com paquímetro / trena', 'Vista do flange'] }
+  { p: 'flange_inf', nome: 'Flange inferior — cabeça de revestimento', short: 'Flange inferior', fotos: ['Medição com paquímetro / trena', 'Vista do flange'] }
 ];
 
 export const ESTANQUEIDADE = ['Estanque', 'Sem estanqueidade (vazamento)', 'Não testada'];

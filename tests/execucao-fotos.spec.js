@@ -157,3 +157,30 @@ test('PDF, Word e prévia: sem "Antes" uma coluna; com Visita, Antes x Depois e 
   expect(antigo.word).toContain('Fotos da execução');
   expect(antigo.html).toContain('data-layout="uma-coluna"');
 });
+
+test('Execução no formato do relatório pós-serviço: tempos de operação, condições encontradas, resumo das intervenções e registro final', async () => {
+  const { page } = ctx;
+  await openTab(page, 'handover');
+  const view = page.locator('#view');
+  // tempos de operação: chegada / saída por dia, tempo no poço calculado
+  const tempos = view.locator('.form-section', { hasText: 'Tempos de operação' });
+  await tempos.getByRole('button', { name: /Adicionar dia/ }).click();
+  const linha = tempos.locator('tbody tr').first();
+  await linha.locator('[data-col=chegada]').fill('08:30');
+  await linha.locator('[data-col=saida]').fill('15:50');
+  await linha.locator('[data-col=saida]').blur();
+  await expect(linha.locator('.cell--computed')).toHaveText(/7h ?20/);
+  // condições encontradas e pressões na chegada
+  await expect(view.locator('[data-field=condicao_geral]')).toBeVisible();
+  await expect(view.locator('.form-section', { hasText: 'Pressões encontradas na chegada' })).toBeVisible();
+  // resumo das intervenções montado com o serviço de cada componente
+  await fill(page, 'va2_servico', 'Instalação de uma kerotest');
+  await fill(page, 'flange_sup_servico', 'Substituição dos parafusos');
+  const resumo = view.locator('[data-field=servico_executado]');
+  await expect(resumo).toHaveValue('VA-2: Instalação de uma kerotest\nFlange superior: Substituição dos parafusos');
+  await expect(view.locator('[data-autotext-status=servico_executado]')).toContainText('serviços executados nos componentes');
+  // registro final do poço
+  const final = view.locator('.form-section', { hasText: 'Registro final do poço' });
+  await expect(final).toContainText('Visão geral do poço após o serviço');
+  await expect(final.locator('[data-field=obs_finais]')).toBeVisible();
+});

@@ -514,7 +514,7 @@ export class FormView {
             ${f.autoText ? `<p class="autotext-status small" data-autotext-status="${id}">${this.autoTextStatus(f)}</p>` : ''}
             <div class="locked-text__actions">
               <button type="button" class="btn btn--ghost btn--sm" data-action="toggle-lock" data-target="${id}" aria-pressed="false">${icon('pen', 15)} <span>${esc(f.lockEdit)}</span></button>
-              ${f.autoText ? `<button type="button" class="btn btn--text btn--sm" data-action="regen-text" data-target="${id}"${this.autoTextManual(f) ? '' : ' hidden'}>${icon('refresh', 15)} Gerar de novo pela apropriação</button>` : ''}
+              ${f.autoText ? `<button type="button" class="btn btn--text btn--sm" data-action="regen-text" data-target="${id}"${this.autoTextManual(f) ? '' : ' hidden'}>${icon('refresh', 15)} Gerar de novo${f.autoTextFonte ? '' : ' pela apropriação'}</button>` : ''}
             </div>
           </div>`;
         }
@@ -1049,7 +1049,7 @@ export class FormView {
       const input = $(`[data-field="${CSS.escape(f.id)}"]`, this.el);
       if (input) input.value = this.draft.data[f.id];
       this.changed(f.id);
-      toast('Resumo gerado de novo a partir da apropriação.', 'info', 3000);
+      toast(`Resumo gerado de novo a partir d${f.autoTextFonte ? 'os serviços dos componentes' : 'a apropriação'}.`, 'info', 3000);
     } else if (action === 'navigate') {
       this.openNavigation();
     } else if (action === 'clear-geo') {
@@ -1501,7 +1501,8 @@ export class FormView {
 
   autoTextStatus(f) {
     if (this.autoTextManual(f)) return 'Editado manualmente: não é mais atualizado sozinho.';
-    return this.draft.data[f.id] ? 'Atualizado automaticamente com a apropriação.' : 'Será montado automaticamente ao preencher a apropriação.';
+    const fonte = f.autoTextFonte || 'a apropriação';
+    return this.draft.data[f.id] ? `Atualizado automaticamente com ${fonte}.` : `Será montado automaticamente ao preencher ${fonte}.`;
   }
 
   /**
