@@ -165,7 +165,7 @@ test.describe('BDO-e → Visita Técnica / Relatório de Execução', () => {
       await page.locator('#view[data-ready=visita_tecnica]').waitFor();
     }
     await openTab(page, 'outbox');
-    const busca = page.getByPlaceholder('Buscar por poço, data ou tipo...');
+    const busca = page.getByPlaceholder('Buscar por poço, cliente ou tipo...');
     const itens = page.locator('[data-history] .outbox-item');
     await expect(itens).toHaveCount(2);
 
