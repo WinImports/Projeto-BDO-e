@@ -154,15 +154,19 @@ test('Histórico em gavetas por dia: a do dia mais recente aberta, as antigas re
   await expect(dias.first()).toHaveAttribute('data-history-day', hojeISO());
   await expect(dias.first()).toHaveAttribute('open', '');
   await expect(dias.first().locator('.history-day__rel')).toHaveText('Hoje');
-  // o antigo não foi enviado: a gaveta abre sozinha para chamar atenção
+  // o antigo não foi enviado: a gaveta fica FECHADA, com o selo "1 a enviar" no resumo
   const antigo = page.locator('[data-history-day="2026-01-15"]');
-  await expect(antigo).toHaveAttribute('open', '');
+  await expect(antigo).not.toHaveAttribute('open', '');
   await expect(antigo.locator('.history-day__pend')).toHaveText('1 a enviar');
   await expect(antigo.locator('summary')).toContainText('15/01/2026');
 
-  // fechar a gaveta: fica fechada mesmo quando a lista é redesenhada
+  // abrir e fechar a gaveta: o que o técnico escolheu fica mesmo quando a lista é redesenhada
   await antigo.locator('summary').click();
-  await expect(antigo).not.toHaveAttribute('open', '');
+  await expect(antigo).toHaveAttribute('open', '');
+  await page.evaluate(async () => (await import('./src/core/outbox.js')).notifyHistory());
+  await expect(page.locator('[data-history-day="2026-01-15"]')).toHaveAttribute('open', '');
+  await page.locator('[data-history-day="2026-01-15"] summary').click();
+  await expect(page.locator('[data-history-day="2026-01-15"]')).not.toHaveAttribute('open', '');
   await page.evaluate(async () => (await import('./src/core/outbox.js')).notifyHistory());
   await expect(page.locator('[data-history-day="2026-01-15"]')).not.toHaveAttribute('open', '');
 

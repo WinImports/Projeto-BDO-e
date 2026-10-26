@@ -226,8 +226,8 @@ export class OutboxView {
       box.innerHTML = `<p class="muted" data-history-empty>${filtrando ? `Nenhum relatório encontrado para ${criterio}${podeBuscarNoServidor() ? ' neste aparelho' : ''}.` : this.items.length ? 'Nenhum relatório deste tipo.' : 'Nenhum relatório neste aparelho.'}</p>`;
       return;
     }
-    // gavetas por dia (mais recente primeiro): abertas a do dia mais recente, as que pedem atenção
-    // (pendente / não enviado) e todas quando há busca ou data escolhida
+    // gavetas por dia (mais recente primeiro): aberta só a do dia mais recente (e as que o técnico abriu);
+    // as que pedem atenção ficam fechadas com o selo "N a enviar"; todas abertas só durante a busca / data
     const dias = new Map();
     for (const r of shown) {
       const dia = diaDoRelatorio(r);
@@ -248,7 +248,7 @@ export class OutboxView {
     const atencao = itens.filter((r) => r.status === 'pending' || r.status === 'error' || r.status === 'local').length;
     const tipos = MODULES.map((m) => [m, itens.filter((r) => r.module === m.id).length]).filter(([, n]) => n);
     return `
-      <details class="history-day card" data-history-day="${esc(dia)}"${filtrando || (this.diasAbertos.get(dia) ?? (maisRecente || atencao > 0)) ? ' open' : ''}>
+      <details class="history-day card" data-history-day="${esc(dia)}"${filtrando || (this.diasAbertos.get(dia) ?? maisRecente) ? ' open' : ''}>
         <summary class="history-day__summary">
           <span class="history-day__when">
             <strong>${esc(titulo)}</strong>
