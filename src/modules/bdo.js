@@ -94,6 +94,10 @@ export default {
         { id: 'rpt', label: 'RPT / APR realizada?', type: 'yesno', required: true },
         { id: 'ocorrencia_sms', label: 'Ocorrência de SMS?', type: 'yesno', required: true },
         { id: 'descricao_sms', label: 'Descrição de SMS', type: 'textarea', placeholder: 'Obrigatório se houve ocorrência de SMS' },
+        { type: 'divider', label: 'Reunião pré-tarefa', icon: 'users' },
+        { id: 'reuniao_pre_tarefa', label: 'Reunião pré-tarefa realizada?', type: 'yesno', span: 6 },
+        { id: 'reuniao_hora', label: 'Horário da reunião', type: 'time', span: 3 },
+        { id: 'reuniao_assuntos', label: 'Assuntos abordados na reunião pré-tarefa', type: 'textarea', placeholder: 'Ex.: riscos da tarefa, uso de EPI, isolamento da área, permissão de trabalho' },
         { type: 'divider', label: 'Técnico de segurança', icon: 'user' },
         { id: 'tst_nome', label: 'Nome do técnico de segurança', type: 'text', span: 6, placeholder: 'Ex.: MARIA OLIVEIRA' },
         { id: 'tst_matricula', label: 'Matrícula do técnico de segurança', type: 'text', span: 3, placeholder: 'Ex.: 41207' }

@@ -46,6 +46,13 @@ export function indicadoresBdo(d) {
   ];
 }
 
+/** Reunião pré-tarefa: "Sim · 07:00 — assuntos", ou '' se nada foi informado. */
+export function reuniaoPreTarefa(d) {
+  const cab = [d.reuniao_pre_tarefa, d.reuniao_hora].filter((v) => !vazio(v)).join(' · ');
+  const assuntos = vazio(d.reuniao_assuntos) ? '' : String(d.reuniao_assuntos).trim();
+  return [cab, assuntos].filter(Boolean).join(' — ');
+}
+
 /** Técnico de segurança do turno (SMS): "NOME · Mat. 123", ou '' se não informado. */
 export function tecnicoSeguranca(d) {
   return [d.tst_nome, d.tst_matricula ? `Mat. ${d.tst_matricula}` : ''].filter((v) => !vazio(v)).join(' · ');
@@ -224,6 +231,7 @@ function render({ jsPDF, autoTable, txt, formatOf }, { uniqueId, data: d, compan
   const ocorreu = d.ocorrencia_sms === 'Sim';
   const sim = (v) => (vazio(v) ? '—' : v);
   const tst = tecnicoSeguranca(d);
+  const reuniao = reuniaoPreTarefa(d);
   tabela({
     body: [
       [
@@ -231,6 +239,7 @@ function render({ jsPDF, autoTable, txt, formatOf }, { uniqueId, data: d, compan
         { content: txt(`Ocorrência de SMS: ${sim(d.ocorrencia_sms)}`), styles: { fontStyle: 'bold', fillColor: ocorreu ? [255, 244, 220] : [255, 255, 255] } },
         { content: txt(vazio(d.descricao_sms) ? (ocorreu ? 'Descrição não informada.' : 'Sem ocorrências de SMS no turno.') : d.descricao_sms) }
       ],
+      ...(reuniao ? [[{ content: txt(`Reunião pré-tarefa: ${reuniao}`), colSpan: 3 }]] : []),
       ...(tst ? [[{ content: txt(`Técnico de segurança: ${tst}`), colSpan: 3 }]] : [])
     ],
     alternateRowStyles: {},

@@ -23,6 +23,8 @@ const paginas = (page, n, texto) => page.evaluate(async ({ n, texto }) => {
     cliente: 'PETROBRAS', contrato: 'OS-MANS', poco: 'FBM-89', cidade_uf: 'Catu - BA', data: '2026-10-20', turno: 'Diurno',
     tecnico: 'ANDERSON', matricula: '1', equipe: [{ nome: 'Anderson', funcao: 'Técnico' }], km_total: '40', atividades,
     paradas: [{ inicio: '10:00', fim: '10:30', codigo: '5', motivo: 'Aguardando carro sugador' }], rpt: 'Sim', ocorrencia_sms: 'Não',
+    reuniao_pre_tarefa: 'Sim', reuniao_hora: '06:45', reuniao_assuntos: 'Riscos da tarefa, uso de EPI e isolamento da área',
+    tst_nome: 'MARIA OLIVEIRA', tst_matricula: '41207',
     observacoes: 'Sem pendências.'
   };
   const blob = await buildPdfBlob({ module, uniqueId: '00000000-0000-4000-8000-000000000000', data, company: null });
@@ -127,5 +129,26 @@ test('SMS & Segurança: nome e matrícula do técnico de segurança no formulár
   });
   expect(r).toEqual(['MARIA OLIVEIRA · Mat. 41207', '']);
   // o PDF continua em 1 página com a linha do técnico de segurança
+  expect(await paginas(page, 8, 'Troca de válvula com teste de estanqueidade')).toBe(1);
+});
+
+test('SMS & Segurança: Reunião pré-tarefa (realizada, horário e assuntos) no formulário e no PDF', async () => {
+  const { page } = ctx;
+  await openTab(page, 'bdo');
+  const sec = page.locator('.form-section', { hasText: 'SMS & Segurança' });
+  await expect(sec).toContainText('Reunião pré-tarefa realizada?');
+  await expect(sec.locator('[data-field=reuniao_hora]')).toHaveAttribute('type', 'time');
+  await fill(page, 'reuniao_assuntos', 'Riscos da troca de válvula, uso de EPI e isolamento da área');
+  await expect(sec.locator('[data-field=reuniao_assuntos]')).toHaveValue(/isolamento da área/);
+  const r = await page.evaluate(async () => {
+    const { reuniaoPreTarefa } = await import('./src/ui/bdo-pdf.js');
+    return [
+      reuniaoPreTarefa({ reuniao_pre_tarefa: 'Sim', reuniao_hora: '07:00', reuniao_assuntos: 'Riscos da tarefa e EPI' }),
+      reuniaoPreTarefa({ reuniao_pre_tarefa: 'Sim' }),
+      reuniaoPreTarefa({})
+    ];
+  });
+  expect(r).toEqual(['Sim · 07:00 — Riscos da tarefa e EPI', 'Sim', '']);
+  // o turno comum continua em 1 página com a linha da reunião
   expect(await paginas(page, 8, 'Troca de válvula com teste de estanqueidade')).toBe(1);
 });
