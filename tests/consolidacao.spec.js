@@ -86,13 +86,14 @@ test('ao informar poço e período, agrupa BDOs (atividades, horas, paradas, SMS
   await expect(consol.locator('.consol__chip')).toContainText(['1 BDO', 'Atividades: 3h00']);
   await expect(consol).not.toContainText('Ocorrências e paradas imprevistas');
 
-  // prévia/PDF: consolidação presente, pendências críticas em destaque e assinatura mantidas no relatório
+  // prévia/PDF: consolidação presente; pendências críticas e assinatura são opcionais (não entram na lista de pendentes)
   await page.locator('#btn-preview').click();
   const preview = page.locator('dialog.modal[open]');
   await expect(preview.locator('.preview__consol')).toContainText('Teste de estanqueidade');
   await expect(preview.locator('.preview__consol')).not.toContainText('Ocorrências e paradas');
-  await expect(preview.locator('.notice--warn')).toContainText('Pendências críticas');
-  await expect(preview.locator('.notice--warn')).toContainText('Assinatura');
+  await expect(preview.locator('.notice--warn')).toContainText('Tipo');
+  await expect(preview.locator('.notice--warn')).not.toContainText('Pendências críticas');
+  await expect(preview.locator('.notice--warn')).not.toContainText('Assinatura');
 });
 
 test('sem relatórios do poço no período: avisa e o bloco fica fora da prévia/PDF', async () => {

@@ -228,8 +228,8 @@ export default {
       fields: [
         {
           id: 'pendencias_criticas', label: 'Pendências críticas — o que a próxima turma precisa fazer', type: 'textarea',
-          required: true, highlight: true,
-          placeholder: 'Itens previstos e não executados, com o motivo. Se não houver, escreva "Nenhuma pendência".'
+          highlight: true, // opcional: sem pendências, o bloco não sai no relatório
+          placeholder: 'Itens previstos e não executados, com o motivo. Se não houver pendência, deixe em branco.'
         },
         {
           id: 'pendencias', label: 'Detalhamento (opcional)', type: 'table', addLabel: 'Adicionar pendência',
@@ -254,7 +254,7 @@ export default {
         { id: 'responsavel_recebe', label: 'Responsável que recebe', type: 'text', required: true },
         { id: 'fiscal', label: 'Fiscal / Fiscalização', type: 'text' },
         { id: 'liberado', label: 'Poço liberado para a fiscalização?', type: 'yesno', required: true, span: 12 },
-        { id: 'assinatura', label: 'Assinatura do técnico responsável', type: 'signature', required: true }
+        { id: 'assinatura', label: 'Assinatura do técnico responsável', type: 'signature' } // opcional
       ]
     },
     {
