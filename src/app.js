@@ -740,12 +740,12 @@ async function usarComoAntes(rel) {
   await saveDraft(draft);
   await showTab('handover');
   const d = String(rel.data.data || rel.data.data_hora || '').slice(0, 10);
-  await state.formView?.importBefore({ uniqueId: rel.uniqueId, data: /^d{4}-d{2}-d{2}$/.test(d) ? d.split('-').reverse().join('/') : '' });
+  await state.formView?.importBefore({ uniqueId: rel.uniqueId, data: /^\d{4}-\d{2}-\d{2}$/.test(d) ? d.split('-').reverse().join('/') : '' });
   if (state.draft) await saveDraft(state.draft);
   return true;
 }
 
-const normPoco = (t) => String(t || '').toUpperCase().replace(/[^p{L}p{N}]+/gu, '');
+const normPoco = (t) => String(t || '').toUpperCase().replace(/[^\p{L}\p{N}]+/gu, '');
 
 // ---------- Licença (core/licenca.js) ----------
 

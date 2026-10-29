@@ -418,6 +418,7 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .
 .photo-cat .photo-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 .photo { position: relative; margin: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; background: var(--surface); }
 .photo img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.photo__indisponivel { display: flex; align-items: center; justify-content: center; aspect-ratio: 4 / 3; background: var(--surface-2); color: var(--text-muted); font-size: .8rem; }
 .photo figcaption { padding: 4px 8px; font-size: .74rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .photo__remove { position: absolute; top: 6px; right: 6px; background: rgba(15, 23, 42, .7); color: #fff; }
 .photo__remove:hover { background: var(--danger); color: #fff; }

@@ -3,6 +3,7 @@
 // PDF compacto (sem campos/blocos vazios), fotos no bloco do componente como "Figura N",
 // "Antes x Depois" na Execução, fotos em 2 colunas e cabeçalho só com a identificação (sem GPS).
 import { displayValue, displayCell, hasContent, dadosParaRelatorio } from './form.js';
+import { fotosParaRelatorio, avisarFotos } from './foto-relatorio.js';
 import { assignPhotoFields, photosOf, temAntes, rotuloFotos, TITULO_EXECUCAO } from '../core/fotos.js';
 import { cabecalhoItens, CAMPOS_CABECALHO } from './cabecalho.js';
 import { empresaDoRelatorio } from '../core/settings.js';
@@ -151,6 +152,14 @@ class Doc {
   /** Foto centralizada na caixa (px, y, w, h) com "Figura N — legenda" embaixo. */
   async photoCell(p, srcOf, px, w, h, n) {
     const src = srcOf.get(p);
+    if (!src) { // foto ilegível: a vaga fica marcada (nunca some sem aviso)
+      this.pdf.setDrawColor(...LINHA);
+      this.pdf.setFillColor(248, 250, 252);
+      this.pdf.rect(px, this.y, w, h, 'FD');
+      this.text('(imagem indisponível)', px + w / 2 - 14, this.y + h / 2, { size: 7.5, color: CINZA });
+      this.text(`Figura ${n} — ${p.legenda || p.category || p.name}`, px, this.y + h + 3.2, { size: 6.8, color: CINZA, maxWidth: w });
+      return;
+    }
     const { w: iw, h: ih } = await imageSize(src);
     const s = Math.min(w / iw, h / ih);
     const dw = iw * s;
@@ -262,7 +271,9 @@ export async function buildPdfBlob({ module, uniqueId, data, photos = [], compan
   assignPhotoFields(module, photos);
   data = dadosParaRelatorio(module, data, photos); // campos fixos da seção ("—") e nota do torque
   const srcOf = new Map();
-  for (const p of photos) srcOf.set(p, await blobToDataUrl(p.blob));
+  const { srcs, falhas } = await fotosParaRelatorio(photos); // sempre JPEG/PNG (HEIC/WebP do celular convertidos)
+  photos.forEach((p, i) => srcOf.set(p, srcs[i]));
+  avisarFotos(falhas);
   const logo = company?.logo ? { src: company.logo, ...(await imageSize(company.logo)) } : null;
 
   header(doc, { module, uniqueId, data, company, draft, logo });

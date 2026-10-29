@@ -4,17 +4,25 @@
 const MAX = 1280;
 const QUALIDADE = 0.8;
 
-function carregar(blob) {
-  if (typeof createImageBitmap === 'function') {
-    return createImageBitmap(blob, { imageOrientation: 'from-image' }).catch(() => createImageBitmap(blob));
-  }
-  return new Promise((resolve, reject) => { // Safari antigo
+function carregarComImg(blob) {
+  return new Promise((resolve, reject) => { // Safari: o <img> abre HEIC mesmo quando o createImageBitmap recusa
     const url = URL.createObjectURL(blob);
     const img = new Image();
     img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Imagem inválida')); };
     img.src = url;
   });
+}
+
+async function carregar(blob) {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return await createImageBitmap(blob, { imageOrientation: 'from-image' });
+    } catch {
+      try { return await createImageBitmap(blob); } catch { /* tenta pelo <img> */ }
+    }
+  }
+  return carregarComImg(blob);
 }
 
 /**
@@ -24,8 +32,8 @@ function carregar(blob) {
 export async function comprimirFoto(foto) {
   try {
     const img = await carregar(foto.blob);
-    const w = img.width;
-    const h = img.height;
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
     const escala = Math.min(1, MAX / Math.max(w, h));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(w * escala));

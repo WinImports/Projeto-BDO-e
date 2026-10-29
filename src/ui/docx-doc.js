@@ -4,6 +4,7 @@
 // (sem coordenadas GPS), seções só com dados, fotos lado a lado em 2 colunas (~48% cada) com
 // "Figura N — legenda", Antes x Depois na Execução e a imagem da assinatura no bloco final.
 import { displayValue, displayCell, hasContent, dadosParaRelatorio } from './form.js';
+import { formatoReal, avisarFotos } from './foto-relatorio.js';
 import { assignPhotoFields, photosOf, temAntes, rotuloFotos, TITULO_EXECUCAO } from '../core/fotos.js';
 import { cabecalhoItens, CAMPOS_CABECALHO } from './cabecalho.js';
 import { empresaDoRelatorio } from '../core/settings.js';
@@ -121,10 +122,11 @@ async function imagemDe(source) {
   try {
     const dim = await imageSize(url);
     if (!dim) return null;
-    const type = isBlob ? source.type : (url.match(/^data:([^;,]+)/) || [])[1] || '';
-    if (/^image\/(png|jpe?g)$/i.test(type)) {
+    // formato pelos bytes, não pelo tipo declarado (o celular pode rotular HEIC/WebP como outra coisa)
+    const fmt = isBlob ? await formatoReal(source) : (/^data:image\/png/i.test(url) ? 'png' : /^data:image\/jpe?g/i.test(url) ? 'jpeg' : null);
+    if (fmt) {
       const bytes = isBlob ? new Uint8Array(await source.arrayBuffer()) : dataUrlBytes(url);
-      return { bytes, ext: /png/i.test(type) ? 'png' : 'jpeg', w: dim.w, h: dim.h };
+      return { bytes, ext: fmt, w: dim.w, h: dim.h };
     }
     const canvas = document.createElement('canvas');
     canvas.width = dim.w;
@@ -343,6 +345,7 @@ export async function buildDocxBlob({ module, uniqueId, data, photos = [], compa
     try { img = await imagemDe(p.blob); } catch { img = null; }
     fotoDe.set(p, { img, cap: p.legenda || p.category || p.name || '' });
   }
+  avisarFotos([...fotoDe.values()].filter((f) => !f.img).length);
 
   // ----- cabeçalho de página: logo + empresa + título (repete em todas as páginas) -----
   let logoXml = '';

@@ -22,6 +22,9 @@ import { contratoSelectHtml } from './contrato-campo.js';
 import { abrirEditorTexto, usarEditorAmpliado } from './texto-expandido.js';
 import { analisar, aplicarSugestao, opcoesDe, sugestoes, rotuloLinha, escolherLinha, limparCampo, NOTA_TORQUE, ROTULOS, CAMPOS, FLANGE_TABLE } from '../core/flange.js';
 
+/** Arquivo de imagem: pelo tipo, ou pela extensão quando o celular não informa o tipo (HEIC/HEIF). */
+const ehImagem = (f) => f.type.startsWith('image/') || (!f.type && /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name || ''));
+
 const INPUT_TYPES = { text: 'text', number: 'number', date: 'date', time: 'time', datetime: 'datetime-local' };
 
 const localIso = () => {
@@ -993,10 +996,10 @@ export class FormView {
 
     if (t.dataset.kind === 'photos') {
       if (e.type !== 'change') return;
-      const files = [...t.files].filter((f) => f.type.startsWith('image/'));
+      const files = [...t.files].filter(ehImagem); // HEIC do iPhone/Android pode vir sem tipo
       const { photosField, category, fase } = t.dataset;
       t.value = ''; // permite escolher o mesmo arquivo de novo
-      Promise.all(files.map((file) => comprimirFoto({ name: file.name, type: file.type, blob: file }))).then((fotos) => {
+      Promise.all(files.map((file) => comprimirFoto({ name: file.name, type: file.type || 'image/heic', blob: file }))).then((fotos) => {
         for (const f of fotos) this.draft.photos.push({ id: crypto.randomUUID(), ...photoMeta({ ...f, category, field: photosField, fase }) });
         if (!this.el.isConnected) return;
         this.refreshField(photosField);

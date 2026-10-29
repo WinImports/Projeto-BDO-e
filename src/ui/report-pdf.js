@@ -7,13 +7,7 @@ import { buildPdfBlob, temLayoutProprio } from './pdf-doc.js';
 import { buildDocxBlob } from './docx-doc.js';
 import { showPdfSheet } from './pdf-sheet.js';
 import { empresaDoRelatorio } from '../core/settings.js';
-
-const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
-  const r = new FileReader();
-  r.onload = () => resolve(r.result);
-  r.onerror = () => reject(r.error);
-  r.readAsDataURL(blob);
-});
+import { fotosParaRelatorio, avisarFotos } from './foto-relatorio.js';
 
 const fileSafe = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '_').replace(/^_|_$/g, '');
 
@@ -58,6 +52,7 @@ const PDF_CSS = `
   .photo-grid { display: grid; grid-template-columns: 48% 48%; justify-content: space-between; row-gap: 8px; }
   .photo { margin: 0; border: 1px solid #c3ccd7; border-radius: 4px; overflow: hidden; break-inside: avoid; }
   .photo img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
+  .photo__indisponivel { aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; background: #f8fafc; color: #5b6676; font-size: 8pt; }
   .photo figcaption { padding: 3px 6px; font-size: 7.5pt; color: #5b6676; }
   .photo figcaption strong { color: #0f172a; }
   .preview__photos { margin-top: 6px; }
@@ -181,7 +176,8 @@ const fileNameOf = (module, data, ext = 'pdf') => {
 };
 
 async function docOpts({ module, uniqueId, data, photos, company, draft }) {
-  const photoSrcs = await Promise.all(photos.map((p) => blobToDataUrl(p.blob)));
+  const { srcs: photoSrcs, falhas } = await fotosParaRelatorio(photos); // JPEG/PNG para o printToPDF
+  avisarFotos(falhas);
   return { module, uniqueId, data, photos, photoSrcs, company: empresaDoRelatorio(company), draft };
 }
 

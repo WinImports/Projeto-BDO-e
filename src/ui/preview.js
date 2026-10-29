@@ -54,7 +54,9 @@ export function reportBodyHtml(module, data, photos, photoSrcs) {
   const figure = (p) => {
     fig += 1;
     const cap = p.legenda || p.category || p.name;
-    return `<figure class="photo"><img src="${srcOf.get(p)}" alt="${esc(cap)}">
+    const src = srcOf.get(p);
+    const media = src ? `<img src="${esc(src)}" alt="${esc(cap)}">` : '<div class="photo__indisponivel">(imagem indisponível)</div>';
+    return `<figure class="photo">${media}
       <figcaption><strong>Figura ${fig}</strong> — ${esc(cap)}</figcaption></figure>`;
   };
   const grid = (list) => `<div class="photo-grid photo-grid--read">${list.map(figure).join('')}</div>`;
