@@ -137,3 +137,45 @@ test('fotos ficam guardadas como bytes e voltam como foto legível no rascunho, 
   expect(r.cruBytes).toBe(true);
   expect(r.getAllBlob).toBe(true);
 });
+
+test('foto escolhida chega mesmo se o bloco for redesenhado com o seletor aberto (fotos "Antes" chegando)', async () => {
+  const { page } = ctx;
+  await openTab(page, 'handover');
+  await fill(page, 'poco', 'FMT-4');
+  const [seletor] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.locator('[data-wrap="fotos_vc"] label.photo-add__btn').first().click()
+  ]);
+  // enquanto o técnico escolhe, o bloco é redesenhado (o campo de arquivo antigo sai da tela)
+  await page.evaluate(async () => {
+    const f = document.querySelector('[data-wrap="fotos_vc"]');
+    f.innerHTML = f.innerHTML; // mesmo HTML, elementos novos
+  });
+  await seletor.setFiles({ name: 'depois.webp', mimeType: 'image/webp', buffer: Buffer.from(WEBP, 'base64') });
+  await expect(page.locator('[data-wrap=fotos_vc] img')).toHaveCount(1);
+});
+
+test('salvamentos seguidos do rascunho terminam na ordem: a foto mais nova não é apagada por um salvamento antigo', async () => {
+  const { page } = ctx;
+  const fotos = await page.evaluate(async (b64) => {
+    const { put, get, STORES } = await import('./src/core/db.js');
+    const grande = new Blob([new Uint8Array(3_000_000)], { type: 'image/jpeg' }); // leitura mais lenta
+    const nova = new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: 'image/webp' });
+    const a = put(STORES.drafts, { key: 'ordem', photos: [{ name: 'g', blob: grande }] });
+    const b = put(STORES.drafts, { key: 'ordem', photos: [{ name: 'g', blob: grande }, { name: 'nova', blob: nova }] });
+    await Promise.all([a, b]);
+    return (await get(STORES.drafts, 'ordem')).photos.map((p) => p.name);
+  }, WEBP);
+  expect(fotos).toEqual(['g', 'nova']);
+});
+
+test('foto que o aparelho não consegue mais abrir aparece marcada para tirar de novo', async () => {
+  const { page } = ctx;
+  await openTab(page, 'handover');
+  await fill(page, 'poco', 'FMT-5');
+  await page.locator('[data-wrap="fotos_vc"] input[data-kind=photos][data-fase="depois"]').first()
+    .setInputFiles({ name: 'ok.webp', mimeType: 'image/webp', buffer: Buffer.from(WEBP, 'base64') });
+  await expect(page.locator('[data-wrap=fotos_vc] img')).toHaveCount(1);
+  await page.evaluate(() => { document.querySelector('[data-wrap=fotos_vc] .photo img').src = 'blob:null/inexistente'; });
+  await expect(page.locator('[data-wrap=fotos_vc] .photo--perdida')).toHaveCount(1);
+});

@@ -247,6 +247,11 @@ export class FormView {
     this.el.addEventListener('change', (e) => this.handleInput(e));
     this.el.addEventListener('click', (e) => this.handleClick(e));
     this.el.addEventListener('submit', (e) => e.preventDefault());
+    // foto que o aparelho não consegue mais abrir (guardada antes da correção de 29/10 no iPhone): avisa na vaga
+    this.el.addEventListener('error', (e) => {
+      const fig = e.target?.tagName === 'IMG' ? e.target.closest('.photo') : null;
+      if (fig) fig.classList.add('photo--perdida');
+    }, true);
     this.el.addEventListener('keydown', (e) => {
       if (e.target.matches?.('input[data-expand][readonly]') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); this.expandirCelula(e.target); return; }
       this.handleComboKey(e);
@@ -885,6 +890,20 @@ export class FormView {
     this.paintSignatures(wrap);
   }
 
+  /** Fotos escolhidas num campo de arquivo (funciona também com o campo já fora da tela). */
+  receberFotos(t) {
+    const files = [...(t.files || [])].filter(ehImagem); // HEIC do iPhone/Android pode vir sem tipo
+    const { photosField, category, fase } = t.dataset;
+    t.value = ''; // permite escolher o mesmo arquivo de novo
+    if (!files.length) return;
+    Promise.all(files.map((file) => comprimirFoto({ name: file.name, type: file.type || 'image/heic', blob: file }))).then((fotos) => {
+      for (const f of fotos) this.draft.photos.push({ id: crypto.randomUUID(), ...photoMeta({ ...f, category, field: photosField, fase }) });
+      if (!this.el.isConnected) return; // técnico saiu desta tela (o rascunho é de outra)
+      this.refreshField(photosField);
+      this.changed(photosField);
+    });
+  }
+
   async addPhoto(fieldId, category, shot, fase) {
     const { name, type, blob } = await comprimirFoto(shot);
     this.draft.photos.push({ id: crypto.randomUUID(), ...photoMeta({ name, type, blob, category, field: fieldId, fase }) });
@@ -995,16 +1014,7 @@ export class FormView {
     }
 
     if (t.dataset.kind === 'photos') {
-      if (e.type !== 'change') return;
-      const files = [...t.files].filter(ehImagem); // HEIC do iPhone/Android pode vir sem tipo
-      const { photosField, category, fase } = t.dataset;
-      t.value = ''; // permite escolher o mesmo arquivo de novo
-      Promise.all(files.map((file) => comprimirFoto({ name: file.name, type: file.type || 'image/heic', blob: file }))).then((fotos) => {
-        for (const f of fotos) this.draft.photos.push({ id: crypto.randomUUID(), ...photoMeta({ ...f, category, field: photosField, fase }) });
-        if (!this.el.isConnected) return;
-        this.refreshField(photosField);
-        this.changed(photosField);
-      });
+      if (e.type === 'change') this.receberFotos(t);
       return;
     }
 
@@ -1046,6 +1056,13 @@ export class FormView {
 
   async handleClick(e) {
     if (e.target.matches?.('input[data-expand]') && usarEditorAmpliado()) return this.expandirCelula(e.target);
+    // escolher foto: o seletor do celular fica aberto um tempo e, se o bloco for redesenhado nesse meio
+    // (foto anterior terminando, fotos "Antes" chegando), o campo sai da tela e o "change" não chega mais
+    // ao formulário — a foto escolhida se perdia. O ouvinte direto no próprio campo recebe mesmo assim.
+    if (e.target.matches?.('input[data-kind=photos]') && !e.target._fotoLigada) {
+      e.target._fotoLigada = true;
+      e.target.addEventListener('change', (ev) => { ev.stopPropagation(); this.receberFotos(ev.target); });
+    }
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     const { action, table } = btn.dataset;

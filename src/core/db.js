@@ -68,15 +68,31 @@ function run(storeName, mode, fn) {
 // recarrega: a foto some do PDF/Word. Bytes não têm esse problema. Na leitura, cada foto volta a ter
 // um Blob novo, em memória.
 
-const bytesDe = new WeakMap(); // Blob criado a partir dos bytes → os mesmos bytes (não relê a cada gravação)
+const bytesDe = new WeakMap(); // Blob → bytes já lidos (não relê a foto a cada gravação do rascunho)
+const ilegiveis = new WeakSet(); // Blob que não abriu: não tenta de novo (cada tentativa podia demorar)
+const LEITURA_MS = 4000; // foto antiga quebrada no iPhone pode nunca responder: não trava o salvamento
 
 const ehBlob = (b) => b && typeof b === 'object' && typeof b.size === 'number' && typeof b.slice === 'function';
+
+function lerBytes(blob) {
+  return Promise.race([
+    blob.arrayBuffer(),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('Leitura da foto demorou demais')), LEITURA_MS))
+  ]);
+}
 
 async function fotoParaGravar(p) {
   if (!p || typeof p !== 'object' || !ehBlob(p.blob)) return p;
   let bytes = bytesDe.get(p.blob);
   if (!bytes) {
-    try { bytes = await p.blob.arrayBuffer(); } catch { return p; } // ilegível: grava como está (não piora)
+    if (ilegiveis.has(p.blob)) return p;
+    try {
+      bytes = await lerBytes(p.blob);
+      bytesDe.set(p.blob, bytes);
+    } catch {
+      ilegiveis.add(p.blob);
+      return p; // ilegível: grava como está (não piora)
+    }
   }
   const { blob, ...resto } = p;
   return { ...resto, type: p.type || blob.type || 'image/jpeg', bytes };
@@ -101,12 +117,24 @@ function lido(value) {
   return value;
 }
 
-export const put = async (storeName, value) => {
-  const v = await paraGravar(value); // fora da transação (await dentro dela a encerraria)
-  return run(storeName, 'readwrite', (s) => s.put(v));
+// Gravações uma de cada vez, na ordem em que foram pedidas: com a leitura das fotos antes da transação,
+// um salvamento mais antigo podia terminar depois de um mais novo e apagar a foto recém-tirada.
+let fila = Promise.resolve();
+
+export const put = (storeName, value) => {
+  const job = fila.then(async () => {
+    const v = await paraGravar(value); // fora da transação (await dentro dela a encerraria)
+    return run(storeName, 'readwrite', (s) => s.put(v));
+  });
+  fila = job.catch(() => {});
+  return job;
 };
 export const get = (storeName, key) => run(storeName, 'readonly', (s) => s.get(key)).then(lido);
-export const remove = (storeName, key) => run(storeName, 'readwrite', (s) => s.delete(key));
+export const remove = (storeName, key) => {
+  const job = fila.then(() => run(storeName, 'readwrite', (s) => s.delete(key))); // na mesma ordem das gravações
+  fila = job.catch(() => {});
+  return job;
+};
 export const count = (storeName) => run(storeName, 'readonly', (s) => s.count());
 export const getAll = (storeName, indexName) =>
   run(storeName, 'readonly', (s) => (indexName ? s.index(indexName).getAll() : s.getAll()))
