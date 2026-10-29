@@ -62,12 +62,55 @@ function run(storeName, mode, fn) {
   }));
 }
 
-export const put = (storeName, value) => run(storeName, 'readwrite', (s) => s.put(value));
-export const get = (storeName, key) => run(storeName, 'readonly', (s) => s.get(key));
+// ---------- fotos guardadas como bytes (ArrayBuffer), não como Blob ----------
+// No Safari do iPhone, um Blob lido do IndexedDB e gravado de novo (o rascunho é salvo a cada alteração;
+// a Execução copia as fotos da Visita do histórico) pode virar um arquivo ilegível depois que o app
+// recarrega: a foto some do PDF/Word. Bytes não têm esse problema. Na leitura, cada foto volta a ter
+// um Blob novo, em memória.
+
+const bytesDe = new WeakMap(); // Blob criado a partir dos bytes → os mesmos bytes (não relê a cada gravação)
+
+const ehBlob = (b) => b && typeof b === 'object' && typeof b.size === 'number' && typeof b.slice === 'function';
+
+async function fotoParaGravar(p) {
+  if (!p || typeof p !== 'object' || !ehBlob(p.blob)) return p;
+  let bytes = bytesDe.get(p.blob);
+  if (!bytes) {
+    try { bytes = await p.blob.arrayBuffer(); } catch { return p; } // ilegível: grava como está (não piora)
+  }
+  const { blob, ...resto } = p;
+  return { ...resto, type: p.type || blob.type || 'image/jpeg', bytes };
+}
+
+function fotoLida(p) {
+  if (!p || typeof p !== 'object' || !(p.bytes instanceof ArrayBuffer)) return p;
+  const { bytes, ...resto } = p;
+  const blob = new Blob([bytes], { type: p.type || 'image/jpeg' });
+  bytesDe.set(blob, bytes);
+  return { ...resto, blob };
+}
+
+async function paraGravar(value) {
+  if (!value || !Array.isArray(value.photos)) return value;
+  return { ...value, photos: await Promise.all(value.photos.map(fotoParaGravar)) };
+}
+
+function lido(value) {
+  if (!value || !Array.isArray(value.photos)) return value;
+  value.photos = value.photos.map(fotoLida);
+  return value;
+}
+
+export const put = async (storeName, value) => {
+  const v = await paraGravar(value); // fora da transação (await dentro dela a encerraria)
+  return run(storeName, 'readwrite', (s) => s.put(v));
+};
+export const get = (storeName, key) => run(storeName, 'readonly', (s) => s.get(key)).then(lido);
 export const remove = (storeName, key) => run(storeName, 'readwrite', (s) => s.delete(key));
 export const count = (storeName) => run(storeName, 'readonly', (s) => s.count());
 export const getAll = (storeName, indexName) =>
-  run(storeName, 'readonly', (s) => (indexName ? s.index(indexName).getAll() : s.getAll()));
+  run(storeName, 'readonly', (s) => (indexName ? s.index(indexName).getAll() : s.getAll()))
+    .then((lista) => (lista || []).map(lido));
 
 // Pede ao Chromium para não descartar os dados locais sob pressão de disco
 export async function requestPersistence() {

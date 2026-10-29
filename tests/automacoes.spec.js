@@ -192,10 +192,11 @@ test('fotos são comprimidas para no máximo 1280 px em JPEG', async () => {
   const salva = await page.evaluate(() => new Promise((resolve) => {
     indexedDB.open('bdo-e').onsuccess = (e) => {
       const g = e.target.result.transaction('drafts').objectStore('drafts').get('visita_tecnica');
-      g.onsuccess = () => { const p = g.result.photos[0]; resolve({ type: p.type, nome: p.name, bytes: p.blob.size }); };
+      g.onsuccess = () => { const p = g.result.photos[0]; resolve({ type: p.type, nome: p.name, bytes: p.bytes.byteLength, semBlob: !p.blob }); };
     };
   }));
   expect(salva.type).toBe('image/jpeg');
   expect(salva.nome).toBe('grande.jpg');
   expect(salva.bytes).toBeLessThan(400_000);
+  expect(salva.semBlob).toBe(true); // guardada como bytes (no iPhone, Blob regravado do IndexedDB ficava ilegível)
 });

@@ -1401,6 +1401,7 @@ export class FormView {
     this.refreshField(f.id);
     // "Antes" escolhido pelo técnico (relatório importado em JSON) fica; senão, a última Visita do poço
     if (!this.draft.data._antes_fixo) await this.importBefore(result.visita);
+    else await this.importBefore({ uniqueId: this.draft.data._antes_fixo, data: this.draft.data._visita_data || '' }); // refresca as fotos do relatório importado
     this.changed(f.id);
     if (manual) {
       toast(hasConsolidation(result)
@@ -1440,14 +1441,24 @@ export class FormView {
     const d = this.draft.data;
     const ref = visita?.uniqueId || null;
     await this.aplicarNotasVisita(ref);
-    const temAntes = this.draft.photos.some((p) => p.fase === 'antes');
-    if (ref === (d._visita_ref || null) && (temAntes || !ref || d._visita_fotos === 0)) return;
+    const antigas = this.draft.photos.filter((p) => p.fase === 'antes');
+    const mesma = ref === (d._visita_ref || null);
+    if (mesma && (!ref || d._visita_fotos === 0)) return;
+    // mesma Visita já puxada: recopia uma vez ao abrir a tela, direto do Histórico (a cópia no rascunho podia
+    // ter ficado ilegível no iPhone); as legendas que o técnico ajustou ficam
+    if (mesma && antigas.length && this._antesRenovado) return;
+    this._antesRenovado = true;
     let novas = [];
     if (ref) {
       const rec = await get(STORES.history, ref);
+      if (mesma && antigas.length && !rec?.photos?.length) return; // Visita não está mais no aparelho: mantém as que existem
       const fotos = assignPhotoFields(getModule('visita_tecnica'), (rec?.photos || []).map((p) => ({ ...p })));
       const ids = new Set(fields.map((f) => f.id));
-      novas = fotos.map((p) => ({ id: crypto.randomUUID(), ...photoMeta({ ...p, field: ids.has(p.field) ? p.field : 'fotos', fase: 'antes', origem: ref }) }));
+      novas = fotos.map((p, i) => {
+        const nova = photoMeta({ ...p, field: ids.has(p.field) ? p.field : 'fotos', fase: 'antes', origem: ref });
+        if (mesma && antigas[i]?.field === nova.field) nova.legenda = antigas[i].legenda;
+        return { id: crypto.randomUUID(), ...nova };
+      });
     }
     if (!this.el.isConnected) return;
     for (const p of this.draft.photos.filter((x) => x.fase === 'antes')) {

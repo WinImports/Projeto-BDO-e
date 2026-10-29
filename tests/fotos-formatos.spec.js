@@ -111,3 +111,29 @@ test('PDF compacto: 4 fotos por linha (Antes x Depois com 2 de cada lado), sem u
   expect(res.imagens).toBe(40);
   expect(res.paginas).toBeLessThanOrEqual(8); // antes: ~1 linha (2 fotos) por página → mais de 20 páginas
 });
+
+test('fotos ficam guardadas como bytes e voltam como foto legível no rascunho, no histórico e na fila', async () => {
+  const { page } = ctx;
+  const r = await page.evaluate(async (b64) => {
+    const { put, get, getAll, STORES } = await import('./src/core/db.js');
+    const blob = new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: 'image/webp' });
+    const foto = { name: 'a', type: 'image/webp', field: 'fotos_vc', blob };
+    await put(STORES.drafts, { key: 't', uniqueId: 'u1', module: 'handover', data: {}, photos: [foto] });
+    const lido = await get(STORES.drafts, 't');
+    await put(STORES.drafts, { ...lido, key: 't2' }); // regravar o que foi lido (o caso que quebrava no iPhone)
+    const relido = await get(STORES.drafts, 't2');
+    const cru = await new Promise((ok) => { indexedDB.open('bdo-e').onsuccess = (e) => {
+      const g = e.target.result.transaction('drafts').objectStore('drafts').get('t2'); g.onsuccess = () => ok(g.result.photos[0]); }; });
+    const todos = await getAll(STORES.drafts);
+    return {
+      tamanho: relido.photos[0].blob.size, original: blob.size, tipo: relido.photos[0].blob.type,
+      cruTemBlob: Boolean(cru.blob), cruBytes: cru.bytes instanceof ArrayBuffer,
+      getAllBlob: todos.every((d) => !d.photos?.length || d.photos[0].blob instanceof Blob)
+    };
+  }, WEBP);
+  expect(r.tamanho).toBe(r.original);
+  expect(r.tipo).toBe('image/webp');
+  expect(r.cruTemBlob).toBe(false);
+  expect(r.cruBytes).toBe(true);
+  expect(r.getAllBlob).toBe(true);
+});
