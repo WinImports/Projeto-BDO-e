@@ -4,7 +4,7 @@
 // (sem coordenadas GPS), seções só com dados, fotos lado a lado em 2 colunas (~48% cada) com
 // "Figura N — legenda", Antes x Depois na Execução e a imagem da assinatura no bloco final.
 import { displayValue, displayCell, hasContent, dadosParaRelatorio } from './form.js';
-import { formatoReal, avisarFotos } from './foto-relatorio.js';
+import { fotoParaRelatorio, avisarFotos } from './foto-relatorio.js';
 import { assignPhotoFields, photosOf, temAntes, rotuloFotos, TITULO_EXECUCAO } from '../core/fotos.js';
 import { cabecalhoItens, CAMPOS_CABECALHO } from './cabecalho.js';
 import { empresaDoRelatorio } from '../core/settings.js';
@@ -116,29 +116,25 @@ const dataUrlBytes = (url) => {
 
 /** Word só aceita com segurança PNG/JPEG: outros formatos são convertidos para JPEG. */
 async function imagemDe(source) {
-  const isBlob = source instanceof Blob;
-  const url = isBlob ? URL.createObjectURL(source) : String(source || '');
-  if (!url) return null;
-  try {
-    const dim = await imageSize(url);
-    if (!dim) return null;
-    // formato pelos bytes, não pelo tipo declarado (o celular pode rotular HEIC/WebP como outra coisa)
-    const fmt = isBlob ? await formatoReal(source) : (/^data:image\/png/i.test(url) ? 'png' : /^data:image\/jpe?g/i.test(url) ? 'jpeg' : null);
-    if (fmt) {
-      const bytes = isBlob ? new Uint8Array(await source.arrayBuffer()) : dataUrlBytes(url);
-      return { bytes, ext: fmt, w: dim.w, h: dim.h };
-    }
-    const canvas = document.createElement('canvas');
-    canvas.width = dim.w;
-    canvas.height = dim.h;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, dim.w, dim.h);
-    ctx.drawImage(dim.img, 0, 0);
-    return { bytes: dataUrlBytes(canvas.toDataURL('image/jpeg', 0.85)), ext: 'jpeg', w: dim.w, h: dim.h };
-  } finally {
-    if (isBlob) URL.revokeObjectURL(url);
+  // foto (Blob): mesma conversão do PDF (pelo <img>, como a tela; no iPhone a leitura direta pode falhar)
+  if (source && typeof source === 'object' && typeof source.size === 'number') {
+    const url = await fotoParaRelatorio(source);
+    return url ? imagemDe(url) : null;
   }
+  const url = String(source || '');
+  if (!url) return null;
+  const dim = await imageSize(url);
+  if (!dim) return null;
+  const fmt = /^data:image\/png/i.test(url) ? 'png' : /^data:image\/jpe?g/i.test(url) ? 'jpeg' : null;
+  if (fmt) return { bytes: dataUrlBytes(url), ext: fmt, w: dim.w, h: dim.h };
+  const canvas = document.createElement('canvas');
+  canvas.width = dim.w;
+  canvas.height = dim.h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, dim.w, dim.h);
+  ctx.drawImage(dim.img, 0, 0);
+  return { bytes: dataUrlBytes(canvas.toDataURL('image/jpeg', 0.85)), ext: 'jpeg', w: dim.w, h: dim.h };
 }
 
 // ---------- XML ----------

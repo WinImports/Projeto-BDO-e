@@ -48,8 +48,8 @@ const PDF_CSS = `
   .preview__signature { max-width: 240px; border: 1px solid #c3ccd7; border-radius: 4px; }
   .preview__ident { padding-top: 4px; }
   .preview__ident .preview__grid { grid-template-columns: repeat(3, 1fr); }
-  /* fotos lado a lado: 2 colunas de ~48% */
-  .photo-grid { display: grid; grid-template-columns: 48% 48%; justify-content: space-between; row-gap: 8px; }
+  /* fotos: 4 por linha na página deitada (no Antes x Depois, 2 de cada lado) */
+  .photo-grid { display: grid; grid-template-columns: repeat(4, 1fr); column-gap: 4mm; row-gap: 6px; }
   .photo { margin: 0; border: 1px solid #c3ccd7; border-radius: 4px; overflow: hidden; break-inside: avoid; }
   .photo img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
   .photo__indisponivel { aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; background: #f8fafc; color: #5b6676; font-size: 8pt; }
@@ -62,7 +62,8 @@ const PDF_CSS = `
   .photo-compare__col--antes { border-top: 3px solid #94a3b8; }
   .photo-compare__col--depois { border-top: 3px solid #15803d; }
   .photo-compare__title { font-size: 8pt; font-weight: 700; margin-bottom: 4px; }
-  .photo-compare .photo-grid { grid-template-columns: 100%; }
+  .photo-compare .photo-grid { grid-template-columns: repeat(2, 1fr); }
+  .preview__photos-title { break-after: avoid; }
   footer { margin-top: 14px; padding-top: 6px; border-top: 1px solid #dde3ea; font-size: 7.5pt; color: #5b6676; }
 `;
 

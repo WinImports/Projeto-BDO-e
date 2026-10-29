@@ -149,6 +149,15 @@ class Doc {
     });
   }
 
+  /** "Figura N — legenda" em até 2 linhas sob a foto (o resto vira "…"). */
+  legendaFoto(p, n, px, w, h) {
+    this.pdf.setFont('helvetica', 'normal');
+    this.pdf.setFontSize(6.5);
+    let linhas = this.pdf.splitTextToSize(txt(`Figura ${n} — ${p.legenda || p.category || p.name || ''}`), w);
+    if (linhas.length > 2) linhas = [linhas[0], `${String(linhas[1]).replace(/\s*\S*$/, '')}…`];
+    linhas.forEach((l, i) => this.text(l, px, this.y + h + 2.8 + i * 2.6, { size: 6.5, color: CINZA }));
+  }
+
   /** Foto centralizada na caixa (px, y, w, h) com "Figura N — legenda" embaixo. */
   async photoCell(p, srcOf, px, w, h, n) {
     const src = srcOf.get(p);
@@ -157,7 +166,7 @@ class Doc {
       this.pdf.setFillColor(248, 250, 252);
       this.pdf.rect(px, this.y, w, h, 'FD');
       this.text('(imagem indisponível)', px + w / 2 - 14, this.y + h / 2, { size: 7.5, color: CINZA });
-      this.text(`Figura ${n} — ${p.legenda || p.category || p.name}`, px, this.y + h + 3.2, { size: 6.8, color: CINZA, maxWidth: w });
+      this.legendaFoto(p, n, px, w, h);
       return;
     }
     const { w: iw, h: ih } = await imageSize(src);
@@ -168,18 +177,25 @@ class Doc {
     this.pdf.setFillColor(248, 250, 252);
     this.pdf.rect(px, this.y, w, h, 'FD');
     try { this.pdf.addImage(src, formatOf(src), px + (w - dw) / 2, this.y + (h - dh) / 2, dw, dh, undefined, 'FAST'); } catch { /* imagem inválida */ }
-    this.text(`Figura ${n} — ${p.legenda || p.category || p.name}`, px, this.y + h + 3.2, { size: 6.8, color: CINZA, maxWidth: w });
+    this.legendaFoto(p, n, px, w, h);
   }
 
-  /** Fotos lado a lado em 2 colunas (~48% da largura cada). */
+  /** Tamanho da vaga de foto: 4 por linha na largura útil (paisagem: ~64 x 48 mm), 3 linhas por página. */
+  get fotoCaixa() {
+    const gap = 4;
+    const w = (this.CW - 3 * gap) / 4;
+    return { gap, w, h: w * 0.75, capH: 7.5 };
+  }
+
+  /** Altura de uma linha de fotos (para manter o título junto da 1ª linha). */
+  get fotoLinhaH() { const { h, capH } = this.fotoCaixa; return h + capH + 2; }
+
+  /** Fotos lado a lado, 4 por linha. */
   async photoGrid(list, srcOf) {
-    const gap = this.CW * 0.04;
-    const w = (this.CW - gap) / 2;
-    const h = w * 0.75;
-    const capH = 7;
-    for (let i = 0; i < list.length; i += 2) {
+    const { gap, w, h, capH } = this.fotoCaixa;
+    for (let i = 0; i < list.length; i += 4) {
       this.ensure(h + capH + 2);
-      for (const [j, p] of list.slice(i, i + 2).entries()) {
+      for (const [j, p] of list.slice(i, i + 4).entries()) {
         this.fig += 1;
         await this.photoCell(p, srcOf, M + j * (w + gap), w, h, this.fig);
       }
@@ -187,25 +203,28 @@ class Doc {
     }
   }
 
-  /** Antes (esquerda) x Depois (direita). Numeração igual à prévia: primeiro as de "Antes", depois as de "Depois". */
+  /**
+   * Antes (metade esquerda) x Depois (metade direita), 2 fotos por lado em cada linha.
+   * Numeração igual à prévia: primeiro as de "Antes", depois as de "Depois".
+   */
   async photoCompare(antes, depois, srcOf, tituloAntes) {
-    const gap = this.CW * 0.04;
-    const w = (this.CW - gap) / 2;
-    const h = w * 0.75;
-    const capH = 7;
+    const { gap, w, h, capH } = this.fotoCaixa;
+    const meio = M + 2 * (w + gap); // início da metade "Depois"
     const base = this.fig;
     this.fig += antes.length + depois.length;
-    this.ensure(5 + h + capH);
-    this.text(tituloAntes, M, this.y + 2.5, { size: 7.5, bold: true, maxWidth: w });
-    this.text('Depois — Execução', M + w + gap, this.y + 2.5, { size: 7.5, bold: true, color: [21, 128, 61], maxWidth: w });
+    this.ensure(5 + h + capH + 2);
+    this.text(tituloAntes, M, this.y + 2.5, { size: 7.5, bold: true, maxWidth: 2 * w + gap });
+    this.text('Depois — Execução', meio, this.y + 2.5, { size: 7.5, bold: true, color: [21, 128, 61], maxWidth: 2 * w + gap });
     this.y += 4;
-    const linhas = Math.max(antes.length, depois.length);
+    const linhas = Math.max(Math.ceil(antes.length / 2), Math.ceil(depois.length / 2), 1);
     for (let i = 0; i < linhas; i++) {
       this.ensure(h + capH + 2);
-      for (const [j, lista, n0] of [[0, antes, base], [1, depois, base + antes.length]]) {
-        const px = M + j * (w + gap);
-        if (lista[i]) await this.photoCell(lista[i], srcOf, px, w, h, n0 + i + 1);
-        else if (i === 0) this.text('Sem fotos.', px, this.y + 2.5, { size: 7.5, color: CINZA });
+      for (const [x0, lista, n0] of [[M, antes, base], [meio, depois, base + antes.length]]) {
+        for (let k = 0; k < 2; k++) {
+          const idx = i * 2 + k;
+          if (lista[idx]) await this.photoCell(lista[idx], srcOf, x0 + k * (w + gap), w, h, n0 + idx + 1);
+          else if (idx === 0) this.text('Sem fotos.', x0, this.y + 2.5, { size: 7.5, color: CINZA });
+        }
       }
       this.y += h + capH + 2;
     }
@@ -287,6 +306,8 @@ export async function buildPdfBlob({ module, uniqueId, data, photos = [], compan
   for (const s of module.sections) {
     const campos = s.fields.filter(temConteudo);
     if (!campos.length) continue;
+    // seção que começa por fotos: o título vai para a página da 1ª linha de fotos (não fica sozinho no rodapé)
+    if (campos[0].type === 'photos') doc.ensure(14 + 10 + 5 + doc.fotoLinhaH);
     doc.sectionTitle(s.title);
 
     // na ordem do formulário; campos simples seguidos viram uma grade
@@ -317,6 +338,7 @@ export async function buildPdfBlob({ module, uniqueId, data, photos = [], compan
         try { doc.pdf.addImage(data[f.id], formatOf(data[f.id]), M, doc.y, w * sc, h * sc); } catch { /* assinatura inválida */ }
         doc.y += h * sc + 4;
       } else if (f.type === 'photos') {
+        doc.ensure(10 + 5 + doc.fotoLinhaH); // título do bloco nunca fica sozinho no fim da página
         doc.subTitle(rotuloFotos(f, data));
         if (f.compare && !temAntes(f, photos)) {
           // sem fotos "Antes" neste componente: uma coluna (fotos da execução, em largura total)
