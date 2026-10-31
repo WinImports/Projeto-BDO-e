@@ -12,6 +12,8 @@ import { resetClient } from '../core/supabase.js';
 import { contratoSelectHtml } from './contrato-campo.js';
 import { LOGO_MAX, resizeLogo } from './logo.js';
 import { empresaPorContrato, empresasDosContratos, souGestor } from '../core/contratos.js';
+import { podeGerirBase, contaNoServidor, enviarBaseEquipe, apagarBaseEquipe, onBaseEquipeChange } from '../core/base-equipe.js';
+import { getClient } from '../core/supabase.js';
 
 const ORIGEM_SERVIDOR = {
   aparelho: 'Configurado neste aparelho',
@@ -89,6 +91,7 @@ export class SettingsView {
     this.root.addEventListener('click', (e) => this.handleClick(e));
     this.root.addEventListener('input', (e) => this.handleInput(e));
     this.root.addEventListener('change', (e) => this.handleChange(e));
+    onBaseEquipeChange(() => this.refreshPocos()); // a base da equipe chegou (ou foi removida) no sincronismo
   }
 
   render() {
@@ -296,23 +299,30 @@ export class SettingsView {
   // ---------- Base de Poços e Locações ----------
 
   pocosSectionHtml() {
+    const gere = podeGerirBase();
+    const equipe = contaNoServidor();
+    const dica = !gere
+      ? 'Alimenta o autocompletar do campo Poço / Locação do BDO-e e preenche as coordenadas. A base é enviada pelo gestor do contrato e chega sozinha a este aparelho quando houver internet; depois funciona sem conexão.'
+      : equipe
+        ? 'Alimenta o autocompletar do campo Poço / Locação do BDO-e e preenche as coordenadas. Como gestor, ao importar a base ela também é enviada para toda a equipe do contrato (cada aparelho recebe no próximo sincronismo e usa sem internet).'
+        : 'Alimenta o autocompletar do campo Poço / Locação do BDO-e (que repassa o poço à Visita Técnica e ao Relatório de Execução) e preenche as coordenadas. Fica salva neste computador e funciona sem internet. A importação vale na hora (não precisa "Salvar configurações").';
     return `
-      <section class="card form-section pocos-section" id="pocos-section">
+      <section class="card form-section pocos-section" id="pocos-section" data-pocos-gestor="${gere ? 'sim' : 'nao'}">
         <header class="form-section__head">
           <span class="form-section__icon">${icon('map', 20)}</span>
           <div class="form-section__titles">
-            <h3 class="form-section__title">Base Local de Poços e Locações</h3>
-            <p class="form-section__hint">Alimenta o autocompletar do campo Poço / Locação do BDO-e (que repassa o poço à Visita Técnica e ao Relatório de Execução) e preenche as coordenadas. Fica salva neste computador e funciona sem internet. A importação vale na hora (não precisa "Salvar configurações").</p>
+            <h3 class="form-section__title">${equipe ? 'Base de Poços e Locações da Equipe' : 'Base Local de Poços e Locações'}</h3>
+            <p class="form-section__hint">${esc(dica)}</p>
           </div>
         </header>
         <div class="pocos-body">
-          <label class="dropzone" data-dropzone>
+          ${gere ? `<label class="dropzone" data-dropzone>
             <input type="file" accept=".csv,.kml" class="sr-only" data-pocos-input>
             <span class="dropzone__icon">${icon('upload', 26)}</span>
             <strong class="dropzone__title" data-dropzone-title><span class="only-mouse">Arraste o arquivo .csv ou .kml aqui</span><span class="only-touch">Toque para escolher o arquivo .csv ou .kml</span></strong>
             <span class="dropzone__sub only-mouse">ou <u>clique para selecionar</u></span>
             <small class="dropzone__help">CSV: colunas com o nome do poço, latitude e longitude (separador ; ou , — vírgula decimal e graus/min/seg aceitos). KML: marcadores exportados do Google Earth/Maps.</small>
-          </label>
+          </label>` : `<p class="notice notice--info" data-pocos-so-gestor>Só o gestor do contrato importa ou limpa a base de poços.</p>`}
           <div class="pocos-status" data-pocos-status role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span> Verificando base…</div>
           <div data-pocos-report aria-live="polite"></div>
         </div>
@@ -332,15 +342,23 @@ export class SettingsView {
     }
     const when = st.importadoEm ? new Date(st.importadoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
     const imported = st.origem === 'importada';
+    const daEquipe = st.origem === 'equipe';
+    const gere = podeGerirBase();
+    const gestorComServidor = gere && contaNoServidor();
+    const origemTxt = daEquipe ? `Base da equipe${st.equipe?.contrato ? ` · contrato ${esc(st.equipe.contrato)}` : ''}` : imported ? 'Importada neste aparelho' : 'Base padrão do app';
     box.className = 'pocos-status pocos-status--ok';
+    box.dataset.origem = st.origem || '';
     box.innerHTML = `<span class="pocos-status__icon">${icon('checkCircle', 22)}</span>
       <div>
         <strong class="pocos-status__count" data-pocos-count>Base Ativa: ${st.total.toLocaleString('pt-BR')} poços carregados</strong>
-        <span class="muted small">${imported ? 'Importada' : 'Base padrão do app'}${st.fonte ? ` · ${esc(st.fonte)}` : ''}${when ? ` · ${when}` : ''}</span>
+        <span class="muted small">${origemTxt}${st.fonte ? ` · ${esc(st.fonte)}` : ''}${when ? ` · ${when}` : ''}</span>
       </div>
-      ${imported
-        ? `<button type="button" class="btn btn--ghost btn--sm btn--danger-text" data-action="clear-pocos">${icon('trash', 15)} Limpar Base</button>`
-        : ''}`;
+      <div class="pocos-status__acoes">
+        ${gestorComServidor && imported ? `<button type="button" class="btn btn--ghost btn--sm" data-action="enviar-base-equipe">${icon('upload', 15)} Enviar para a equipe</button>` : ''}
+        ${gere && (imported || daEquipe)
+          ? `<button type="button" class="btn btn--ghost btn--sm btn--danger-text" data-action="clear-pocos">${icon('trash', 15)} Limpar Base</button>`
+          : ''}
+      </div>`;
   }
 
   bindDropzone() {
@@ -359,6 +377,7 @@ export class SettingsView {
   }
 
   async importPocos(file) {
+    if (!podeGerirBase()) return toast('Só o gestor do contrato importa a base de poços.', 'warn');
     const ext = file.name.toLowerCase().split('.').pop();
     const report = $('[data-pocos-report]', this.root);
     if (!['csv', 'kml', 'kmz', 'txt'].includes(ext)) {
@@ -402,16 +421,51 @@ export class SettingsView {
         ${problemsHtml(res.problems, res.problemsCount)}</div></div>`;
     toast(`${n} poços importados com sucesso para a memória local!`, 'success', 5000);
     this.refreshPocos();
+    if (contaNoServidor() && souGestor()) await this.enviarBaseEquipe();
+  }
+
+  /** Gestor: manda a base deste aparelho para a equipe do(s) contrato(s) que ele gere. */
+  async enviarBaseEquipe() {
+    const report = $('[data-pocos-report]', this.root);
+    const aviso = document.createElement('div');
+    aviso.className = 'notice notice--info';
+    aviso.dataset.pocosEnvio = '';
+    aviso.innerHTML = '<span class="spinner" aria-hidden="true"></span> Enviando a base para a equipe…';
+    report?.append(aviso);
+    try {
+      if (!navigator.onLine) throw new Error('Sem internet.');
+      const contratos = await enviarBaseEquipe(getClient());
+      aviso.className = 'notice notice--ok';
+      aviso.textContent = `Base enviada para a equipe (${contratos.join(', ')}). Os aparelhos recebem no próximo sincronismo.`;
+      toast('Base de poços enviada para a equipe.', 'success');
+    } catch (err) {
+      aviso.className = 'notice notice--warn';
+      aviso.textContent = `A base ficou salva neste aparelho, mas não foi enviada para a equipe: ${err.message || err} Use "Enviar para a equipe" quando houver internet.`;
+      toast('Base não enviada para a equipe. Tente de novo com internet.', 'warn', 7000);
+    }
+    this.refreshPocos();
   }
 
   async clearPocos() {
+    if (!podeGerirBase()) return toast('Só o gestor do contrato limpa a base de poços.', 'warn');
     const st = await pocosStatus();
+    const daEquipe = contaNoServidor() && souGestor();
     const ok = await confirmDialog({
       title: 'Limpar a base de poços?',
-      message: `Os ${st.total.toLocaleString('pt-BR')} poços importados serão removidos deste computador. Relatórios já preenchidos não mudam.`,
+      message: daEquipe
+        ? `Os ${st.total.toLocaleString('pt-BR')} poços serão removidos deste aparelho e da equipe do contrato (os aparelhos dos técnicos deixam de usar esta base no próximo sincronismo). Relatórios já preenchidos não mudam.`
+        : `Os ${st.total.toLocaleString('pt-BR')} poços importados serão removidos deste computador. Relatórios já preenchidos não mudam.`,
       confirmLabel: 'Limpar Base', danger: true, iconName: 'trash'
     });
     if (!ok) return;
+    if (daEquipe) {
+      try {
+        if (!navigator.onLine) throw new Error('Sem internet.');
+        await apagarBaseEquipe(getClient());
+      } catch (err) {
+        return toast(`Não foi possível apagar a base da equipe: ${err.message || err} Tente de novo com internet.`, 'error', 8000);
+      }
+    }
     const after = await clearPocosBase();
     $('[data-pocos-report]', this.root).innerHTML = '';
     toast(after.total ? `Base importada removida. Voltando à base padrão do app (${after.total.toLocaleString('pt-BR')} poços).` : 'Base de poços removida.', 'info');
@@ -485,6 +539,7 @@ export class SettingsView {
     }
     if (btn.dataset.action === 'save') this.save();
     if (btn.dataset.action === 'clear-pocos') this.clearPocos();
+    if (btn.dataset.action === 'enviar-base-equipe') this.enviarBaseEquipe();
     if (btn.dataset.action === 'logout') this.onLogout?.();
     if (btn.dataset.action === 'save-server') this.saveServer();
     if (btn.dataset.action === 'clear-server') this.clearServer();

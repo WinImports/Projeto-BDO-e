@@ -24,13 +24,13 @@ function webBundled() {
 export async function getPocos() {
   if (isDesktop()) return window.desktop.getPocos();
   const imported = readWebImported();
-  if (imported?.pocos?.length) return { ...imported, origem: 'importada', total: imported.pocos.length };
+  if (imported?.pocos?.length) return { ...imported, origem: imported.equipe ? 'equipe' : 'importada', total: imported.pocos.length };
   const bundled = await webBundled();
   if (bundled?.pocos?.length) return { ...bundled, origem: 'embutida', importadoEm: bundled.geradoEm || null, total: bundled.pocos.length };
   return EMPTY;
 }
 
-const statusOf = (b) => ({ origem: b.origem, fonte: b.fonte, importadoEm: b.importadoEm, total: b.total });
+const statusOf = (b) => ({ origem: b.origem, fonte: b.fonte, importadoEm: b.importadoEm, total: b.total, equipe: b.equipe || null });
 
 export async function pocosStatus() {
   if (isDesktop()) return window.desktop.pocosStatus();
@@ -60,6 +60,21 @@ export async function importPocos(name, bytes) {
     ok: true, ...statusOf({ ...base, origem: 'importada' }), formato: r.formato, lidos: r.lidos,
     foraDaRegiao: r.foraDaRegiao, problems: r.problems.slice(0, 50), problemsCount: r.problems.length
   };
+}
+
+/**
+ * Base recebida da equipe (o gestor envia pelo servidor, migração 009): substitui a base deste aparelho.
+ * base = { fonte, importadoEm, pocos: [[nome, lat, lng], …], equipe: { contratoId, contrato, atualizadoEm } }
+ */
+export async function setPocosEquipe(base) {
+  if (isDesktop()) return window.desktop.setPocos(base);
+  const salvo = { fonte: base.fonte || null, importadoEm: base.importadoEm || null, total: base.pocos.length, pocos: base.pocos, equipe: base.equipe };
+  try {
+    localStorage.setItem(WEB_BASE_KEY, JSON.stringify(salvo));
+  } catch {
+    return { ok: false, error: 'Sem espaço no navegador para guardar a base da equipe.' };
+  }
+  return { ok: true, ...statusOf({ ...salvo, origem: 'equipe' }) };
 }
 
 export async function clearPocos() {

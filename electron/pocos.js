@@ -21,7 +21,7 @@ function registerPocosIpc(ipcMain, app) {
     if (cache) return cache;
     const imported = await readJson(importedFile());
     if (imported?.pocos?.length) {
-      cache = { ...imported, origem: 'importada', total: imported.pocos.length };
+      cache = { ...imported, origem: imported.equipe ? 'equipe' : 'importada', total: imported.pocos.length };
     } else {
       const bundled = await readJson(bundledFile());
       cache = bundled?.pocos?.length
@@ -31,7 +31,7 @@ function registerPocosIpc(ipcMain, app) {
     return cache;
   }
 
-  const status = (b) => ({ origem: b.origem, fonte: b.fonte, importadoEm: b.importadoEm, total: b.total });
+  const status = (b) => ({ origem: b.origem, fonte: b.fonte, importadoEm: b.importadoEm, total: b.total, equipe: b.equipe || null });
 
   ipcMain.handle('pocos:list', () => load());
   ipcMain.handle('pocos:status', async () => status(await load()));
@@ -58,6 +58,23 @@ function registerPocosIpc(ipcMain, app) {
       ok: true, ...status(cache), formato: r.formato, lidos: r.lidos,
       foraDaRegiao: r.foraDaRegiao, problems: r.problems.slice(0, 50), problemsCount: r.problems.length
     };
+  });
+
+  // Base recebida da equipe pelo servidor (o gestor envia; migração 009): já vem processada
+  ipcMain.handle('pocos:set', async (_e, base) => {
+    const pocos = Array.isArray(base?.pocos) ? base.pocos.filter((p) => Array.isArray(p) && typeof p[0] === 'string'
+      && Number.isFinite(p[1]) && Number.isFinite(p[2])) : [];
+    if (!pocos.length) return { ok: false, error: 'Base da equipe vazia ou inválida.' };
+    const salvo = {
+      fonte: String(base.fonte || '').slice(0, 200) || null, importadoEm: base.importadoEm || null, total: pocos.length, pocos,
+      equipe: { contratoId: String(base.equipe?.contratoId || ''), contrato: String(base.equipe?.contrato || ''), atualizadoEm: base.equipe?.atualizadoEm || null }
+    };
+    const file = importedFile();
+    const tmp = `${file}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(salvo));
+    await fs.rename(tmp, file);
+    cache = { ...salvo, origem: 'equipe' };
+    return { ok: true, ...status(cache) };
   });
 
   ipcMain.handle('pocos:clear', async () => {

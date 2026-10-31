@@ -45,6 +45,22 @@ async function supabaseFalso(page, cfg) {
           return { status: 200, error: null, data: aceitos.map((r, i) => ({ unique_id: r.unique_id, id: i + 1 })) };
         }
         if (name === 'list_team_reports') return { status: 200, error: null, data: [] };
+        if (name === 'set_my_matricula') {
+          if (sb.matriculaOcupada && norm(args.p_matricula) === norm(sb.matriculaOcupada)) {
+            return { data: null, error: { code: '23505', message: `Matrícula ${String(args.p_matricula).trim().toUpperCase()} já está cadastrada para outra pessoa.` } };
+          }
+          return { data: String(args.p_matricula).trim().toUpperCase(), error: null };
+        }
+        if (name === 'my_pocos_bases') {
+          const b = sb.basePocos;
+          return { data: b ? [{ contrato_id: b.contrato_id, contrato: 'OS-Mans', fonte: b.fonte, total: b.pocos.length, atualizado_em: b.atualizado_em }] : [], error: null };
+        }
+        if (name === 'my_pocos_base') return { data: sb.basePocos ? { ...sb.basePocos, total: sb.basePocos.pocos.length } : null, error: null };
+        if (name === 'team_set_pocos') {
+          sb.basePocos = { contrato_id: args.p_contrato_id, fonte: args.p_fonte, pocos: args.p_pocos, atualizado_em: new Date().toISOString() };
+          return { data: { contrato_id: args.p_contrato_id, fonte: args.p_fonte, total: args.p_pocos.length, atualizado_em: sb.basePocos.atualizado_em }, error: null };
+        }
+        if (name === 'team_clear_pocos') { sb.basePocos = null; return { data: null, error: null }; }
         if (name === 'my_company_settings') return { status: 200, error: null, data: null };
         return { status: 200, error: null, data: args.p_device_id ?? null };
       },
@@ -287,6 +303,95 @@ test('Gestão de Equipe › Nova senha: o gestor gera senha provisória para um 
   await page.locator('dialog.modal--confirm[open] [data-ok]').click();
   await expect(page.locator('#toasts')).toContainText('Peça ao Master da licença para redefinir a senha.');
   await expect(page.locator('dialog[data-senha-provisoria]')).toHaveCount(0);
+});
+
+test('primeiro acesso do gestor com matrícula provisória: informa a matrícula real e cria a senha', async () => {
+  const { page } = ctx;
+  const usuarios = { 'gestor@empresa.com': { senha: 'Ab12-Cd34-Ef56', meta: { nome: 'Gestor Novo', matricula: 'G-482193', matricula_provisoria: true, must_change_password: true } } };
+  await supabaseFalso(page, { usuarios, matriculas: { G482193: 'gestor@empresa.com' }, acesso: { contratos: [{ ...CONTRATO, role: 'gestor' }] }, equipe: { membros: [] }, busca: [], matriculaOcupada: 'T-001' });
+  await configurarServidor(page);
+  await sair(page);
+
+  // entra com a matrícula provisória
+  await digitarLogin(page, 'G-482193', 'Ab12-Cd34-Ef56');
+  await expect(page.locator('#troca-senha-title')).toHaveText('Primeiro acesso');
+  await expect(page.locator('#troca-senha-form')).toContainText('Substitui a provisória (G-482193)');
+
+  await page.locator('#nova-senha').fill('MinhaSenha#2026');
+  await page.locator('#nova-senha-2').fill('MinhaSenha#2026');
+  await page.locator('#troca-senha-submit').click();
+  await expect(page.locator('#troca-senha-erro')).toHaveText('Informe a sua matrícula funcional.');
+
+  await page.locator('#nova-matricula').fill('t-001'); // de outra pessoa
+  await page.locator('#troca-senha-submit').click();
+  await expect(page.locator('#troca-senha-erro')).toHaveText('Matrícula T-001 já está cadastrada para outra pessoa.');
+
+  await page.locator('#nova-matricula').fill(' 778899 ');
+  await page.locator('#troca-senha-submit').click();
+  await expect(page.locator('#troca-senha')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__sb.updates)).toEqual([{ email: 'gestor@empresa.com', password: 'MinhaSenha#2026', data: { must_change_password: false, matricula: '778899', matricula_provisoria: false } }]);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('bdoe.auth.session')))).toMatchObject({ matricula: '778899', matriculaProvisoria: false, trocarSenha: false });
+
+  // técnico cadastrado pelo gestor (matrícula real): só a senha, sem o campo de matrícula
+  await sair(page);
+  await page.evaluate(() => { window.__sb.usuarios['tec@empresa.com'] = { senha: 'inicial123', meta: { nome: 'Téc', matricula: 'T-050', must_change_password: true } }; });
+  await digitarLogin(page, 'tec@empresa.com', 'inicial123');
+  await expect(page.locator('#troca-senha-title')).toHaveText('Crie a sua senha');
+  await expect(page.locator('#nova-matricula')).toHaveCount(0);
+});
+
+test('base de poços da equipe: técnico não importa nem limpa e recebe a base do gestor; gestor importa e envia para a equipe', async () => {
+  const { page } = ctx;
+  const CSV = require('path').join(__dirname, 'fixtures', 'pocos-teste.csv');
+  const cfg = {
+    usuarios: { 'tec@empresa.com': { senha: 'senha-certa', meta: {} }, 'gestor@empresa.com': { senha: 'senha-certa', meta: { nome: 'Gestor' } } },
+    matriculas: {}, acesso: { contratos: [{ ...CONTRATO, role: 'tecnico' }] }, equipe: { membros: [] }, busca: [],
+    basePocos: { contrato_id: CONTRATO.id, fonte: 'base-ba.csv', atualizado_em: '2026-10-30T12:00:00.000Z', pocos: [['EQP-001', -12.1, -38.2], ['EQP-002', -12.2, -38.3]] }
+  };
+  await supabaseFalso(page, cfg);
+  await configurarServidor(page);
+  await sair(page);
+  await digitarLogin(page, 'tec@empresa.com', 'senha-certa');
+  await aguardarEntrada(page);
+  await page.evaluate(async () => (await import('./src/core/sync.js')).syncNow({ force: true }));
+  await openTab(page, 'settings');
+  await expect(page.locator('[data-pocos-count]')).toHaveText('Base Ativa: 2 poços carregados');
+  await expect(page.locator('[data-pocos-status]')).toContainText('Base da equipe · contrato OS-Mans');
+  await expect(page.locator('[data-dropzone]')).toHaveCount(0);
+  await expect(page.locator('[data-pocos-so-gestor]')).toHaveText('Só o gestor do contrato importa ou limpa a base de poços.');
+  await expect(page.locator('[data-action=clear-pocos]')).toHaveCount(0);
+
+  // o gestor apagou a base no servidor: some do aparelho no próximo sincronismo
+  await page.evaluate(() => { window.__sb.basePocos = null; });
+  await page.evaluate(async () => (await import('./src/core/sync.js')).syncNow({ force: true }));
+  await expect(page.locator('[data-pocos-count]')).toHaveText('Nenhuma base carregada');
+
+  // gestor: importa o arquivo e a base vai para a equipe
+  await supabaseFalso(page, { ...cfg, basePocos: null, acesso: { contratos: [{ ...CONTRATO, role: 'gestor' }] } });
+  await page.evaluate(async () => {
+    window.__sb.session = { user: { email: 'gestor@empresa.com' } };
+    (await import('./src/core/supabase.js')).resetClient();
+    localStorage.setItem('bdoe.auth.session', JSON.stringify({ email: 'gestor@empresa.com', nome: 'Gestor', modo: 'supabase' }));
+  });
+  await page.evaluate(async () => (await import('./src/core/sync.js')).syncNow({ force: true }));
+  await expect(page.locator('#tabs [data-tab=equipe]')).toBeVisible();
+  await openTab(page, 'settings');
+  await expect(page.locator('[data-dropzone]')).toBeVisible();
+  await page.locator('[data-pocos-input]').setInputFiles(CSV);
+  await expect(page.locator('[data-pocos-envio]')).toContainText('Base enviada para a equipe (OS-Mans)');
+  const enviado = await page.evaluate(() => window.__sb.rpc.find((c) => c.name === 'team_set_pocos').args);
+  expect(enviado.p_contrato_id).toBe(CONTRATO.id);
+  expect(enviado.p_fonte).toBe('pocos-teste.csv');
+  expect(enviado.p_pocos).toHaveLength(5);
+  await expect(page.locator('[data-pocos-status]')).toContainText('Base da equipe · contrato OS-Mans');
+
+  // limpar: apaga da equipe e do aparelho
+  await page.locator('[data-action=clear-pocos]').click();
+  await expect(page.locator('dialog.modal--confirm[open]')).toContainText('removidos deste aparelho e da equipe do contrato');
+  await page.locator('dialog.modal--confirm[open] [data-ok]').click();
+  await expect(page.locator('[data-pocos-count]')).toHaveText('Nenhuma base carregada');
+  expect(await page.evaluate(() => window.__sb.rpc.some((c) => c.name === 'team_clear_pocos'))).toBe(true);
+  expect(await page.evaluate(() => window.__sb.basePocos)).toBeNull();
 });
 
 test('histórico sem limite: busca no servidor todo o acervo do contrato (anos atrás), em páginas, e abre a prévia', async () => {

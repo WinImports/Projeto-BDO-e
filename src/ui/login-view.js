@@ -87,10 +87,19 @@ export function showTrocaSenha() {
     root.className = 'login auth';
     root.id = 'troca-senha';
     const user = currentUser();
+    const pedeMatricula = user?.matriculaProvisoria === true;
     root.innerHTML = authShellHtml(`
       <form class="login__card" id="troca-senha-form" novalidate aria-labelledby="troca-senha-title">
-        ${authHeadHtml('troca-senha-title', 'Crie a sua senha', `${displayName(user)} · primeiro acesso`)}
-        <p class="notice notice--info auth__help">A senha que você recebeu é provisória. Por segurança, crie agora uma senha só sua (mínimo de ${SENHA_MIN} caracteres).</p>
+        ${authHeadHtml('troca-senha-title', pedeMatricula ? 'Primeiro acesso' : 'Crie a sua senha', `${displayName(user)} · primeiro acesso`)}
+        <p class="notice notice--info auth__help">${pedeMatricula
+          ? `A matrícula e a senha que você recebeu são provisórias. Informe a sua matrícula funcional e crie uma senha só sua (mínimo de ${SENHA_MIN} caracteres).`
+          : `A senha que você recebeu é provisória. Por segurança, crie agora uma senha só sua (mínimo de ${SENHA_MIN} caracteres).`}</p>
+        ${pedeMatricula ? `
+        <div class="field">
+          <label class="field__label-wrap" for="nova-matricula"><span class="field__label">Sua matrícula funcional</span></label>
+          <input id="nova-matricula" name="matricula" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" required placeholder="Ex.: 123456">
+          <small class="field__hint">Substitui a provisória${user.matricula ? ` (${esc(user.matricula)})` : ''}. Depois você pode entrar com ela no lugar do e-mail.</small>
+        </div>` : ''}
         <div class="field">
           <label class="field__label-wrap" for="nova-senha"><span class="field__label">Nova senha</span></label>
           <div class="password-field">
@@ -113,17 +122,17 @@ export function showTrocaSenha() {
     const form = $('#troca-senha-form', root);
     const erro = $('#troca-senha-erro', root);
     const botao = $('#troca-senha-submit', root);
-    $('#nova-senha', root).focus();
+    $(pedeMatricula ? '#nova-matricula' : '#nova-senha', root).focus();
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       erro.hidden = true;
       botao.disabled = true;
       botao.innerHTML = '<span class="spinner" aria-hidden="true"></span> Salvando…';
       try {
-        await trocarSenha(form.nova.value, form.confirmacao.value);
+        await trocarSenha(form.nova.value, form.confirmacao.value, pedeMatricula ? form.matricula.value : '');
         root.remove();
         if (!document.getElementById('login') && !document.getElementById('licenca')) document.body.classList.remove('is-login');
-        toast('Senha criada. Use a nova senha nos próximos acessos.', 'success', 6000);
+        toast(pedeMatricula ? 'Pronto! Entre com a sua matrícula (ou e-mail) e a nova senha nos próximos acessos.' : 'Senha criada. Use a nova senha nos próximos acessos.', 'success', 6000);
         resolve();
       } catch (err) {
         erro.textContent = err.message || 'Não foi possível trocar a senha.';

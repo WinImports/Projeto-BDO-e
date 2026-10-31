@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('desktop', {
   /** Envia o conteúdo do .csv/.kml para o parser do processo principal. */
   importPocos: (name, bytes) => ipcRenderer.invoke('pocos:import', { name, bytes }),
   clearPocos: () => ipcRenderer.invoke('pocos:clear'),
+  setPocos: (base) => ipcRenderer.invoke('pocos:set', base),
   /** A janela vai fechar: grave o que estiver pendente e chame readyToClose(). */
   onBeforeClose: (cb) => ipcRenderer.on('app:before-close', () => cb()),
   readyToClose: () => ipcRenderer.send('app:ready-to-close')

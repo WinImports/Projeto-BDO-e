@@ -21,6 +21,7 @@ import { syncSettings, pullSettings, getDeviceId } from './settings.js';
 import { currentUser } from './auth.js';
 import { pullTeamHistory } from './pull.js';
 import { atualizarContratos, contratoDaLista, meusContratos } from './contratos.js';
+import { atualizarBaseEquipe } from './base-equipe.js';
 
 const state = { running: false, lastRunAt: null, lastError: null, pullError: null, pullPending: false };
 const listeners = new Set();
@@ -192,6 +193,10 @@ export async function syncNow({ force = false, pull = false } = {}) {
       await atualizarContratos(client, { force: pull || force });
     } catch (err) {
       console.warn('[sync] contratos não atualizados', err);
+    }
+    // base de poços enviada pelo gestor (migração 009): ao entrar / abrir / voltar a internet / "Sincronizar agora"
+    if (pull || force) {
+      try { await atualizarBaseEquipe(client); } catch (err) { console.warn('[sync] base de poços da equipe', err); }
     }
     const items = await outbox.due();
     for (let i = 0; i < items.length; i += SYNC.batchSize) {

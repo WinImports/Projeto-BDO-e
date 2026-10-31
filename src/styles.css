@@ -1369,3 +1369,7 @@ input[data-expand] { cursor: text; text-overflow: ellipsis; }
   user-select: all;
   word-break: break-all;
 }
+
+/* Base de poços: ações do status (Enviar para a equipe · Limpar Base) */
+.pocos-status > .pocos-status__acoes { display: flex; flex-direction: row; flex: none; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.pocos-status > .pocos-status__acoes:empty { display: none; }

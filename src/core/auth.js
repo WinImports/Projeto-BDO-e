@@ -73,7 +73,9 @@ async function loginSupabase(email, senha) {
   return {
     email, userId: data.user?.id || '', nome: meta.nome || meta.full_name || meta.name || '',
     matricula: meta.matricula || '',
-    trocarSenha: meta.must_change_password === true // conta criada pelo gestor com senha inicial
+    trocarSenha: meta.must_change_password === true, // conta criada pelo gestor com senha inicial
+    // gestor criado pelo Painel de Licenças: matrícula provisória (G-000000) até o 1º acesso
+    matriculaProvisoria: meta.matricula_provisoria === true
   };
 }
 
@@ -134,7 +136,7 @@ async function loginPorEmail(email, senha, { matricula = '', criarLocal = true, 
     try {
       const remoto = await loginSupabase(email, senha);
       const mat = remoto.matricula || matricula || ler(USERS_KEY, {})[email]?.matricula || '';
-      await guardarCredencial(email, senha, { nome: remoto.nome, userId: remoto.userId, origem: 'supabase', matricula: mat, trocarSenha: remoto.trocarSenha });
+      await guardarCredencial(email, senha, { nome: remoto.nome, userId: remoto.userId, origem: 'supabase', matricula: mat, trocarSenha: remoto.trocarSenha, matriculaProvisoria: remoto.matriculaProvisoria });
       return { user: abrirSessao({ ...remoto, matricula: mat, modo: 'supabase' }), aviso: '' };
     } catch (err) {
       if (!erroDeRede(err)) throw new Error(errado);
@@ -148,7 +150,7 @@ async function loginPorEmail(email, senha, { matricula = '', criarLocal = true, 
     if (await hashSenha(senha, local.salt) !== local.hash) throw new Error(errado);
     const modo = local.origem === 'supabase' ? 'offline' : 'local';
     return {
-      user: abrirSessao({ email, nome: local.nome || '', userId: local.userId || '', matricula: local.matricula || '', trocarSenha: local.trocarSenha === true, modo }),
+      user: abrirSessao({ email, nome: local.nome || '', userId: local.userId || '', matricula: local.matricula || '', trocarSenha: local.trocarSenha === true, matriculaProvisoria: local.matriculaProvisoria === true, modo }),
       aviso: modo === 'offline' ? 'Sem conexão com o servidor: acesso liberado com a última senha confirmada neste aparelho.' : ''
     };
   }
@@ -166,23 +168,38 @@ async function loginPorEmail(email, senha, { matricula = '', criarLocal = true, 
 export const SENHA_MIN = 8;
 
 /**
- * Troca de senha obrigatória no 1º acesso (conta criada pelo gestor com senha inicial): grava a nova senha no
- * Supabase Auth, apaga o aviso must_change_password e atualiza a senha do login offline. Precisa de internet.
+ * Primeiro acesso (conta criada pelo gestor ou pelo Painel de Licenças com senha inicial): grava a nova senha no
+ * Supabase Auth, apaga o aviso must_change_password e atualiza a senha do login offline. Com matrícula
+ * provisória (user.matriculaProvisoria), a matrícula real é obrigatória e vai antes para o banco
+ * (set_my_matricula, migração 009: vale em todos os contratos da pessoa). Precisa de internet.
  */
-export async function trocarSenha(nova, confirmacao) {
+export async function trocarSenha(nova, confirmacao, matricula = '') {
   const user = currentUser();
   if (!user) throw new Error('Entre de novo para trocar a senha.');
+  const pedeMatricula = user.matriculaProvisoria === true;
+  const mat = String(matricula || '').trim();
+  if (pedeMatricula && !normMatricula(mat)) throw new Error('Informe a sua matrícula funcional.');
   if (!nova || nova.length < SENHA_MIN) throw new Error(`A nova senha precisa ter pelo menos ${SENHA_MIN} caracteres.`);
   if (nova !== confirmacao) throw new Error('A confirmação não é igual à nova senha.');
   if (!navigator.onLine || !isSupabaseConfigured()) throw new Error('Conecte-se à internet para criar a sua senha.');
-  const { error } = await getClient().auth.updateUser({ password: nova, data: { must_change_password: false } });
+  const client = getClient();
+  let matriculaFinal = user.matricula || '';
+  if (pedeMatricula) {
+    const { data, error } = await client.rpc('set_my_matricula', { p_matricula: mat });
+    if (error) throw new Error(error.code ? (error.message || 'Não foi possível gravar a matrícula.') : 'Sem conexão com o servidor. Tente de novo.');
+    matriculaFinal = data || mat.toUpperCase();
+  }
+  const dados = pedeMatricula
+    ? { must_change_password: false, matricula: matriculaFinal, matricula_provisoria: false }
+    : { must_change_password: false };
+  const { error } = await client.auth.updateUser({ password: nova, data: dados });
   if (error) {
     throw new Error(/different from the old|same as the old|should be different/i.test(error.message || '')
       ? 'A nova senha precisa ser diferente da senha inicial.'
       : `Não foi possível trocar a senha: ${error.message}`);
   }
-  await guardarCredencial(user.email, nova, { trocarSenha: false });
-  return abrirSessao({ ...user, trocarSenha: false });
+  await guardarCredencial(user.email, nova, { trocarSenha: false, matriculaProvisoria: false, matricula: matriculaFinal });
+  return abrirSessao({ ...user, trocarSenha: false, matriculaProvisoria: false, matricula: matriculaFinal });
 }
 
 /** Sair: apaga só a sessão (as credenciais locais continuam para o próximo login offline). */
