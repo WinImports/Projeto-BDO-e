@@ -97,6 +97,28 @@ test.describe('BDO-e → Visita Técnica / Relatório de Execução', () => {
     await expect(page.locator('[data-field=campo]')).toHaveValue('Campo de Buracica');
   });
 
+  test('depois de finalizar a Visita o formulário volta limpo: o mesmo BDO-e não é herdado de novo', async () => {
+    const { page } = ctx;
+    await pocoNoBdo(page, 'RCB-34');
+    await openTab(page, 'visita_tecnica');
+    await expect(page.locator('[data-field=poco]')).toHaveValue('RCB-34');
+    await preencherVisita(page, 'RCB-34');
+    await page.locator('#btn-finalize').click();
+    await page.locator('dialog.modal[open] [data-confirm]').click();
+    await expect(toast(page)).toContainText('Caixa de Saída');
+    await page.locator('#view[data-ready=visita_tecnica]').waitFor();
+    await expect(page.locator('[data-field=poco]')).toHaveValue('');
+    await expect(page.locator('[data-field=vc_estanqueidade]')).toHaveValue('');
+    await expect(page.locator('[data-heranca]')).toContainText('vêm do BDO-e');
+    // a Execução ainda não usou esse BDO-e: continua recebendo
+    await openTab(page, 'handover');
+    await expect(page.locator('[data-field=poco]')).toHaveValue('RCB-34');
+    // BDO-e com outro poço: a Visita nova volta a herdar
+    await pocoNoBdo(page, 'FBM-89');
+    await openTab(page, 'visita_tecnica');
+    await expect(page.locator('[data-field=poco]')).toHaveValue('FBM-89');
+  });
+
   test('sem BDO-e com poço: aviso leva ao BDO-e; Visita e Execução não têm busca de poço nem rotas', async () => {
     const { page } = ctx;
     for (const tab of ['visita_tecnica', 'handover']) {

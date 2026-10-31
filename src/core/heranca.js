@@ -12,13 +12,35 @@ import { ultimoPoco } from './pocos.js';
 const vazio = (v) => v == null || v === '' || (typeof v === 'object' && !Object.keys(v).length);
 const igual = (a, b) => JSON.stringify(a ?? '') === JSON.stringify(b ?? '');
 
-/** Dados do BDO-e ativo, ou null. */
-export async function bdoAtivo() {
+// Depois de finalizar uma Visita / Execução, o formulário novo vem LIMPO: o BDO-e que ela usou não é herdado
+// de novo (um BDO-e mais novo ou com outro poço, sim). Guardado por relatório: { visita_tecnica: '<uniqueId>|<poço>' }.
+const KEY_USADO = 'bdoe.heranca.usado';
+const lerUsados = () => { try { return JSON.parse(localStorage.getItem(KEY_USADO)) || {}; } catch { return {}; } };
+
+/** BDO-e + poço atual: o mesmo BDO-e com outro poço no dia (vários poços) volta a ser herdado. */
+const chaveHeranca = (bdo) => `${bdo.uniqueId}|${ultimoPoco(bdo.data?.poco || '')}`;
+
+/** Marca o BDO-e herdado pelo relatório finalizado (o próximo formulário deste relatório não o herda). */
+export function marcarHerancaUsada(moduleId, bdoId) {
+  if (!moduleId || !bdoId) return;
+  try { localStorage.setItem(KEY_USADO, JSON.stringify({ ...lerUsados(), [moduleId]: bdoId })); } catch { /* sem espaço */ }
+}
+
+/**
+ * Dados do BDO-e ativo, ou null. Com `moduleId` (relatório novo), o BDO-e já usado por um relatório
+ * finalizado deste tipo não conta: o formulário novo fica limpo até haver outro BDO-e.
+ */
+export async function bdoAtivo(moduleId = null) {
   const rascunho = await get(STORES.drafts, 'bdo');
-  if (rascunho?.data?.poco) return { data: rascunho.data, origem: 'rascunho' };
-  const finalizados = (await getAll(STORES.history, 'module')).filter((r) => r.module === 'bdo' && r.data?.poco);
-  finalizados.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-  return finalizados[0] ? { data: finalizados[0].data, origem: 'finalizado' } : null;
+  let atual = null;
+  if (rascunho?.data?.poco) atual = { data: rascunho.data, origem: 'rascunho', uniqueId: rascunho.uniqueId };
+  else {
+    const finalizados = (await getAll(STORES.history, 'module')).filter((r) => r.module === 'bdo' && r.data?.poco);
+    finalizados.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    if (finalizados[0]) atual = { data: finalizados[0].data, origem: 'finalizado', uniqueId: finalizados[0].uniqueId };
+  }
+  if (atual && moduleId && atual.uniqueId && lerUsados()[moduleId] === chaveHeranca(atual)) return null;
+  return atual;
 }
 
 /** Valor do BDO-e convertido para o tipo do campo de destino (data → data e hora mantém o horário). */
@@ -56,5 +78,6 @@ export function herdar(module, draft, bdo) {
     if (campo?.label && campo.type !== 'geo') preenchidos.push(campo.label);
   }
   d._bdo = herdado;
+  if (bdo.uniqueId && Object.keys(herdado).length) d._bdo_id = chaveHeranca(bdo);
   return preenchidos;
 }

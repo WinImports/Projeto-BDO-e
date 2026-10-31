@@ -10,7 +10,7 @@ import { showSharePrompt } from './ui/share-prompt.js';
 import { syncNow, startSyncScheduler, onSyncState, setDocumentPublisher } from './core/sync.js';
 import { getPref, setPref } from './core/prefs.js';
 import { newUniqueId } from './core/ids.js';
-import { bdoAtivo, herdar } from './core/heranca.js';
+import { bdoAtivo, herdar, marcarHerancaUsada } from './core/heranca.js';
 import { currentUser, displayName, logout } from './core/auth.js';
 import { showLogin, showTrocaSenha } from './ui/login-view.js';
 import { licenciamentoAtivo, licencaLocal, verificarLicenca, avaliarSemRede } from './core/licenca.js';
@@ -207,7 +207,7 @@ async function showTab(tab) {
   const module = getModule(tab);
   const draft = await loadDraft(module.id);
   // Visita Técnica / Execução: Poço, Locação, Data e Cliente vêm do BDO-e ativo
-  const bdo = module.herdaDoBdo ? await bdoAtivo() : null;
+  const bdo = module.herdaDoBdo ? await bdoAtivo(draft.isNew ? module.id : null) : null;
   if (state.tab !== tab) return; // usuário trocou de aba enquanto carregava
   const herdados = module.herdaDoBdo ? herdar(module, draft, bdo) : [];
   state.draft = draft;
@@ -422,7 +422,8 @@ async function finalize(module) {
     state.saveTimer = null;
     if (choice === 'send') await enqueue(report);
     else await saveLocalOnly(report);
-    // 2) só então descarta o rascunho
+    // 2) só então descarta o rascunho (o formulário novo vem limpo: não herda de novo o mesmo BDO-e)
+    if (module.herdaDoBdo) marcarHerancaUsada(module.id, draft.data._bdo_id);
     state.draft = null;
     await discardDraft(module.id);
   } catch (err) {
