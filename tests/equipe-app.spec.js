@@ -356,6 +356,7 @@ test('base de poços da equipe: técnico não importa nem limpa e recebe a base 
   await page.evaluate(async () => (await import('./src/core/sync.js')).syncNow({ force: true }));
   await openTab(page, 'settings');
   await expect(page.locator('[data-pocos-count]')).toHaveText('Base Ativa: 2 poços carregados');
+  await expect(page.locator('#servidor-avancado')).toHaveCount(0); // com conta no servidor: URL e chave ocultas
   await expect(page.locator('[data-pocos-status]')).toContainText('Base da equipe · contrato OS-Mans');
   await expect(page.locator('[data-dropzone]')).toHaveCount(0);
   await expect(page.locator('[data-pocos-so-gestor]')).toHaveText('Só o gestor do contrato importa ou limpa a base de poços.');

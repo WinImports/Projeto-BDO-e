@@ -148,7 +148,9 @@ export class SettingsView {
             </div>
           </section>`).join('')}
       </form>
-      <details class="card advanced" id="servidor-avancado">
+      ${/* servidor (URL e chave): só sem conta no servidor (1ª configuração / usuário local); quem entrou com
+         conta não vê nem altera — a conexão vem da publicação do site / instalação */ ''}
+      ${contaNoServidor() ? '' : `<details class="card advanced" id="servidor-avancado">
         <summary class="advanced__summary">
           <span class="form-section__icon">${icon('shield', 20)}</span>
           <span class="advanced__titles">
@@ -158,7 +160,7 @@ export class SettingsView {
           <span class="advanced__chevron" aria-hidden="true">${icon('chevronDown', 18)}</span>
         </summary>
         ${this.servidorSectionHtml()}
-      </details>
+      </details>`}
       <div class="action-bar">
         <span class="save-status">${icon('info', 16)}<span>Salvas neste aparelho e enviadas ao servidor · ID do aparelho <code>${esc(getDeviceId().slice(0, 8))}</code></span></span>
         <div class="action-bar__buttons">
