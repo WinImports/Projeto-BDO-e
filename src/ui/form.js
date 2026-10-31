@@ -60,6 +60,10 @@ const filledRows = (rows, columns) => (rows || []).filter((row) => rowFilled(row
 export const allFields = (module) => module.sections.flatMap((s) => s.fields);
 
 /** Bloco opcional (válvula adicional VL / VM) só existe no relatório em que foi incluído. */
+/** Celular / tablet (toque): o botão Câmera abre o app de câmera nativo do aparelho. */
+export const usarCameraNativa = () => {
+  try { return window.matchMedia('(pointer: coarse)').matches; } catch { return false; }
+};
 export const secaoAtiva = (s, data = {}) => !s.opcional || (data._valvulas_extras || []).includes(s.opcional);
 /** Campos dos blocos que existem neste relatório (para validação e progresso). */
 const camposAtivos = (module, data) => module.sections.filter((s) => secaoAtiva(s, data)).flatMap((s) => s.fields);
@@ -1097,6 +1101,7 @@ export class FormView {
     const catOf = (p) => (cats.includes(p.category ?? null) ? (p.category ?? null) : cats[cats.length - 1]);
     const list = photosOf(f, this.draft.photos, fase);
     const attrs = (cat) => `data-photos-field="${esc(f.id)}" data-category="${esc(cat ?? '')}" data-fase="${fase || ''}"`;
+    const nativa = usarCameraNativa();
     return cats.map((cat) => {
       const items = list.filter((p) => catOf(p) === cat);
       return `
@@ -1107,11 +1112,19 @@ export class FormView {
             <div class="photo-add">
               <label class="photo-add__btn">
                 <input type="file" accept="image/*" multiple class="sr-only" data-kind="photos" ${attrs(cat)}>
-                ${icon('image', 16)} Arquivo
+                ${icon('image', 16)} ${nativa ? 'Galeria' : 'Arquivo'}
               </label>
-              <button type="button" class="photo-add__btn" data-action="camera" ${attrs(cat)}>
-                ${icon('camera', 16)} Câmera
-              </button>
+              ${nativa
+                // celular / tablet: abre o app de câmera do aparelho (zoom, foco e flash nativos); a foto volta
+                // pelo mesmo caminho do seletor de arquivos (receberFotos → comprimida)
+                ? `<label class="photo-add__btn" data-camera-nativa>
+                    <input type="file" accept="image/*" capture="environment" class="sr-only" data-kind="photos" ${attrs(cat)}>
+                    ${icon('camera', 16)} Câmera
+                  </label>`
+                // computador: câmera dentro do app (webcam)
+                : `<button type="button" class="photo-add__btn" data-action="camera" ${attrs(cat)}>
+                    ${icon('camera', 16)} Câmera
+                  </button>`}
             </div>
           </div>
         </div>`;
