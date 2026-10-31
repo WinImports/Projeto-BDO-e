@@ -2,7 +2,7 @@
 
 import { MODULES, getModule } from './modules/index.js';
 import { openDb, requestPersistence } from './core/db.js';
-import { loadDraft, saveDraft, discardDraft, hasDraft, restoreDraft } from './core/drafts.js';
+import { loadDraft, saveDraft, discardDraft, hasDraft, restoreDraft, trocarTecnicoNosRascunhos } from './core/drafts.js';
 import { enqueue, pendingCount, onOutboxChange, takeBack, saveLocalOnly, sendFromHistory, takeBackLocal, pausarEnvio } from './core/outbox.js';
 import { shareMessage, waUrl, publishReportDocuments, whatsappConfigurado } from './core/share.js';
 import { reportFiles } from './ui/report-pdf.js';
@@ -26,7 +26,7 @@ import { closeRoutePrompt } from './ui/route-prompt.js';
 import { openPreview } from './ui/preview.js';
 import { OutboxView } from './ui/outbox-view.js';
 import { SettingsView } from './ui/settings-view.js';
-import { companyInfo, onSettingsChange, getSettings } from './core/settings.js';
+import { companyInfo, onSettingsChange, getSettings, prepararTecnicoDoUsuario } from './core/settings.js';
 import { toast } from './ui/toast.js';
 import { icon } from './ui/icons.js';
 import { $, $$, esc } from './ui/dom.js';
@@ -685,6 +685,14 @@ function mostrarNovaVersao() {
 
 // ---------- Usuário logado ----------
 
+/** Dados do técnico (nome / matrícula / cargo) de quem entrou; troca nos rascunhos se era outro técnico. */
+async function aplicarTecnicoDoUsuario() {
+  const troca = prepararTecnicoDoUsuario(currentUser());
+  if (troca) {
+    try { await trocarTecnicoNosRascunhos(MODULES, troca.antes, troca.depois); } catch (err) { console.warn('[técnico] rascunhos', err); }
+  }
+}
+
 function renderUser() {
   const el = $('#user-chip');
   const user = currentUser();
@@ -711,6 +719,7 @@ async function signOut() {
   await showLogin();
   if (currentUser()?.trocarSenha) await showTrocaSenha(); // conta nova: senha inicial do gestor
   await limparEquipeDeOutroUsuario(currentUser()?.email);
+  await aplicarTecnicoDoUsuario();
   renderUser();
   await showTab(state.tab);
   syncNow({ pull: true }); // login: baixa o histórico da equipe (últimos 30 dias)
@@ -800,6 +809,7 @@ async function init() {
   // conta criada pelo gestor: troca de senha obrigatória antes de usar o app
   if (currentUser()?.trocarSenha) await showTrocaSenha();
   await limparEquipeDeOutroUsuario(currentUser()?.email);
+  await aplicarTecnicoDoUsuario();
   renderUser();
 
   settingsView = new SettingsView();

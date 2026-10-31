@@ -41,6 +41,37 @@ export async function saveDraft(draft) {
 
 export const discardDraft = (moduleId) => remove(STORES.drafts, moduleId);
 
+/**
+ * Outro técnico entrou neste aparelho: nos rascunhos em andamento, os campos que ainda têm os dados do técnico
+ * anterior (vindos das Configurações: técnico responsável, matrícula, 1ª linha da Equipe…) passam a ter os de
+ * quem entrou. O que foi digitado diferente fica. modules = MODULES (src/modules/index.js).
+ */
+export async function trocarTecnicoNosRascunhos(modules, antes, depois) {
+  if (!antes || !depois) return 0;
+  let trocados = 0;
+  for (const m of modules) {
+    const rec = await get(STORES.drafts, m.id);
+    if (!rec?.data) continue;
+    let mudou = false;
+    for (const s of m.sections || []) {
+      for (const f of s.fields || []) {
+        const v = rec.data[f.id];
+        if (f.settingsKey in antes && antes[f.settingsKey] && v === antes[f.settingsKey]) {
+          rec.data[f.id] = depois[f.settingsKey] || '';
+          mudou = true;
+        }
+        if (f.type === 'table' && Array.isArray(v) && antes.tecnico_nome) {
+          for (const row of v) {
+            if (row && row.nome === antes.tecnico_nome) { row.nome = depois.tecnico_nome || ''; mudou = true; }
+          }
+        }
+      }
+    }
+    if (mudou) { await saveDraft(rec); trocados++; }
+  }
+  return trocados;
+}
+
 export async function hasDraft(moduleId) {
   return Boolean(await get(STORES.drafts, moduleId));
 }

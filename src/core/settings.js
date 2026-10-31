@@ -22,19 +22,94 @@ export const SETTINGS_FIELDS = [
 const listeners = new Set();
 export const onSettingsChange = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 
+// ---------- Dados do técnico POR USUÁRIO LOGADO ----------
+// Nome, matrícula e cargo ("Dados do usuário / técnico") ficam guardados por e-mail de quem entrou neste aparelho:
+// quando outro técnico entra, os relatórios novos saem com os dados DELE (nunca com os do anterior). Na 1ª vez
+// vêm do cadastro da conta (nome / matrícula); a pessoa pode alterar, e o que ela alterar prevalece.
+export const CAMPOS_TECNICO = ['tecnico_nome', 'tecnico_matricula', 'tecnico_cargo'];
+const TECNICOS_KEY = 'bdoe.settings.tecnicos';
+const ULTIMO_KEY = 'bdoe.settings.ultimoTecnico';
+
+const emailLogado = () => {
+  try { return String(JSON.parse(localStorage.getItem('bdoe.auth.session'))?.email || '').toLowerCase(); } catch { return ''; }
+};
+function lerTecnicos() {
+  try { return JSON.parse(localStorage.getItem(TECNICOS_KEY)) || {}; } catch { return {}; }
+}
+const gravarTecnicos = (t) => localStorage.setItem(TECNICOS_KEY, JSON.stringify(t));
+const normTexto = (t) => String(t ?? '').toUpperCase().replace(/[^\p{L}\p{N}]+/gu, '');
+
+/** Dados do técnico de um e-mail (ou null se ainda não há neste aparelho). */
+export function dadosDoTecnico(email = emailLogado()) {
+  const slot = email ? lerTecnicos()[email] : null;
+  return slot ? Object.fromEntries(CAMPOS_TECNICO.map((k) => [k, slot[k] ?? ''])) : null;
+}
+
+/**
+ * Ao entrar: garante os dados do técnico deste usuário. Sem registro ainda → do cadastro da conta (ou dos dados
+ * antigos do aparelho, se eram dele: mesma matrícula ou nome). Nome / matrícula que vieram da conta acompanham
+ * mudanças da conta (ex.: matrícula real no 1º acesso) enquanto a pessoa não os alterar.
+ * Devolve { antes, depois } quando o técnico do aparelho mudou (para trocar nos rascunhos), senão null.
+ */
+export function prepararTecnicoDoUsuario(user) {
+  const email = String(user?.email || '').toLowerCase();
+  if (!email) return null;
+  const tecnicos = lerTecnicos();
+  const contaNome = String(user.nome || '').trim();
+  const contaMat = String(user.matriculaProvisoria ? '' : (user.matricula || '')).trim();
+  let slot = tecnicos[email];
+  if (!slot) {
+    const aparelho = read();
+    // conta sem nome nem matrícula (usuário local deste aparelho): não há como ser de outra pessoa
+    const eraDele = (!contaNome && !contaMat)
+      || (contaMat && normTexto(aparelho.tecnico_matricula) === normTexto(contaMat))
+      || (contaNome && normTexto(aparelho.tecnico_nome) === normTexto(contaNome));
+    slot = eraDele
+      ? { tecnico_nome: aparelho.tecnico_nome || contaNome, tecnico_matricula: aparelho.tecnico_matricula || contaMat, tecnico_cargo: aparelho.tecnico_cargo || '' }
+      : { tecnico_nome: contaNome, tecnico_matricula: contaMat, tecnico_cargo: '' };
+    slot._nomeConta = contaNome;
+    slot._matConta = contaMat;
+  } else {
+    if (contaNome && (!slot.tecnico_nome || slot.tecnico_nome === slot._nomeConta)) slot.tecnico_nome = contaNome;
+    if (contaMat && (!slot.tecnico_matricula || slot.tecnico_matricula === slot._matConta)) slot.tecnico_matricula = contaMat;
+    if (contaNome) slot._nomeConta = contaNome;
+    if (contaMat) slot._matConta = contaMat;
+  }
+  tecnicos[email] = slot;
+  gravarTecnicos(tecnicos);
+  const anterior = localStorage.getItem(ULTIMO_KEY) || '';
+  localStorage.setItem(ULTIMO_KEY, email);
+  listeners.forEach((fn) => fn(getSettings()));
+  if (!anterior || anterior === email) return null;
+  const antes = dadosDoTecnico(anterior);
+  return antes ? { antes, depois: dadosDoTecnico(email) } : null;
+}
+
 function read() {
   try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; }
 }
 
 export function getSettings() {
   const raw = read();
-  return Object.fromEntries([...SETTINGS_FIELDS, 'updatedAt', 'syncPending', 'syncedAt'].map((k) => [k, raw[k] ?? '']));
+  const proprios = dadosDoTecnico(); // técnico logado: os dados dele, não os do aparelho
+  return Object.fromEntries([...SETTINGS_FIELDS, 'updatedAt', 'syncPending', 'syncedAt'].map((k) => [k, (proprios && k in proprios ? proprios[k] : raw[k]) ?? '']));
 }
 
 /** Grava localmente (imediato) e marca para envio ao Supabase. */
 export function saveSettings(values) {
   const next = { ...read() };
-  for (const k of SETTINGS_FIELDS) next[k] = (values[k] ?? '').toString().trim();
+  const email = emailLogado();
+  if (email) {
+    const tecnicos = lerTecnicos();
+    const slot = { ...(tecnicos[email] || {}) };
+    for (const k of CAMPOS_TECNICO) slot[k] = (values[k] ?? '').toString().trim();
+    tecnicos[email] = slot;
+    gravarTecnicos(tecnicos);
+  }
+  for (const k of SETTINGS_FIELDS) {
+    if (email && CAMPOS_TECNICO.includes(k)) continue; // ficam no registro do técnico logado
+    next[k] = (values[k] ?? '').toString().trim();
+  }
   next.whatsapp_padrao = sanitizarWhatsApp(next.whatsapp_padrao); // ex.: (71) 99961-2118 → 5571999612118
   next.updatedAt = new Date().toISOString();
   next.syncPending = true;
@@ -119,7 +194,18 @@ export async function pullSettings(client) {
   if (cur.syncPending) return false; // a alteração deste aparelho vai primeiro
   if (cur.updatedAt && new Date(cur.updatedAt) >= new Date(remoto.updated_at)) return false;
   const next = { ...cur };
-  for (const k of SETTINGS_FIELDS) next[k] = (remoto.settings[k] ?? '').toString();
+  const email = emailLogado();
+  for (const k of SETTINGS_FIELDS) {
+    if (email && CAMPOS_TECNICO.includes(k)) continue;
+    next[k] = (remoto.settings[k] ?? '').toString();
+  }
+  if (email) { // a cópia do servidor é deste mesmo técnico (my_company_settings): vai para o registro dele
+    const tecnicos = lerTecnicos();
+    const slot = { ...(tecnicos[email] || {}) };
+    for (const k of CAMPOS_TECNICO) if (remoto.settings[k]) slot[k] = String(remoto.settings[k]);
+    tecnicos[email] = slot;
+    gravarTecnicos(tecnicos);
+  }
   next.whatsapp_padrao = sanitizarWhatsApp(next.whatsapp_padrao);
   next.updatedAt = new Date(remoto.updated_at).toISOString();
   next.syncPending = false;

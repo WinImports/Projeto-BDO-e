@@ -403,6 +403,43 @@ test('base de poços da equipe: técnico não importa nem limpa e recebe a base 
   expect(await page.evaluate(() => window.__sb.basePocos)).toBeNull();
 });
 
+test('dados do técnico por usuário: outro técnico no mesmo aparelho não usa nome/matrícula do anterior (nem nos rascunhos)', async () => {
+  const { page } = ctx;
+  const usuarios = {
+    'ana@empresa.com': { senha: 'senha-certa', meta: { nome: 'Ana Souza', matricula: 'T-101' } },
+    'beto@empresa.com': { senha: 'senha-certa', meta: { nome: 'Beto Lima', matricula: 'T-202' } }
+  };
+  await supabaseFalso(page, { usuarios, matriculas: {}, acesso: { contratos: [{ ...CONTRATO, role: 'tecnico' }] }, equipe: { membros: [] }, busca: [] });
+  await configurarServidor(page);
+  await sair(page);
+
+  await digitarLogin(page, 'ana@empresa.com', 'senha-certa');
+  await aguardarEntrada(page);
+  await openTab(page, 'settings');
+  await expect(page.locator('#s-tecnico_nome')).toHaveValue('Ana Souza');
+  await expect(page.locator('#s-tecnico_matricula')).toHaveValue('T-101');
+  await openTab(page, 'bdo');
+  await expect(page.locator('[data-field=tecnico]')).toHaveValue('Ana Souza');
+  await expect(page.locator('[data-field=matricula]')).toHaveValue('T-101');
+  await page.waitForTimeout(800); // rascunho salvo (o "Sair" também grava)
+
+  await sair(page);
+  await digitarLogin(page, 'beto@empresa.com', 'senha-certa');
+  await aguardarEntrada(page);
+  await openTab(page, 'bdo');
+  await expect(page.locator('[data-field=tecnico]')).toHaveValue('Beto Lima');
+  await expect(page.locator('[data-field=matricula]')).toHaveValue('T-202');
+  await openTab(page, 'settings');
+  await expect(page.locator('#s-tecnico_nome')).toHaveValue('Beto Lima');
+
+  // Ana volta: os dados dela continuam os dela
+  await sair(page);
+  await digitarLogin(page, 'ana@empresa.com', 'senha-certa');
+  await aguardarEntrada(page);
+  await openTab(page, 'settings');
+  await expect(page.locator('#s-tecnico_nome')).toHaveValue('Ana Souza');
+});
+
 test('histórico sem limite: busca no servidor todo o acervo do contrato (anos atrás), em páginas, e abre a prévia', async () => {
   const { page } = ctx;
   const agora = Date.now();

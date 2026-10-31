@@ -60,9 +60,9 @@ const GROUPS = [
   {
     title: 'Dados do usuário / técnico',
     icon: 'user',
-    hint: 'Preenchem o técnico responsável e a matrícula nos relatórios novos.',
+    hint: 'Seus dados (de quem entrou neste aparelho): preenchem o técnico responsável e a matrícula nos relatórios novos. Outro técnico que entrar aqui usa os dados dele. Você pode alterar.',
     fields: [
-      { id: 'tecnico_nome', label: 'Nome do técnico padrão', placeholder: 'Ex.: ANDERSON SOUZA' },
+      { id: 'tecnico_nome', label: 'Nome do técnico', placeholder: 'Ex.: ANDERSON SOUZA' },
       { id: 'tecnico_matricula', label: 'Matrícula / Chave', placeholder: 'Ex.: 30882' },
       { id: 'tecnico_cargo', label: 'Cargo', placeholder: 'Ex.: Técnico / Encarregado de Campo' }
     ]
