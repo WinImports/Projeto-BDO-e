@@ -54,6 +54,10 @@ async function supabaseFalso(page, cfg) {
           if (sb.erroInvoke) {
             return { data: null, error: { name: 'FunctionsHttpError', message: 'Edge Function returned a non-2xx status code', context: new Response(JSON.stringify({ ok: false, erro: sb.erroInvoke })) } };
           }
+          if (name === 'reset-technician-password') {
+            const m = sb.equipe.membros.find((x) => x.id === body.member_id);
+            return { data: { ok: true, senha: 'Prov-1234-Abcd', nome: m.nome, email: m.email, matricula: m.matricula }, error: null };
+          }
           sb.equipe.membros.push({ id: `m-${sb.equipe.membros.length + 1}`, nome: body.name, email: body.email, matricula: body.matricula, role: 'tecnico', ativo: true });
           return { data: { ok: true, conta_criada: true, equipe: comCota() }, error: null };
         }
@@ -240,6 +244,49 @@ test('Gestão de Equipe: cota "X de Y liberados", cadastro pela Edge Function, l
   await page.locator('#eq-cadastrar').click();
   await expect(page.locator('#toasts')).toContainText('Matrícula T-777 já está cadastrada para outra pessoa.');
   await expect(page.locator('#eq-nome')).toHaveValue('João Souza');
+});
+
+test('Gestão de Equipe › Nova senha: o gestor gera senha provisória para um técnico ativo (gestor e desativado não têm o botão)', async () => {
+  const { page } = ctx;
+  await supabaseFalso(page, {
+    usuarios: { 'gestor@empresa.com': { senha: 'senha-certa', meta: { nome: 'Gestor' } } }, matriculas: {},
+    acesso: { contratos: [{ ...CONTRATO, role: 'gestor' }] }, busca: [],
+    equipe: { contrato_id: CONTRATO.id, contrato: 'OS-Mans', max_technicians: 3, membros: [
+      { id: 'm-g', nome: 'Gestor', email: 'gestor@empresa.com', matricula: 'G-1', role: 'gestor', ativo: true },
+      { id: 'm-1', nome: 'Técnico Um', email: 'um@empresa.com', matricula: 'T-001', role: 'tecnico', ativo: true },
+      { id: 'm-2', nome: 'Técnico Dois', email: 'dois@empresa.com', matricula: 'T-002', role: 'tecnico', ativo: false }
+    ] }
+  });
+  await configurarServidor(page);
+  await sair(page);
+  await digitarLogin(page, 'gestor@empresa.com', 'senha-certa');
+  await page.locator('#tabs [data-tab=equipe]').waitFor();
+  await openTab(page, 'equipe');
+
+  await expect(page.locator('[data-membro=m-g] [data-action=nova-senha]')).toHaveCount(0);
+  await expect(page.locator('[data-membro=m-2] [data-action=nova-senha]')).toHaveCount(0);
+
+  // cancelar não chama o servidor
+  await page.locator('[data-membro=m-1] [data-action=nova-senha]').click();
+  await expect(page.locator('dialog.modal--confirm[open]')).toContainText('A senha atual de Técnico Um deixa de valer');
+  await page.locator('dialog.modal--confirm[open] [data-cancel]').click();
+  expect(await page.evaluate(() => window.__sb.invocacoes)).toEqual([]);
+
+  await page.locator('[data-membro=m-1] [data-action=nova-senha]').click();
+  await page.locator('dialog.modal--confirm[open] [data-ok]').click();
+  const janela = page.locator('dialog[data-senha-provisoria][open]');
+  await expect(janela.locator('[data-senha]')).toHaveText('Prov-1234-Abcd');
+  await expect(janela).toContainText('Matrícula: T-001 (ou e-mail: um@empresa.com)');
+  expect(await page.evaluate(() => window.__sb.invocacoes)).toEqual([{ name: 'reset-technician-password', body: { member_id: 'm-1' } }]);
+  await janela.locator('[data-ok]').click();
+  await expect(page.locator('dialog[data-senha-provisoria]')).toHaveCount(0);
+
+  // recusa do servidor: a mensagem aparece
+  await page.evaluate(() => { window.__sb.erroInvoke = 'Este técnico também tem acesso a outro contrato. Peça ao Master da licença para redefinir a senha.'; });
+  await page.locator('[data-membro=m-1] [data-action=nova-senha]').click();
+  await page.locator('dialog.modal--confirm[open] [data-ok]').click();
+  await expect(page.locator('#toasts')).toContainText('Peça ao Master da licença para redefinir a senha.');
+  await expect(page.locator('dialog[data-senha-provisoria]')).toHaveCount(0);
 });
 
 test('histórico sem limite: busca no servidor todo o acervo do contrato (anos atrás), em páginas, e abre a prévia', async () => {

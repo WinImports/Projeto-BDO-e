@@ -99,7 +99,7 @@ const DenoGlobal = globalThis['Deno'];
 if (DenoGlobal?.serve) {
   const { createClient } = await import('npm:@supabase/supabase-js@2');
   const url = DenoGlobal.env.get('SUPABASE_URL');
-  const anon = DenoGlobal.env.get('SUPABASE_ANON_KEY');
+  const anon = DenoGlobal.env.get('SUPABASE_ANON_KEY') || DenoGlobal.env.get('SUPABASE_SERVICE_ROLE_KEY');
   const servico = DenoGlobal.env.get('SUPABASE_SERVICE_ROLE_KEY');
   const semSessao = { auth: { persistSession: false, autoRefreshToken: false } };
   const admin = createClient(url, servico, semSessao);

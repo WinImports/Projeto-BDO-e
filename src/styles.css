@@ -1353,3 +1353,19 @@ input[data-expand] { cursor: text; text-overflow: ellipsis; }
 .update-banner__msg { flex: 1; font-size: .9rem; line-height: 1.35; }
 .update-banner__close { display: flex; padding: 8px; border: 0; background: none; color: var(--text-muted); cursor: pointer; border-radius: 8px; }
 @media (pointer: coarse), (max-width: 640px) { .update-banner .btn { min-height: 44px; } .update-banner__close { min-width: 44px; min-height: 44px; justify-content: center; align-items: center; } }
+
+/* Gestão de Equipe › Nova senha (senha provisória gerada para o técnico) */
+.equipe-acoes { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.senha-provisoria {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.35rem;
+  letter-spacing: 1px;
+  text-align: center;
+  user-select: all;
+  word-break: break-all;
+}

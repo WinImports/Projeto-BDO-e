@@ -4,6 +4,8 @@
 // cota, migração 001): esconder a aba é só interface. Precisa de internet.
 // Também a EMPRESA DO CONTRATO (migração 003, team_set_company): nome, CNPJ e logo que saem no cabeçalho dos
 // relatórios de todos do contrato — cada contrato tem a sua.
+// "Nova senha" (Edge Function reset-technician-password, migração 008): o gestor gera uma senha provisória para
+// um técnico ativo que esqueceu a senha; no próximo acesso o técnico cria uma senha própria.
 import { icon } from './icons.js';
 import { $, esc } from './dom.js';
 import { toast } from './toast.js';
@@ -18,7 +20,7 @@ import { SENHA_MIN } from '../core/auth.js';
 export const AVISO_COTA = 'Limite de técnicos liberados atingido. Entre em contato com o Master para ampliar a licença.';
 
 /** Mensagem de erro do servidor (as funções do banco e a Edge Function já respondem em português). */
-async function mensagemDe(err) {
+async function mensagemDe(err, funcao = 'create-technician') {
   try {
     const corpo = await err?.context?.json?.(); // FunctionsHttpError: corpo da resposta da Edge Function
     if (corpo?.erro) return corpo.erro;
@@ -27,7 +29,7 @@ async function mensagemDe(err) {
     return 'Sem conexão com o servidor. Tente de novo com internet.';
   }
   if (err?.name === 'FunctionsRelayError' || /not found|404/i.test(err?.message || '')) {
-    return 'Cadastro indisponível: a função create-technician ainda não foi publicada no Supabase.';
+    return `Função indisponível: ${funcao} ainda não foi publicada no servidor.`;
   }
   return err?.message || 'Não foi possível concluir.';
 }
@@ -40,6 +42,43 @@ export function gerarSenha(tamanho = 10) {
 }
 
 const FUNCAO = { gestor: 'Gestor', tecnico: 'Técnico' };
+
+/** Janela com a senha provisória e um botão para copiar a mensagem pronta para o técnico. */
+export function mostrarSenhaProvisoria({ nome = '', email = '', matricula = '', senha = '' } = {}) {
+  const acesso = matricula ? `Matrícula: ${matricula} (ou e-mail: ${email})` : `E-mail: ${email}`;
+  const mensagem = `Nova senha do BDO-e para ${nome || email}\n${acesso}\nSenha provisória: ${senha}\n\nNo próximo acesso o app pede para você criar uma senha própria.`;
+  return new Promise((resolve) => {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'modal modal--confirm modal--info';
+    dialog.dataset.senhaProvisoria = '';
+    dialog.innerHTML = `
+      <div class="confirm">
+        <span class="confirm__icon confirm__icon--info">${icon('key', 22)}</span>
+        <div class="confirm__text">
+          <h2 class="confirm__title">Senha provisória gerada</h2>
+          <p class="confirm__message">Passe ao técnico <strong>${esc(nome || email)}</strong>. Ela só aparece agora.</p>
+          <p class="muted small">${esc(acesso)}</p>
+          <p class="senha-provisoria" data-senha>${esc(senha)}</p>
+          <p class="muted small">No próximo acesso o app pede para ele criar uma senha própria.</p>
+        </div>
+      </div>
+      <div class="modal__footer">
+        <button type="button" class="btn btn--ghost" data-copiar>${icon('copy', 16)} Copiar mensagem</button>
+        <button type="button" class="btn btn--primary" data-ok>Fechar</button>
+      </div>`;
+    dialog.addEventListener('click', async (e) => {
+      if (e.target.closest('[data-copiar]')) {
+        try { await navigator.clipboard.writeText(mensagem); toast('Mensagem copiada.', 'success'); }
+        catch { toast('Não foi possível copiar. Anote a senha mostrada na tela.', 'warn'); }
+      }
+      if (e.target.closest('[data-ok]')) dialog.close();
+    });
+    dialog.addEventListener('close', () => { dialog.remove(); resolve(); });
+    document.body.appendChild(dialog);
+    dialog.showModal();
+    $('[data-ok]', dialog).focus();
+  });
+}
 
 export class EquipeView {
   constructor() {
@@ -197,7 +236,9 @@ export class EquipeView {
                 <td>${esc(m.email)}</td>
                 <td>${esc(FUNCAO[m.role] || m.role)}</td>
                 <td><span class="status status--${m.ativo ? 'sent' : 'error'}" data-membro-status>${m.ativo ? 'Ativo' : 'Desativado'}</span></td>
-                <td>${m.role === 'tecnico' ? `<button type="button" class="btn btn--ghost btn--sm" data-action="${m.ativo ? 'desativar' : 'ativar'}" data-id="${esc(m.id)}"${this.podeUsar() ? '' : ' disabled'}>${m.ativo ? 'Desativar' : 'Ativar'}</button>` : ''}</td>
+                <td>${m.role === 'tecnico' ? `<div class="equipe-acoes">
+                  ${m.ativo ? `<button type="button" class="btn btn--ghost btn--sm" data-action="nova-senha" data-id="${esc(m.id)}"${this.podeUsar() ? '' : ' disabled'}>${icon('key', 15)} Nova senha</button>` : ''}
+                  <button type="button" class="btn btn--ghost btn--sm" data-action="${m.ativo ? 'desativar' : 'ativar'}" data-id="${esc(m.id)}"${this.podeUsar() ? '' : ' disabled'}>${m.ativo ? 'Desativar' : 'Ativar'}</button></div>` : ''}</td>
               </tr>`).join('')}</tbody>
           </table></div>` : `<p class="muted">${this.carregando ? 'Carregando…' : 'Nenhum membro cadastrado.'}</p>`}
       </section>`;
@@ -353,6 +394,28 @@ export class EquipeView {
     }
   }
 
+  /** Gera uma senha provisória para o técnico (ele cria uma senha própria no próximo acesso). */
+  async novaSenha(id, botao) {
+    const m = (this.equipe?.membros || []).find((x) => x.id === id);
+    if (!m) return;
+    const ok = await confirmDialog({
+      title: 'Gerar nova senha?',
+      message: `A senha atual de ${m.nome || m.email} deixa de valer. Ele entra com a senha provisória e, no próximo acesso, cria uma senha própria.`,
+      confirmLabel: 'Gerar nova senha', iconName: 'key'
+    });
+    if (!ok) return;
+    if (botao) botao.disabled = true;
+    try {
+      const { data, error } = await getClient().functions.invoke('reset-technician-password', { body: { member_id: id } });
+      if (error) throw error;
+      await mostrarSenhaProvisoria(data);
+    } catch (err) {
+      toast(await mensagemDe(err, 'reset-technician-password'), 'error', 8000);
+    } finally {
+      if (botao) botao.disabled = false;
+    }
+  }
+
   handleClick(e) {
     const b = e.target.closest('[data-action]');
     if (!b) return;
@@ -364,5 +427,6 @@ export class EquipeView {
     if (b.dataset.action === 'remover-logo-empresa') { this.empresaAtual().logo = ''; this.atualizarLogoNaTela(); }
     if (b.dataset.action === 'desativar') this.alterarAcesso(b.dataset.id, false);
     if (b.dataset.action === 'ativar') this.alterarAcesso(b.dataset.id, true);
+    if (b.dataset.action === 'nova-senha') this.novaSenha(b.dataset.id, b);
   }
 }
