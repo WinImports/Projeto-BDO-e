@@ -17,6 +17,7 @@ import handover from '../modules/handover.js';
 import { podeGerirBase, contaNoServidor, enviarBaseEquipe, apagarBaseEquipe, onBaseEquipeChange } from '../core/base-equipe.js';
 import { getClient } from '../core/supabase.js';
 import { getPref, setPref } from '../core/prefs.js';
+import { VALVULAS_CABECA, VALVULAS_EXTRAS, TODOS_FLANGES, limparNomes } from '../modules/common.js';
 
 const ORIGEM_SERVIDOR = {
   aparelho: 'Configurado neste aparelho',
@@ -165,6 +166,7 @@ export class SettingsView {
           </section>`).join('')}
       </form>
       ${this.objetivosSectionHtml()}
+      ${this.nomesSectionHtml()}
       ${/* servidor (URL e chave): só sem conta no servidor (1ª configuração / usuário local); quem entrou com
          conta não vê nem altera — a conexão vem da publicação do site / instalação */ ''}
       ${contaNoServidor() ? '' : `<details class="card advanced" id="servidor-avancado">
@@ -350,6 +352,72 @@ export class SettingsView {
             </div>`).join('')}
         </div>
       </section>`;
+  }
+
+  // ---------- Nomes das válvulas e flanges (só o gestor) ----------
+
+  /** Gestor: renomeia válvulas e flanges para toda a equipe do contrato (migração 011). Em branco = nome do app. */
+  nomesSectionHtml() {
+    if (!podeGerirBase()) return '';
+    const comServidor = contaNoServidor();
+    const geridos = comServidor ? contratosGeridos() : [];
+    const doContrato = geridos.length ? (empresasDosContratos().find((e) => e.id === geridos[0].id) || {}) : null;
+    const nomes = limparNomes(doContrato ? doContrato.nomes_componentes : getSettings().nomes_componentes);
+    const grupos = [
+      ['Válvulas da cabeça de poço', VALVULAS_CABECA],
+      ['Válvulas adicionais (VL / VM)', VALVULAS_EXTRAS],
+      ['Flanges', TODOS_FLANGES]
+    ];
+    const hint = comServidor
+      ? `Vale para toda a equipe do contrato${geridos.length > 1 ? 's' : ''} ${esc(geridos.map((c) => c.nome).join(', '))}: o formulário, o Quadro de Ações, o PDF e o Word usam estes nomes. Em branco = nome padrão do app.`
+      : 'O formulário, o Quadro de Ações, o PDF e o Word usam estes nomes. Em branco = nome padrão do app.';
+    return `
+      <section class="card form-section" id="nomes-section" data-nomes>
+        <header class="form-section__head">
+          <span class="form-section__icon">${icon('wrench', 20)}</span>
+          <div class="form-section__titles">
+            <h3 class="form-section__title">Nomes das válvulas e flanges (gestor)</h3>
+            <p class="form-section__hint">${hint}</p>
+          </div>
+        </header>
+        <div class="form-grid">
+        ${grupos.map(([titulo, lista]) => `
+          <div class="field-divider span-12"><span>${esc(titulo)}</span></div>
+          <div class="nomes-comp span-12">
+            ${lista.map((c) => `
+              <div class="nomes-comp__linha" data-wrap="nome_${c.p}">
+                <span class="nomes-comp__padrao">${esc(c.nome)}</span>
+                <label class="nomes-comp__campo"><span class="field__label">Nome curto</span>
+                  <input type="text" maxlength="80" data-nome-comp="${c.p}" data-nome-parte="short" placeholder="${esc(c.short)}" value="${esc(nomes[c.p]?.short || '')}"></label>
+                <label class="nomes-comp__campo"><span class="field__label">Nome completo</span>
+                  <input type="text" maxlength="80" data-nome-comp="${c.p}" data-nome-parte="nome" placeholder="${esc(c.nome)}" value="${esc(nomes[c.p]?.nome || '')}"></label>
+              </div>`).join('')}
+          </div>`).join('')}
+        </div>
+      </section>`;
+  }
+
+  nomesDaTela() {
+    const obj = {};
+    for (const i of $$('[data-nome-comp]', this.root)) (obj[i.dataset.nomeComp] ||= {})[i.dataset.nomeParte] = i.value;
+    return limparNomes(obj);
+  }
+
+  /** Gestor com conta: grava os nomes em todos os contratos que ele gere (a equipe recebe no sincronismo). */
+  async salvarNomesNoServidor(nomes) {
+    const geridos = contratosGeridos();
+    if (!contaNoServidor() || !geridos.length) return;
+    try {
+      if (!navigator.onLine) throw new Error('Sem internet.');
+      for (const c of geridos) {
+        const { data, error } = await getClient().rpc('team_set_nomes', { p_contrato_id: c.id, p_nomes: nomes });
+        if (error) throw new Error(/PGRST202|team_set_nomes/i.test(`${error.code} ${error.message}`) ? 'o servidor ainda não tem a migração 011.' : error.message);
+        guardarEmpresaDoContrato({ id: data.id, nome: data.nome, nomes_componentes: data.nomes_componentes || {} });
+      }
+      toast('Nomes das válvulas e flanges enviados para a equipe.', 'success');
+    } catch (err) {
+      toast(`Nomes não enviados para a equipe: ${err.message || err} Salve de novo com internet.`, 'warn', 8000);
+    }
   }
 
   /** Gestor com conta: grava os objetivos em todos os contratos que ele gere (a equipe recebe no sincronismo). */
@@ -569,6 +637,7 @@ export class SettingsView {
       t.value = formatCnpj(t.value);
       if (document.activeElement === t && pos === t.value.length) t.setSelectionRange(pos, pos);
     }
+    if (t.dataset.nomeComp) this.dirty = true;
     if (t.dataset.setting) {
       this.dirty = true;
       this.clearError(t.dataset.setting);
@@ -627,6 +696,8 @@ export class SettingsView {
 
   save() {
     const values = Object.fromEntries($$('[data-setting]', this.root).map((i) => [i.dataset.setting, i.value]));
+    const nomesNaTela = $('[data-nomes]', this.root) ? this.nomesDaTela() : null;
+    values.nomes_componentes = JSON.stringify(nomesNaTela || limparNomes(getSettings().nomes_componentes));
     values.empresa_logo = this.logo || '';
     const errors = [];
     if (!('empresa_nome' in values)) {
@@ -651,6 +722,7 @@ export class SettingsView {
     this.refreshStatus();
     toast('Configurações salvas. Relatórios novos já usarão esses dados.', 'success');
     if ('objetivo_visita' in values && souGestor()) this.salvarObjetivosNoServidor(values);
+    if (nomesNaTela && souGestor()) this.salvarNomesNoServidor(nomesNaTela);
     this.onSaved?.();
   }
 

@@ -3,7 +3,7 @@
 // componente com o SEU bloco de fotos → outras fotos → recomendações e assinatura.
 import {
   pocoHerdado, herancaBdo, pressoes, coordenadas, fotosDe, paragrafoAbertura, equipe, PRIORIDADES, TURNOS,
-  FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, VALVULAS_EXTRAS, TODAS_VALVULAS, blocoValvulasExtras, FLANGES, TODOS_FLANGES, tituloAdicional,
+  FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, VALVULAS_EXTRAS, TODAS_VALVULAS, blocoValvulasExtras, FLANGES, TODOS_FLANGES, nomeDe, tituloAdicional,
   ESTANQUEIDADE, ABERTURA, CORROSAO
 } from './common.js';
 import { MODELOS, PRESSOES, NOTA_TORQUE } from '../core/flange.js';
@@ -61,7 +61,7 @@ export function acoesAutomaticas(d) {
     const est = d[`${v.p}_estanqueidade`];
     const ab = d[`${v.p}_abertura`];
     out.push({
-      _auto: v.p, acao: `${v.short}: ${acaoValvula(est, ab)}`,
+      _auto: v.p, acao: `${nomeDe(v, d).short}: ${acaoValvula(est, ab)}`,
       detalhe: diagnostico([['Estanqueidade', est], ['Abertura / fechamento', ab], ['Necessita intervenção', 'Sim']])
     });
   }
@@ -69,7 +69,7 @@ export function acoesAutomaticas(d) {
     if (d[`${fl.p}_intervencao`] !== 'Sim') continue;
     const cor = d[`${fl.p}_corrosao`];
     out.push({
-      _auto: fl.p, acao: `${fl.short}: ${acaoFlange(cor)}`,
+      _auto: fl.p, acao: `${nomeDe(fl, d).short}: ${acaoFlange(cor)}`,
       detalhe: diagnostico([['Corrosão', cor], ['Necessita intervenção', 'Sim']])
     });
   }
@@ -79,6 +79,7 @@ export function acoesAutomaticas(d) {
 const valvula = (v, n) => ({
   title: v.opcional ? tituloAdicional(v) : `${n}. ${v.nome}`,
   opcional: v.opcional ? v.p : undefined,
+  comp: v.p, // nome renomeável pelo gestor (comNomes)
   short: v.short,
   icon: 'gauge',
   hint: 'Deixe em branco se a válvula não existir neste poço.',
@@ -95,6 +96,7 @@ const valvula = (v, n) => ({
 const flange = (fl, n) => ({
   title: fl.opcional ? tituloAdicional(fl) : `${n}. ${fl.nome}`,
   opcional: fl.opcional ? fl.p : undefined,
+  comp: fl.p,
   short: fl.short,
   icon: 'wrench',
   fields: [

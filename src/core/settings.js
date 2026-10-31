@@ -17,7 +17,8 @@ export const SETTINGS_FIELDS = [
   'tecnico_nome', 'tecnico_matricula', 'tecnico_cargo',
   'whatsapp_padrao',
   'locais_personalizados',
-  'objetivo_visita', 'objetivo_execucao' // sem servidor; com servidor o objetivo vem do contrato (migração 010)
+  'objetivo_visita', 'objetivo_execucao', // sem servidor; com servidor o objetivo vem do contrato (migração 010)
+  'nomes_componentes' // JSON { vc: { short, nome } } sem servidor; com servidor vem do contrato (migração 011)
 ];
 
 const listeners = new Set();

@@ -254,3 +254,58 @@ export const equipe = ({ required = true } = {}) => ({
     { id: 'funcao', label: 'Função', type: 'select', options: FUNCOES, aux: true, width: 'medium' }
   ]
 });
+
+// ---------- Nomes das válvulas e flanges definidos pelo gestor ----------
+// O gestor renomeia em Ajustes (por contrato, migração 011; sem servidor, nas Configurações). O relatório guarda os
+// nomes em data._nomes = { vc: { short: 'VC-01', nome: 'VC-01 — Válvula da Coluna' } } (só os alterados) e tudo que
+// mostra o componente (formulário, índice, prévia, PDF, Word, Quadro de Ações, pendências, resumo) usa nomeDe().
+export const COMPONENTES_RENOMEAVEIS = [...TODAS_VALVULAS, ...TODOS_FLANGES];
+const POR_P = new Map(COMPONENTES_RENOMEAVEIS.map((c) => [c.p, c]));
+
+/** Só componentes conhecidos, textos aparados (máx. 80), sem vazios. Aceita objeto ou JSON. */
+export function limparNomes(v) {
+  let o = v;
+  if (typeof o === 'string') { try { o = JSON.parse(o || '{}'); } catch { o = {}; } }
+  const out = {};
+  for (const [p, n] of Object.entries(o && typeof o === 'object' ? o : {})) {
+    if (!POR_P.has(p) || !n || typeof n !== 'object') continue;
+    const short = String(n.short || '').trim().slice(0, 80);
+    const nome = String(n.nome || '').trim().slice(0, 80);
+    if (short || nome) out[p] = { ...(short ? { short } : {}), ...(nome ? { nome } : {}) };
+  }
+  return out;
+}
+
+/** Nome curto e completo do componente neste relatório (sem renomear = os do app). */
+export function nomeDe(c, d) {
+  const n = d?._nomes?.[c.p];
+  const short = n?.short || c.short || c.nome;
+  const nome = n?.nome || (n?.short && c.short ? c.nome.split(c.short).join(n.short) : c.nome);
+  return { short, nome };
+}
+
+const cacheNomes = new WeakMap();
+/** Módulo com os títulos / rótulos dos componentes renomeados (o mesmo objeto quando não há nomes). */
+export function comNomes(module, data) {
+  const nomes = data?._nomes;
+  if (!module || !nomes || !Object.keys(nomes).length) return module;
+  const chave = JSON.stringify(nomes);
+  const c0 = cacheNomes.get(module);
+  if (c0?.chave === chave) return c0.mod;
+  const troca = (txt, de, para) => (typeof txt === 'string' && de && de !== para ? txt.split(de).join(para) : txt);
+  const sections = module.sections.map((s) => {
+    const c = s.comp && POR_P.get(s.comp);
+    if (!c || !nomes[c.p]) return s;
+    const { short, nome } = nomeDe(c, data);
+    return {
+      ...s,
+      title: troca(s.title, c.nome, nome),
+      short: s.short === c.short ? short : s.short,
+      fields: s.fields.map((f) => (f.label?.includes(c.short) || f.pdfLabel?.includes(c.short)
+        ? { ...f, label: troca(f.label, c.short, short), pdfLabel: troca(f.pdfLabel, c.short, short) } : f))
+    };
+  });
+  const mod = { ...module, sections, base: module.base || module };
+  cacheNomes.set(module, { chave, mod });
+  return mod;
+}

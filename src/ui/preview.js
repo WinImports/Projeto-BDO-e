@@ -1,6 +1,7 @@
 // Prévia / conferência do relatório. O mesmo HTML do corpo é usado no PDF (report-pdf.js).
 // Modos: "confirm" (finalizar → caixa de saída), "draft" (conferência do rascunho) e "view" (relatório salvo no histórico).
 
+import { comNomes } from '../modules/common.js';
 import { icon } from './icons.js';
 import { esc, $ } from './dom.js';
 import { displayValue, displayCell, hasContent, emptyOptionalSections, dadosParaRelatorio } from './form.js';
@@ -47,6 +48,7 @@ function fieldHtml(f, data) {
  * Coordenadas GPS não entram no relatório.
  */
 export function reportBodyHtml(module, data, photos, photoSrcs) {
+  module = comNomes(module, data); // nomes das válvulas / flanges definidos pelo gestor
   assignPhotoFields(module, photos);
   data = dadosParaRelatorio(module, data, photos); // campos fixos da seção ("—") e nota do torque
   const srcOf = new Map(photos.map((p, i) => [p, photoSrcs[i]]));
@@ -121,6 +123,7 @@ async function exportarJson({ module, uniqueId, data, photos, createdAt }) {
 export function openPreview({ module, uniqueId, data, photos = [], mode = 'confirm', meta = '', pending = [], onNewReport, onReuse, reuseLabel = 'Editar este relatório', notice = '', createdAt = null }) {
   // Relatório finalizado usa a empresa "congelada" no envio; rascunho usa a atual (a do contrato do relatório)
   const company = data._empresa || companyInfo(data.contrato);
+  module = comNomes(module, data);
   assignPhotoFields(module, photos); // cada foto no bloco do seu componente (antigas → "Outras fotos")
   return new Promise((resolve) => {
     const urls = photos.map((p) => URL.createObjectURL(p.blob));

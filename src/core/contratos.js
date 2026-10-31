@@ -127,7 +127,9 @@ const empresaLimpa = (e) => ({
   empresa_logo: /^data:image\/(png|jpe?g)/i.test(e.empresa_logo || '') ? e.empresa_logo : '',
   atualizada_em: e.atualizada_em || null,
   // migração 010: objetivo dos relatórios definido pelo gestor ('' = texto padrão do app)
-  objetivo_visita: String(e.objetivo_visita || '').trim(), objetivo_execucao: String(e.objetivo_execucao || '').trim()
+  objetivo_visita: String(e.objetivo_visita || '').trim(), objetivo_execucao: String(e.objetivo_execucao || '').trim(),
+  // migração 011: nomes das válvulas / flanges definidos pelo gestor ({ vc: { short, nome } }; {} = os do app)
+  nomes_componentes: e.nomes_componentes && typeof e.nomes_componentes === 'object' && !Array.isArray(e.nomes_componentes) ? e.nomes_componentes : {}
 });
 
 /** Grava a lista de empresas dos contratos do usuário (suportado = o banco tem a migração 003). */
@@ -165,6 +167,17 @@ export function objetivoDoContrato(contrato, tipo) {
   const n = normContrato(contrato);
   const e = n ? empresasDosContratos().find((x) => normContrato(x.nome) === n) : null;
   return e ? String(e[`objetivo_${tipo}`] || '') : '';
+}
+
+/**
+ * Nomes das válvulas / flanges para o contrato escolhido (migração 011): undefined → não vem do contrato
+ * (sem conta no servidor: use o das Configurações); {} → o gestor não renomeou; objeto → os do contrato.
+ */
+export function nomesDoContrato(contrato) {
+  if (!empresaPorContrato()) return undefined;
+  const n = normContrato(contrato);
+  const e = n ? empresasDosContratos().find((x) => normContrato(x.nome) === n) : null;
+  return e?.nomes_componentes || {};
 }
 
 /** Baixa my_contract_companies(). Banco sem a migração 003 → guarda `suportado: false` (vale a das Configurações). */

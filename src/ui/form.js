@@ -17,7 +17,8 @@ import { routeLinks, showRoutePrompt } from './route-prompt.js';
 import { assignPhotoFields, photoFields, photosOf, photoMeta, rotuloFotos, TITULO_EXECUCAO } from '../core/fotos.js';
 import { STORES, get } from '../core/db.js';
 import { getModule } from '../modules/index.js';
-import { meusContratos, valorContrato, objetivoDoContrato } from '../core/contratos.js';
+import { meusContratos, valorContrato, objetivoDoContrato, nomesDoContrato } from '../core/contratos.js';
+import { comNomes, limparNomes } from '../modules/common.js';
 import { podeGerirBase } from '../core/base-equipe.js';
 import { getPref } from '../core/prefs.js';
 import { contratoSelectHtml } from './contrato-campo.js';
@@ -250,6 +251,11 @@ export class FormView {
     // Também em rascunhos antigos: preenche só campos que nunca existiram neles (undefined);
     // o que o técnico apagou fica '' e não é tocado (applyDefaults usa ??=).
     this.applyDefaults();
+    // nomes das válvulas / flanges definidos pelo gestor (data._nomes): títulos e rótulos do formulário
+    this.baseModule = module;
+    this.aplicarNomes();
+    this.module = module = comNomes(module, draft.data);
+    this.fields = new Map(allFields(module).filter((f) => f.id).map((f) => [f.id, f]));
     this.updateAutoTexts();
 
     this.el = document.createElement('form');
@@ -461,6 +467,7 @@ export class FormView {
       if (wrap) wrap.innerHTML = this.fieldInnerHtml(f);
     }
     if (this.aplicarObjetivo()) mudou = true; // contratos / objetivos do gestor podem ter chegado
+    if (this.aplicarNomes()) { this.renomearSecoes(); mudou = true; }
     if (mudou) this.onChange(this.draft);
   }
 
@@ -490,6 +497,35 @@ export class FormView {
       if (automatico) data[`_auto_${f.id}`] = novo;
     }
     return mudou;
+  }
+
+  /**
+   * Nomes das válvulas / flanges (data._nomes): os do contrato, definidos pelo gestor em Ajustes (migração 011);
+   * sem servidor, os das Configurações. Só troca enquanto ainda são os automáticos (data._auto_nomes).
+   */
+  aplicarNomes() {
+    const d = this.draft.data;
+    const doContrato = nomesDoContrato(d.contrato);
+    const novo = JSON.stringify(limparNomes(doContrato === undefined ? getSettings().nomes_componentes : doContrato));
+    const atual = JSON.stringify(d._nomes || {});
+    if (d._auto_nomes !== undefined && d._auto_nomes !== atual) return false;
+    d._auto_nomes = novo;
+    if (novo === atual) return false;
+    if (novo === '{}') delete d._nomes; else d._nomes = JSON.parse(novo);
+    return true;
+  }
+
+  /** Redesenha os blocos dos componentes com os nomes novos (o resto do formulário não é tocado). */
+  renomearSecoes() {
+    const mod = comNomes(this.baseModule, this.draft.data);
+    if (mod === this.module) return;
+    this.module = mod;
+    this.fields = new Map(allFields(mod).filter((f) => f.id).map((f) => [f.id, f]));
+    mod.sections.forEach((sec, i) => {
+      const el = sec.comp ? $(`#sec-${i}`, this.el) : null;
+      if (el) el.outerHTML = this.sectionHtml(sec, i);
+    });
+    this.renumerarSecoes();
   }
 
   applyDefaults() {
@@ -560,7 +596,7 @@ export class FormView {
 
   // ---------- Etapas (seções recolhidas) ----------
 
-  chaveEtapa(section) { return section.opcional || section.short || section.title; }
+  chaveEtapa(section) { return section.opcional || section.comp || section.short || section.title; }
   etapaConcluida(section) { return (this.draft.data._etapas || []).includes(this.chaveEtapa(section)); }
 
   /** Abre a seção i (e fecha a que estava aberta). Sem etapas, só rola até ela. */
@@ -1263,7 +1299,10 @@ export class FormView {
     }
     const campoFlange = this.fields.get(id);
     if (campoFlange?.flangeCampo) this.atualizarFlange(campoFlange.flange);
-    if (campoFlange?.type === 'contrato') this.aplicarObjetivo(); // trocar o contrato troca o objetivo
+    if (campoFlange?.type === 'contrato') {
+      this.aplicarObjetivo(); // trocar o contrato troca o objetivo
+      if (this.aplicarNomes()) this.renomearSecoes(); // ... e os nomes das válvulas / flanges
+    }
     this.changed(id);
   }
 

@@ -2,6 +2,7 @@
 // (cópias locais em src/vendor, carregadas só quando necessário). Mesmo conteúdo da prévia:
 // PDF compacto (sem campos/blocos vazios), fotos no bloco do componente como "Figura N",
 // "Antes x Depois" na Execução, fotos em 2 colunas e cabeçalho só com a identificação (sem GPS).
+import { comNomes } from '../modules/common.js';
 import { displayValue, displayCell, hasContent, dadosParaRelatorio } from './form.js';
 import { fotosParaRelatorio, avisarFotos } from './foto-relatorio.js';
 import { assignPhotoFields, photosOf, temAntes, rotuloFotos, TITULO_EXECUCAO } from '../core/fotos.js';
@@ -283,6 +284,7 @@ export { imageSize, blobToDataUrl, formatOf };
 /** Gera o PDF do relatório e devolve um Blob (application/pdf). */
 export async function buildPdfBlob({ module, uniqueId, data, photos = [], company: empresa, draft = false }) {
   const { jsPDF, autoTable } = await libs();
+  module = comNomes(module, data); // nomes das válvulas / flanges definidos pelo gestor
   const company = empresaDoRelatorio(empresa); // sem empresa configurada: "Empresa Prestadora"
   // todos os relatórios em paisagem (A4 deitado); o BDO-e mantém o layout próprio, também deitado
   if (temLayoutProprio(module)) return buildBdoPdf({ jsPDF, autoTable, txt, formatOf, imageSize }, { uniqueId, data, company, draft });

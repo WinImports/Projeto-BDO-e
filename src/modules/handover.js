@@ -3,7 +3,7 @@
 // "Antes" vêm da última Visita Técnica do poço finalizada neste aparelho (ver consolidação).
 import {
   pocoHerdado, herancaBdo, pressoes, coordenadas, fotosDe, paragrafoAbertura, equipe, duracao, PRIORIDADES,
-  FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, VALVULAS_EXTRAS, TODAS_VALVULAS, blocoValvulasExtras, FLANGES, TODOS_FLANGES, tituloAdicional,
+  FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, VALVULAS_EXTRAS, TODAS_VALVULAS, blocoValvulasExtras, FLANGES, TODOS_FLANGES, nomeDe, tituloAdicional,
   ESTANQUEIDADE, CORROSAO
 } from './common.js';
 
@@ -48,15 +48,15 @@ export function pendenciasAutomaticas(d) {
   for (const v of TODAS_VALVULAS) {
     const sit = d[`${v.p}_situacao`];
     if (sit === 'Sem estanqueidade (vazamento)') {
-      out.push({ _auto: v.p, descricao: `${v.short}: Necessária a substituição da válvula devido à falta de estanqueidade`, recurso: `Válvula para a posição ${v.short}` });
+      out.push({ _auto: v.p, descricao: `${nomeDe(v, d).short}: Necessária a substituição da válvula devido à falta de estanqueidade`, recurso: `Válvula para a posição ${nomeDe(v, d).short}` });
     } else if (sit === 'Não testada') {
-      out.push({ _auto: v.p, descricao: `${v.short}: Necessário realizar o teste de estanqueidade da válvula`, prioridade: 'Média' });
+      out.push({ _auto: v.p, descricao: `${nomeDe(v, d).short}: Necessário realizar o teste de estanqueidade da válvula`, prioridade: 'Média' });
     }
   }
   for (const fl of TODOS_FLANGES) {
     const sit = d[`${fl.p}_situacao`];
     if (sit === 'Corrosão: moderada' || sit === 'Corrosão: severa') {
-      out.push({ _auto: fl.p, descricao: `${fl.short}: Necessária a substituição dos parafusos / prisioneiros devido à corrosão ${sit.split(': ')[1]}`, recurso: 'Parafusos / prisioneiros e porcas' });
+      out.push({ _auto: fl.p, descricao: `${nomeDe(fl, d).short}: Necessária a substituição dos parafusos / prisioneiros devido à corrosão ${sit.split(': ')[1]}`, recurso: 'Parafusos / prisioneiros e porcas' });
     }
   }
   if (d[`${ANTEPOCO.p}_situacao`] === 'Necessita nova limpeza') {
@@ -71,7 +71,7 @@ export function pendenciasAutomaticas(d) {
  */
 export function resumoIntervencoes(d = {}) {
   return [ANTEPOCO, ...TODAS_VALVULAS, ...TODOS_FLANGES]
-    .map((c) => [c.short || c.nome, String(d[`${c.p}_servico`] || '').trim()])
+    .map((c) => [nomeDe(c, d).short, String(d[`${c.p}_servico`] || '').trim()])
     .filter(([, s]) => s)
     .map(([nome, s]) => `${nome}: ${s}`)
     .join('\n');
@@ -88,6 +88,7 @@ export function execucaoDosBdos(d) {
 const componente = ({ p, nome, short, fotos, opcional }, n, situacao) => ({
   title: opcional ? tituloAdicional({ p, nome }) : `${n}. ${nome}`,
   opcional: opcional ? p : undefined,
+  comp: p, // nome renomeável pelo gestor (comNomes; o antipoço não é)
   short: short || nome,
   icon: p.startsWith('flange') ? 'wrench' : p === 'antepoco' ? 'map' : 'gauge',
   fields: [

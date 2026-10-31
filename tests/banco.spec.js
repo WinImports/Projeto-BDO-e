@@ -271,7 +271,7 @@ test('empresa por contrato (migração 003): gestor grava; todos do contrato rec
   const gravar = (q, contrato, nome, cnpj, logo) => como(db, q, () => um(db, 'select public.team_set_company($1, $2, $3, $4) as e', [contrato, nome, cnpj, logo]));
 
   // sem empresa definida: vem vazia (o app mostra "Empresa Prestadora", sem logo)
-  expect(await empresas(tec1)).toEqual([{ id: A, nome: 'OS-Mans', empresa_nome: '', empresa_cnpj: '', empresa_logo: '', atualizada_em: null, objetivo_visita: '', objetivo_execucao: '' }]);
+  expect(await empresas(tec1)).toEqual([{ id: A, nome: 'OS-Mans', empresa_nome: '', empresa_cnpj: '', empresa_logo: '', atualizada_em: null, objetivo_visita: '', objetivo_execucao: '', nomes_componentes: {} }]);
 
   const r = await gravar(gestorA, A, ' Empresa A ', '12.345.678/0001-95', LOGO_PNG);
   expect(r.e).toMatchObject({ id: A, empresa_nome: 'Empresa A', empresa_logo: LOGO_PNG });

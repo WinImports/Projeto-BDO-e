@@ -3,6 +3,7 @@
 // rodapé ("Página X de Y") e as imagens. Mesmo conteúdo do PDF: quadro de identificação no topo
 // (sem coordenadas GPS), seções só com dados, fotos lado a lado em 2 colunas (~48% cada) com
 // "Figura N — legenda", Antes x Depois na Execução e a imagem da assinatura no bloco final.
+import { comNomes } from '../modules/common.js';
 import { displayValue, displayCell, hasContent, dadosParaRelatorio } from './form.js';
 import { fotoParaRelatorio, avisarFotos } from './foto-relatorio.js';
 import { assignPhotoFields, photosOf, temAntes, rotuloFotos, TITULO_EXECUCAO } from '../core/fotos.js';
@@ -330,6 +331,7 @@ const STYLES = `${XML_DECL}<w:styles xmlns:w="http://schemas.openxmlformats.org/
 /** Gera o .docx do relatório (Blob). Mesmos argumentos de buildPdfBlob. */
 export async function buildDocxBlob({ module, uniqueId, data, photos = [], company: empresa, draft = false }) {
   const company = empresaDoRelatorio(empresa); // sem empresa configurada: "Empresa Prestadora"
+  module = comNomes(module, data); // nomes das válvulas / flanges definidos pelo gestor
   assignPhotoFields(module, photos);
   data = dadosParaRelatorio(module, data, photos); // campos fixos da seção ("—") e nota do torque
   const doc = new DocxBuilder();

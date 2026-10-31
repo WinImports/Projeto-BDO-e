@@ -1401,3 +1401,14 @@ input[data-expand] { cursor: text; text-overflow: ellipsis; }
 @media (pointer: coarse), (max-width: 640px) {
   .etapa__acoes .btn { width: 100%; justify-content: center; min-height: 48px; }
 }
+
+/* Ajustes › Nomes das válvulas e flanges (gestor) */
+.nomes-comp { display: grid; gap: 10px; margin-bottom: 14px; }
+.nomes-comp__linha { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 1.4fr); gap: 10px; align-items: end; }
+.nomes-comp__padrao { font-weight: 600; color: var(--text-muted, inherit); align-self: center; }
+.nomes-comp__campo { display: grid; gap: 4px; min-width: 0; }
+.nomes-comp__campo input { width: 100%; }
+@media (max-width: 640px) {
+  .nomes-comp__linha { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding-bottom: 10px; border-bottom: 1px solid var(--border, rgba(0,0,0,.08)); }
+  .nomes-comp__padrao { grid-column: 1 / -1; }
+}
