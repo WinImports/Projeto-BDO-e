@@ -148,7 +148,6 @@ test.describe('prévia, PDF, finalizar e editar', () => {
     await expect(page.locator('[data-field=vc_estanqueidade]')).toHaveValue('Sem estanqueidade (vazamento)');
     await expect(page.locator('#outbox-badge')).toBeHidden();
 
-    await fill(page, 'objetivo', 'Reavaliar a VC');
     await page.locator('#btn-finalize').click();
     await page.locator('dialog.modal[open] [data-confirm]').click();
     await expect(page.locator('#outbox-badge')).toHaveText('1');

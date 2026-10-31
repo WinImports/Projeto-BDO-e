@@ -11,7 +11,9 @@ import { supabaseConfig, saveSupabaseOverride, urlSupabaseValida } from '../conf
 import { resetClient } from '../core/supabase.js';
 import { contratoSelectHtml } from './contrato-campo.js';
 import { LOGO_MAX, resizeLogo } from './logo.js';
-import { empresaPorContrato, empresasDosContratos, souGestor } from '../core/contratos.js';
+import { empresaPorContrato, empresasDosContratos, souGestor, contratosGeridos, guardarEmpresaDoContrato } from '../core/contratos.js';
+import visitaTecnica from '../modules/visita-tecnica.js';
+import handover from '../modules/handover.js';
 import { podeGerirBase, contaNoServidor, enviarBaseEquipe, apagarBaseEquipe, onBaseEquipeChange } from '../core/base-equipe.js';
 import { getClient } from '../core/supabase.js';
 
@@ -148,6 +150,7 @@ export class SettingsView {
             </div>
           </section>`).join('')}
       </form>
+      ${this.objetivosSectionHtml()}
       ${/* servidor (URL e chave): só sem conta no servidor (1ª configuração / usuário local); quem entrou com
          conta não vê nem altera — a conexão vem da publicação do site / instalação */ ''}
       ${contaNoServidor() ? '' : `<details class="card advanced" id="servidor-avancado">
@@ -296,6 +299,62 @@ export class SettingsView {
     resetClient();
     this.refreshServer();
     this.onServerChanged?.();
+  }
+
+  // ---------- Objetivos dos relatórios (só o gestor) ----------
+
+  /** Objetivo de cada relatório, por contrato (migração 010). Técnico com conta não vê esta seção. */
+  objetivosSectionHtml() {
+    if (!podeGerirBase()) return '';
+    const comServidor = contaNoServidor();
+    const geridos = comServidor ? contratosGeridos() : [];
+    const doContrato = geridos.length ? (empresasDosContratos().find((e) => e.id === geridos[0].id) || {}) : null;
+    const s = getSettings();
+    const valor = (tipo) => (doContrato ? doContrato[`objetivo_${tipo}`] : s[`objetivo_${tipo}`]) || '';
+    const padrao = (m) => m.sections.flatMap((x) => x.fields).find((f) => f.objetivoTipo)?.defaultValue || '';
+    const campos = [
+      { tipo: 'visita', label: 'Objetivo do Relatório de Visita Técnica', modulo: visitaTecnica },
+      { tipo: 'execucao', label: 'Objetivo do Relatório de Execução', modulo: handover }
+    ];
+    const hint = comServidor
+      ? `Vale para toda a equipe do contrato${geridos.length > 1 ? 's' : ''} ${esc(geridos.map((c) => c.nome).join(', '))}: os relatórios saem com este objetivo. Em branco = texto padrão do app. O BDO-e não tem objetivo.`
+      : 'Os relatórios novos saem com este objetivo. Em branco = texto padrão do app. O BDO-e não tem objetivo.';
+    return `
+      <section class="card form-section" id="objetivos-section" data-objetivos>
+        <header class="form-section__head">
+          <span class="form-section__icon">${icon('flag', 20)}</span>
+          <div class="form-section__titles">
+            <h3 class="form-section__title">Objetivos dos relatórios (gestor)</h3>
+            <p class="form-section__hint">${hint}</p>
+          </div>
+        </header>
+        <div class="form-grid">
+          ${campos.map((c) => `
+            <div class="field span-12" data-wrap="objetivo_${c.tipo}">
+              <label class="field__label-wrap" for="s-objetivo_${c.tipo}"><span class="field__label">${esc(c.label)}</span></label>
+              <textarea id="s-objetivo_${c.tipo}" data-setting="objetivo_${c.tipo}" rows="4" placeholder="${esc(padrao(c.modulo))}">${esc(valor(c.tipo))}</textarea>
+            </div>`).join('')}
+        </div>
+      </section>`;
+  }
+
+  /** Gestor com conta: grava os objetivos em todos os contratos que ele gere (a equipe recebe no sincronismo). */
+  async salvarObjetivosNoServidor(values) {
+    const geridos = contratosGeridos();
+    if (!contaNoServidor() || !geridos.length) return;
+    try {
+      if (!navigator.onLine) throw new Error('Sem internet.');
+      for (const c of geridos) {
+        const { data, error } = await getClient().rpc('team_set_objetivos', {
+          p_contrato_id: c.id, p_visita: values.objetivo_visita || '', p_execucao: values.objetivo_execucao || ''
+        });
+        if (error) throw new Error(/PGRST202|team_set_objetivos/i.test(`${error.code} ${error.message}`) ? 'o servidor ainda não tem a migração 010.' : error.message);
+        guardarEmpresaDoContrato({ id: data.id, nome: data.nome, objetivo_visita: data.objetivo_visita, objetivo_execucao: data.objetivo_execucao });
+      }
+      toast('Objetivos dos relatórios enviados para a equipe.', 'success');
+    } catch (err) {
+      toast(`Objetivos não enviados para a equipe: ${err.message || err} Salve de novo com internet.`, 'warn', 8000);
+    }
   }
 
   // ---------- Base de Poços e Locações ----------
@@ -572,6 +631,7 @@ export class SettingsView {
     this.dirty = false;
     this.refreshStatus();
     toast('Configurações salvas. Relatórios novos já usarão esses dados.', 'success');
+    if ('objetivo_visita' in values && souGestor()) this.salvarObjetivosNoServidor(values);
     this.onSaved?.();
   }
 

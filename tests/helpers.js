@@ -86,4 +86,15 @@ async function abrirAvancado(page) {
   if (!(await area.evaluate((el) => el.open))) await area.locator('summary').click();
 }
 
-module.exports = { launchApp, newUserData, fill, openTab, preencherVisita, cell, entrar, vincularContratos, abrirAvancado };
+/** Objetivo dos relatórios: definido em Ajustes › Objetivos dos relatórios (tipo 'visita' | 'execucao'). */
+async function definirObjetivo(page, tipo, texto, voltarPara) {
+  await openTab(page, 'settings');
+  await page.locator(`#s-objetivo_${tipo}`).fill(texto);
+  const empresa = page.locator('#s-empresa_nome'); // sem servidor o nome da empresa é obrigatório para salvar
+  if (await empresa.count() && !(await empresa.inputValue())) await empresa.fill('Empresa Teste');
+  await page.locator('[data-action=save]').click();
+  await page.locator('#toasts').getByText('Configurações salvas').waitFor();
+  if (voltarPara) await openTab(page, voltarPara);
+}
+
+module.exports = { launchApp, newUserData, fill, openTab, preencherVisita, cell, entrar, vincularContratos, abrirAvancado, definirObjetivo };

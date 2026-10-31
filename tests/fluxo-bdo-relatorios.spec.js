@@ -1,7 +1,7 @@
 // Login, herança do BDO-e para Visita / Execução, Objetivo protegido, Ação / Recomendação detalhada,
 // poço sem busca/GPS/rotas fora do BDO-e e busca rápida no Histórico.
 const { test, expect } = require('@playwright/test');
-const { launchApp, fill, openTab, preencherVisita, entrar, cell } = require('./helpers');
+const { launchApp, fill, openTab, preencherVisita, entrar, cell, definirObjetivo } = require('./helpers');
 
 const toast = (page) => page.locator('#toasts .toast').last();
 const pad = (n) => String(n).padStart(2, '0');
@@ -111,21 +111,22 @@ test.describe('BDO-e → Visita Técnica / Relatório de Execução', () => {
     await expect(page.locator('[data-action=gps]')).toHaveCount(1);
   });
 
-  test('Objetivo vem com o texto padrão, protegido, e só edita pelo botão "Editar Objetivo"', async () => {
+  test('Objetivo não aparece nos relatórios: é definido em Ajustes, por relatório, com o texto padrão como sugestão', async () => {
     const { page } = ctx;
-    for (const [tab, inicio] of [['visita_tecnica', 'Avaliar as condições da cabeça de poço'], ['handover', 'Executar a manutenção da cabeça de poço']]) {
+    for (const tab of ['visita_tecnica', 'handover']) {
       await openTab(page, tab);
-      const obj = page.locator('[data-field=objetivo]');
-      await expect(obj).toHaveValue(new RegExp(`^${inicio}`));
-      await expect(obj).not.toBeEditable();
-      await page.getByRole('button', { name: 'Editar Objetivo' }).click();
-      await expect(obj).toBeEditable();
-      await expect(obj).toBeFocused();
-      await obj.fill('Substituir a VA-1');
-      await page.getByRole('button', { name: 'Concluir edição' }).click();
-      await expect(obj).not.toBeEditable();
-      await expect(obj).toHaveValue('Substituir a VA-1');
+      await expect(page.locator('[data-field=objetivo]')).toHaveCount(0);
     }
+    await openTab(page, 'settings');
+    await expect(page.locator('#objetivos-section label[for=s-objetivo_visita]')).toHaveText('Objetivo do Relatório de Visita Técnica');
+    await expect(page.locator('#objetivos-section label[for=s-objetivo_execucao]')).toHaveText('Objetivo do Relatório de Execução');
+    await expect(page.locator('#s-objetivo_visita')).toHaveAttribute('placeholder', /^Avaliar as condições da cabeça de poço/);
+    await expect(page.locator('#s-objetivo_execucao')).toHaveAttribute('placeholder', /^Executar a manutenção da cabeça de poço/);
+
+    await definirObjetivo(page, 'execucao', 'Substituir a VA-1', 'handover');
+    await fill(page, 'poco', 'RCB-34');
+    await page.getByRole('button', { name: /Visualizar Prévia do Texto de abertura/ }).click();
+    await expect(page.locator('dialog.modal--info[open] [data-info-text]')).toContainText('com o objetivo de substituir a VA-1');
   });
 
   test('Ação / Recomendação traz a instrução derivada do diagnóstico (Visita e Execução)', async () => {

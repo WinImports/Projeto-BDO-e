@@ -125,7 +125,9 @@ const empresaLimpa = (e) => ({
   id: String(e.id || ''), nome: String(e.nome || ''),
   empresa_nome: String(e.empresa_nome || '').trim(), empresa_cnpj: String(e.empresa_cnpj || '').trim(),
   empresa_logo: /^data:image\/(png|jpe?g)/i.test(e.empresa_logo || '') ? e.empresa_logo : '',
-  atualizada_em: e.atualizada_em || null
+  atualizada_em: e.atualizada_em || null,
+  // migração 010: objetivo dos relatórios definido pelo gestor ('' = texto padrão do app)
+  objetivo_visita: String(e.objetivo_visita || '').trim(), objetivo_execucao: String(e.objetivo_execucao || '').trim()
 });
 
 /** Grava a lista de empresas dos contratos do usuário (suportado = o banco tem a migração 003). */
@@ -145,8 +147,24 @@ export function guardarEmpresaDoContrato(empresa) {
   const s = lerEmpresas();
   const email = emailAtual();
   if (!email || s.email !== email) return guardarEmpresas([empresa], email);
-  const lista = (s.lista || []).filter((e) => e.id !== empresa.id).concat(empresaLimpa(empresa));
+  const anterior = (s.lista || []).find((e) => e.id === empresa.id) || {};
+  // só os campos que vieram (gravar a empresa não apaga os objetivos, e vice-versa)
+  const junto = { ...anterior, ...Object.fromEntries(Object.entries(empresa).filter(([, v]) => v !== undefined)) };
+  const lista = (s.lista || []).filter((e) => e.id !== empresa.id).concat(empresaLimpa(junto));
   guardarEmpresas(lista, email);
+}
+
+/**
+ * Objetivo do relatório ('visita' | 'execucao') para o contrato escolhido (migração 010):
+ *  - undefined → não vem do contrato (sem conta no servidor): use o das Configurações / o padrão;
+ *  - '' → o gestor não definiu: use o texto padrão do app;
+ *  - texto → o do contrato.
+ */
+export function objetivoDoContrato(contrato, tipo) {
+  if (!empresaPorContrato()) return undefined;
+  const n = normContrato(contrato);
+  const e = n ? empresasDosContratos().find((x) => normContrato(x.nome) === n) : null;
+  return e ? String(e[`objetivo_${tipo}`] || '') : '';
 }
 
 /** Baixa my_contract_companies(). Banco sem a migração 003 → guarda `suportado: false` (vale a das Configurações). */

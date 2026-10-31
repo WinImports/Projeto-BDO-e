@@ -16,7 +16,8 @@ export const SETTINGS_FIELDS = [
   'cliente_padrao', 'contrato_padrao',
   'tecnico_nome', 'tecnico_matricula', 'tecnico_cargo',
   'whatsapp_padrao',
-  'locais_personalizados'
+  'locais_personalizados',
+  'objetivo_visita', 'objetivo_execucao' // sem servidor; com servidor o objetivo vem do contrato (migração 010)
 ];
 
 const listeners = new Set();

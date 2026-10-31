@@ -2,7 +2,7 @@
 // por componente (legenda e "Figura N" no PDF), comparativo Antes (Visita) x Depois (Execução),
 // relatórios no formato anterior e BDO intacto.
 const { test, expect } = require('@playwright/test');
-const { launchApp, fill, openTab, preencherVisita, cell } = require('./helpers');
+const { launchApp, fill, openTab, preencherVisita, cell, definirObjetivo } = require('./helpers');
 
 const toast = (page) => page.locator('#toasts .toast').last();
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
@@ -50,7 +50,7 @@ test('texto de abertura: gerado em segundo plano, só com botão de prévia no f
   await page.locator('[data-action=add-row][data-table=equipe]').click();
   await cell(page, 'equipe', 1, 'nome').fill('Carlos');
   await cell(page, 'equipe', 1, 'funcao').selectOption('Operador');
-  await fill(page, 'objetivo', 'Avaliar as válvulas e flanges.');
+  await definirObjetivo(page, 'visita', 'Avaliar as válvulas e flanges.', 'visita_tecnica');
   const esperado = `No dia ${hojeBR()} fizemos uma visita técnica ao poço RCB-34, localizado em Campo de Buracica, com a equipe formada por João (Técnico) e Carlos (Operador), com o objetivo de avaliar as válvulas e flanges.`;
 
   // nada de caixa de texto gigante no formulário: só o botão

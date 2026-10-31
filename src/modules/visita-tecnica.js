@@ -141,7 +141,8 @@ export default {
         equipe(),
         { type: 'divider', label: 'Objetivo da visita', icon: 'flag' },
         {
-          id: 'objetivo', label: 'Objetivo', type: 'textarea', required: true, lockEdit: 'Editar Objetivo', soGestor: true,
+          // definido pelo gestor em Ajustes › Objetivos dos relatórios (por contrato); não aparece no formulário
+          id: 'objetivo', label: 'Objetivo', type: 'textarea', formHidden: true, objetivoTipo: 'visita',
           defaultValue: 'Avaliar as condições da cabeça de poço (antipoço, válvulas e flanges), verificando estanqueidade, operação e corrosão, e indicar as intervenções necessárias',
           placeholder: 'Ex.: avaliar as condições das válvulas e flanges da cabeça de poço'
         },

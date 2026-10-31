@@ -61,6 +61,13 @@ async function supabaseFalso(page, cfg) {
           return { data: { contrato_id: args.p_contrato_id, fonte: args.p_fonte, total: args.p_pocos.length, atualizado_em: sb.basePocos.atualizado_em }, error: null };
         }
         if (name === 'team_clear_pocos') { sb.basePocos = null; return { data: null, error: null }; }
+        if (name === 'my_contract_companies') {
+          return { data: sb.acesso.contratos.map((c) => ({ id: c.id, nome: c.nome, empresa_nome: '', empresa_cnpj: '', empresa_logo: '', ...(sb.objetivos || {}) })), error: null };
+        }
+        if (name === 'team_set_objetivos') {
+          sb.objetivos = { objetivo_visita: args.p_visita, objetivo_execucao: args.p_execucao };
+          return { data: { id: args.p_contrato_id, nome: 'OS-Mans', ...sb.objetivos }, error: null };
+        }
         if (name === 'my_company_settings') return { status: 200, error: null, data: null };
         return { status: 200, error: null, data: args.p_device_id ?? null };
       },
@@ -357,7 +364,8 @@ test('base de poços da equipe: técnico não importa nem limpa e recebe a base 
   await openTab(page, 'settings');
   await expect(page.locator('[data-pocos-count]')).toHaveText('Base Ativa: 2 poços carregados');
   await expect(page.locator('#servidor-avancado')).toHaveCount(0); // com conta no servidor: URL e chave ocultas
-  // Objetivo é só do gestor: o técnico não vê o campo (o texto padrão segue no relatório); a prévia da abertura continua
+  // Objetivo: definido pelo gestor em Ajustes; o técnico não vê o campo nem a seção (o texto segue no relatório)
+  await expect(page.locator('#objetivos-section')).toHaveCount(0);
   await openTab(page, 'visita_tecnica');
   await expect(page.locator('[data-field=objetivo]')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Visualizar Prévia do Texto de abertura/ })).toBeVisible();
@@ -383,8 +391,18 @@ test('base de poços da equipe: técnico não importa nem limpa e recebe a base 
   await expect(page.locator('#tabs [data-tab=equipe]')).toBeVisible();
   await openTab(page, 'settings');
   await expect(page.locator('[data-dropzone]')).toBeVisible();
+  // gestor define os objetivos em Ajustes (por relatório) e eles valem para o contrato
+  await expect(page.locator('#objetivos-section')).toContainText('Objetivo do Relatório de Visita Técnica');
+  await expect(page.locator('#objetivos-section')).toContainText('Objetivo do Relatório de Execução');
+  await page.locator('#s-objetivo_visita').fill('Inspecionar a árvore de natal molhada do contrato');
+  await page.locator('[data-action=save]').click();
+  await expect.poll(() => page.evaluate(() => window.__sb.objetivos)).toEqual({ objetivo_visita: 'Inspecionar a árvore de natal molhada do contrato', objetivo_execucao: '' });
   await openTab(page, 'visita_tecnica');
-  await expect(page.locator('[data-field=objetivo]')).toBeVisible(); // gestor vê e edita o Objetivo
+  await expect(page.locator('[data-field=objetivo]')).toHaveCount(0);
+  await page.locator('[data-field=poco]').fill('TST-001');
+  await page.getByRole('button', { name: /Visualizar Prévia do Texto de abertura/ }).click();
+  await expect(page.locator('dialog[open]')).toContainText(/inspecionar a árvore de natal molhada do contrato/i);
+  await page.locator('dialog[open] [data-ok]').click();
   await openTab(page, 'settings');
   await page.locator('[data-pocos-input]').setInputFiles(CSV);
   await expect(page.locator('[data-pocos-envio]')).toContainText('Base enviada para a equipe (OS-Mans)');

@@ -17,7 +17,7 @@ import { routeLinks, showRoutePrompt } from './route-prompt.js';
 import { assignPhotoFields, photoFields, photosOf, photoMeta, rotuloFotos, TITULO_EXECUCAO } from '../core/fotos.js';
 import { STORES, get } from '../core/db.js';
 import { getModule } from '../modules/index.js';
-import { meusContratos, valorContrato } from '../core/contratos.js';
+import { meusContratos, valorContrato, objetivoDoContrato } from '../core/contratos.js';
 import { podeGerirBase } from '../core/base-equipe.js';
 import { contratoSelectHtml } from './contrato-campo.js';
 import { abrirEditorTexto, usarEditorAmpliado } from './texto-expandido.js';
@@ -448,6 +448,7 @@ export class FormView {
       const wrap = $(`[data-wrap="${CSS.escape(f.id)}"]`, this.el);
       if (wrap) wrap.innerHTML = this.fieldInnerHtml(f);
     }
+    if (this.aplicarObjetivo()) mudou = true; // contratos / objetivos do gestor podem ter chegado
     if (mudou) this.onChange(this.draft);
   }
 
@@ -456,6 +457,27 @@ export class FormView {
     clearTimeout(this.routeRefreshTimer);
     this.photoUrls.forEach((url) => URL.revokeObjectURL(url));
     this.photoUrls.clear();
+  }
+
+  /**
+   * Objetivo do relatório (campo com `objetivoTipo`, fora do formulário): o do contrato escolhido, definido pelo
+   * gestor em Ajustes (migração 010); sem servidor, o das Configurações; senão o texto padrão. Só troca enquanto
+   * o valor ainda é o automático (relatório editado guarda o que tinha).
+   */
+  aplicarObjetivo() {
+    const data = this.draft.data;
+    const settings = getSettings();
+    let mudou = false;
+    for (const f of this.fields.values()) {
+      if (!f.objetivoTipo) continue;
+      const doContrato = objetivoDoContrato(data.contrato, f.objetivoTipo);
+      const novo = (doContrato === undefined ? settings[`objetivo_${f.objetivoTipo}`] : doContrato) || f.defaultValue || '';
+      const atual = data[f.id];
+      const automatico = !atual || atual === data[`_auto_${f.id}`] || atual === f.defaultValue;
+      if (automatico && atual !== novo) { data[f.id] = novo; mudou = true; }
+      if (automatico) data[`_auto_${f.id}`] = novo;
+    }
+    return mudou;
   }
 
   applyDefaults() {
@@ -479,6 +501,7 @@ export class FormView {
       if (f.type === 'date') this.draft.data[f.id] ??= now.slice(0, 10);
       if (f.type === 'datetime') this.draft.data[f.id] ??= now.slice(0, 16);
     }
+    this.aplicarObjetivo();
   }
 
   // ---------- HTML ----------
@@ -1058,6 +1081,7 @@ export class FormView {
     }
     const campoFlange = this.fields.get(id);
     if (campoFlange?.flangeCampo) this.atualizarFlange(campoFlange.flange);
+    if (campoFlange?.type === 'contrato') this.aplicarObjetivo(); // trocar o contrato troca o objetivo
     this.changed(id);
   }
 
