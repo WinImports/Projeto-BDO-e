@@ -90,7 +90,7 @@ export function showTrocaSenha() {
     root.innerHTML = authShellHtml(`
       <form class="login__card" id="troca-senha-form" novalidate aria-labelledby="troca-senha-title">
         ${authHeadHtml('troca-senha-title', 'Crie a sua senha', `${displayName(user)} · primeiro acesso`)}
-        <p class="notice notice--info auth__help">A senha inicial foi definida pelo gestor. Por segurança, crie agora uma senha só sua (mínimo de ${SENHA_MIN} caracteres).</p>
+        <p class="notice notice--info auth__help">A senha que você recebeu é provisória. Por segurança, crie agora uma senha só sua (mínimo de ${SENHA_MIN} caracteres).</p>
         <div class="field">
           <label class="field__label-wrap" for="nova-senha"><span class="field__label">Nova senha</span></label>
           <div class="password-field">
