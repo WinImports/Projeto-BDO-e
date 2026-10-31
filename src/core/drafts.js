@@ -54,13 +54,18 @@ const CHAVE_ARQUIVO = (contrato, moduleId) => `contrato:${normContrato(contrato)
 
 /** Contrato a que o rascunho pertence ('' = sem como saber). */
 function contratoDoRascunho(rec) {
-  return String(rec?.data?.contrato || '').trim() || (Array.isArray(rec?.contexto) && rec.contexto.length === 1 ? rec.contexto[0] : '');
+  const c = String(rec?.data?.contrato || '').trim();
+  const ctx = Array.isArray(rec?.contexto) ? rec.contexto : [];
+  return ctx.find((x) => normContrato(x) === normContrato(c)) || ctx[0] || c;
 }
 
+/**
+ * O rascunho foi salvo por uma conta cujos contratos (contexto) não têm nada em comum com os da conta atual.
+ * Pelo contexto e não pelo campo Contrato: editar aqui um relatório antigo de um contrato fora da lista continua
+ * valendo (ele é salvo no contexto da conta atual).
+ */
 function foraDoContrato(rec, lista) {
   const meus = new Set(lista.map(normContrato));
-  const c = String(rec?.data?.contrato || '').trim();
-  if (c) return !meus.has(normContrato(c));
   return Array.isArray(rec?.contexto) && rec.contexto.length > 0 && !rec.contexto.some((x) => meus.has(normContrato(x)));
 }
 
