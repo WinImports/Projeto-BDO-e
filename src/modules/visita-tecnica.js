@@ -141,7 +141,7 @@ export default {
         equipe(),
         { type: 'divider', label: 'Objetivo da visita', icon: 'flag' },
         {
-          id: 'objetivo', label: 'Objetivo', type: 'textarea', required: true, lockEdit: 'Editar Objetivo',
+          id: 'objetivo', label: 'Objetivo', type: 'textarea', required: true, lockEdit: 'Editar Objetivo', soGestor: true,
           defaultValue: 'Avaliar as condições da cabeça de poço (antipoço, válvulas e flanges), verificando estanqueidade, operação e corrosão, e indicar as intervenções necessárias',
           placeholder: 'Ex.: avaliar as condições das válvulas e flanges da cabeça de poço'
         },

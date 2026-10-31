@@ -120,7 +120,7 @@ export default {
         { type: 'divider', label: 'Equipe', icon: 'users' },
         equipe(),
         {
-          id: 'objetivo', label: 'Objetivo / escopo da execução', type: 'textarea', lockEdit: 'Editar Objetivo',
+          id: 'objetivo', label: 'Objetivo / escopo da execução', type: 'textarea', lockEdit: 'Editar Objetivo', soGestor: true,
           defaultValue: 'Executar a manutenção da cabeça de poço conforme as recomendações da Visita Técnica, com o reparo ou a substituição das válvulas e dos parafusos / prisioneiros indicados, entregando a locação em condição segura',
           placeholder: 'Ex.: substituir a VA-1 e os parafusos do flange inferior'
         },

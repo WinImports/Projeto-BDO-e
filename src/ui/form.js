@@ -18,6 +18,7 @@ import { assignPhotoFields, photoFields, photosOf, photoMeta, rotuloFotos, TITUL
 import { STORES, get } from '../core/db.js';
 import { getModule } from '../modules/index.js';
 import { meusContratos, valorContrato } from '../core/contratos.js';
+import { podeGerirBase } from '../core/base-equipe.js';
 import { contratoSelectHtml } from './contrato-campo.js';
 import { abrirEditorTexto, usarEditorAmpliado } from './texto-expandido.js';
 import { analisar, aplicarSugestao, opcoesDe, sugestoes, rotuloLinha, escolherLinha, limparCampo, NOTA_TORQUE, ROTULOS, CAMPOS, FLANGE_TABLE } from '../core/flange.js';
@@ -138,9 +139,15 @@ export function displayCell(column, value) {
   return isBlank(value) ? '' : String(value);
 }
 
+/**
+ * Campo só do gestor (`soGestor: true`, ex.: Objetivo): técnico com conta no servidor não vê nem precisa preencher;
+ * o valor (texto padrão ou o que o gestor escreveu) continua indo para o relatório. Sem servidor, todos veem.
+ */
+export const ocultoParaTecnico = (f) => Boolean(f.soGestor) && !podeGerirBase();
+
 /** Campo obrigatório ainda sem valor? */
 export function fieldMissing(f, data) {
-  if (!f.required) return false;
+  if (!f.required || ocultoParaTecnico(f)) return false;
   if (f.type === 'geo') return geoBlank(data[f.id]);
   return isBlank(f.type === 'table' ? filledRows(data[f.id], f.columns) : data[f.id]);
 }
@@ -175,7 +182,7 @@ export function validate(module, data) {
       if (f.required && !parseCoords(v)) errors.push({ field: f.id, label: f.label, message: 'Capture pelo GPS ou escolha o poço na base' });
       continue;
     }
-    if (!f.required) continue;
+    if (!f.required || ocultoParaTecnico(f)) continue;
     // sem contrato vinculado à conta o campo fica desabilitado: o relatório segue sem contrato
     if (f.type === 'contrato' && !meusContratos().length) continue;
     const v = f.type === 'table' ? filledRows(data[f.id], f.columns) : data[f.id];
@@ -487,7 +494,7 @@ export class FormView {
           </div>
           <span class="section-badge" data-section-badge="${i}"></span>
         </header>
-        <div class="form-grid">${section.fields.filter((f) => !f.formHidden).map((f) => this.fieldHtml(f)).join('')}</div>
+        <div class="form-grid">${section.fields.filter((f) => !f.formHidden && !ocultoParaTecnico(f)).map((f) => this.fieldHtml(f)).join('')}</div>
       </section>`;
   }
 

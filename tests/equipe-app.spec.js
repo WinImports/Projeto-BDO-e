@@ -357,6 +357,11 @@ test('base de poços da equipe: técnico não importa nem limpa e recebe a base 
   await openTab(page, 'settings');
   await expect(page.locator('[data-pocos-count]')).toHaveText('Base Ativa: 2 poços carregados');
   await expect(page.locator('#servidor-avancado')).toHaveCount(0); // com conta no servidor: URL e chave ocultas
+  // Objetivo é só do gestor: o técnico não vê o campo (o texto padrão segue no relatório); a prévia da abertura continua
+  await openTab(page, 'visita_tecnica');
+  await expect(page.locator('[data-field=objetivo]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Visualizar Prévia do Texto de abertura/ })).toBeVisible();
+  await openTab(page, 'settings');
   await expect(page.locator('[data-pocos-status]')).toContainText('Base da equipe · contrato OS-Mans');
   await expect(page.locator('[data-dropzone]')).toHaveCount(0);
   await expect(page.locator('[data-pocos-so-gestor]')).toHaveText('Só o gestor do contrato importa ou limpa a base de poços.');
@@ -378,6 +383,9 @@ test('base de poços da equipe: técnico não importa nem limpa e recebe a base 
   await expect(page.locator('#tabs [data-tab=equipe]')).toBeVisible();
   await openTab(page, 'settings');
   await expect(page.locator('[data-dropzone]')).toBeVisible();
+  await openTab(page, 'visita_tecnica');
+  await expect(page.locator('[data-field=objetivo]')).toBeVisible(); // gestor vê e edita o Objetivo
+  await openTab(page, 'settings');
   await page.locator('[data-pocos-input]').setInputFiles(CSV);
   await expect(page.locator('[data-pocos-envio]')).toContainText('Base enviada para a equipe (OS-Mans)');
   const enviado = await page.evaluate(() => window.__sb.rpc.find((c) => c.name === 'team_set_pocos').args);

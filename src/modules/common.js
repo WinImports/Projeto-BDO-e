@@ -32,6 +32,7 @@
 // reportAlways: true → sai na prévia/PDF/Word sempre que a seção tiver algum dado ("—" quando vazio);
 //   reportNote: texto que acompanha o valor (ex.: nota do torque de referência)
 // flangeCard: card de apoio do Assistente Técnico de Flanges (core/flange.js), só no formulário
+// soGestor: true → com conta no servidor, só o gestor vê e edita o campo (o técnico não vê; o valor segue no relatório)
 // defaultValue: texto inicial do campo em relatórios novos; lockEdit: 'Editar Objetivo' → textarea protegida
 //            (somente leitura) até o técnico tocar no botão de edição
 // textarea.autoText(data): texto gerado e refeito a cada alteração do relatório enquanto o técnico não o
