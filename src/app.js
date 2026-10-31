@@ -327,10 +327,10 @@ function refreshFormChrome() {
 
   const nav = $('#section-nav');
   const active = nav.querySelector('.is-active')?.dataset.gotoSection;
-  nav.innerHTML = formView.status().map((st) => `
+  nav.innerHTML = formView.status().map((st, pos) => `
     <li>
       <a href="#sec-${st.index}" class="section-nav__item section-nav__item--${st.state}${String(st.index) === active ? ' is-active' : ''}" data-goto-section="${st.index}">
-        <span class="section-nav__num">${st.state === 'done' ? icon('check', 14) : st.index + 1}</span>
+        <span class="section-nav__num">${st.state === 'done' ? icon('check', 14) : pos + 1}</span>
         <span class="section-nav__text">
           <span class="section-nav__label">${esc(st.short)}</span>
           <span class="section-nav__state">${st.state === 'pending' ? `${st.missing} pendente${st.missing > 1 ? 's' : ''}` : st.state === 'done' ? 'Completo' : 'Opcional'}</span>

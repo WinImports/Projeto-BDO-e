@@ -4,7 +4,7 @@
 import { STORES, getAll, get } from './db.js';
 import { normalizeWell, listaPocos } from './pocos.js';
 import { isTravel } from './deslocamento.js';
-import { ANTEPOCO, VALVULAS_CABECA, FLANGES } from '../modules/common.js';
+import { ANTEPOCO, TODAS_VALVULAS, FLANGES } from '../modules/common.js';
 
 export const listHistory = () => getAll(STORES.history);
 
@@ -27,7 +27,7 @@ function resumoVisita(d) {
   if (d.estado_antepoco || d.obs_antepoco) {
     valvulas.push({ item: ANTEPOCO.nome, status: d.estado_antepoco || '', obs: d.obs_antepoco || '' });
   }
-  for (const v of VALVULAS_CABECA) {
+  for (const v of TODAS_VALVULAS) {
     const status = juntar(d[`${v.p}_estanqueidade`], d[`${v.p}_abertura`], d[`${v.p}_intervencao`] === 'Sim' && 'Necessita intervenção');
     if (status || d[`${v.p}_obs`]) valvulas.push({ item: v.short, status, obs: juntar(d[`${v.p}_config`], d[`${v.p}_obs`]) });
   }

@@ -127,6 +127,31 @@ export const VALVULAS_CABECA = [
   { p: 'vb2', nome: 'VB-2 — Válvula Anular Inferior 2', short: 'VB-2', fotos: ['VB-2'] }
 ];
 
+// Válvulas ADICIONAIS (opcionais): o técnico inclui pelo bloco "Válvulas adicionais" — até 2 de cada tipo.
+// Cada uma vira um bloco igual ao das válvulas fixas (mesmos campos e fotos), só no relatório em que foi incluída
+// (lista em data._valvulas_extras). A Execução inclui as mesmas da Visita de referência.
+export const TIPOS_VALVULA_EXTRA = [
+  { tipo: 'VL', rotulo: 'VL — Válvula Lateral' },
+  { tipo: 'VM', rotulo: 'VM — Válvula Mestre' }
+];
+export const VALVULAS_EXTRAS = [
+  { p: 'vl1', tipo: 'VL', nome: 'VL-1 — Válvula Lateral 1', short: 'VL-1', abertura: true, opcional: true, fotos: ['VL-1', 'Teste de estanqueidade'] },
+  { p: 'vl2', tipo: 'VL', nome: 'VL-2 — Válvula Lateral 2', short: 'VL-2', abertura: true, opcional: true, fotos: ['VL-2', 'Teste de estanqueidade'] },
+  { p: 'vm1', tipo: 'VM', nome: 'VM-1 — Válvula Mestre 1', short: 'VM-1', abertura: true, opcional: true, fotos: ['VM-1', 'Teste de estanqueidade'] },
+  { p: 'vm2', tipo: 'VM', nome: 'VM-2 — Válvula Mestre 2', short: 'VM-2', abertura: true, opcional: true, fotos: ['VM-2', 'Teste de estanqueidade'] }
+];
+/** Todas as válvulas (fixas + adicionais): as adicionais não incluídas ficam sem dados e não aparecem em nada. */
+export const TODAS_VALVULAS = [...VALVULAS_CABECA, ...VALVULAS_EXTRAS];
+/** Bloco do formulário para incluir / remover as válvulas adicionais (sem dados próprios, não sai no relatório). */
+export const blocoValvulasExtras = () => ({
+  title: 'Válvulas adicionais (VL / VM)',
+  short: 'Válvulas adicionais',
+  icon: 'plus',
+  controle: true,
+  hint: 'Se o poço tiver válvula lateral (VL) ou válvula mestre (VM), inclua aqui — até 2 de cada. Cada uma ganha um bloco com os mesmos campos e fotos.',
+  fields: [{ type: 'valvulasExtras', full: true }]
+});
+
 export const FLANGES = [
   { p: 'flange_sup', nome: 'Flange da cabeça superior', short: 'Flange superior', fotos: ['Medição com paquímetro / trena', 'Vista do flange'] },
   { p: 'flange_inf', nome: 'Flange inferior — cabeça de revestimento', short: 'Flange inferior', fotos: ['Medição com paquímetro / trena', 'Vista do flange'] }

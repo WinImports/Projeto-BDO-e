@@ -57,6 +57,11 @@ const filledRows = (rows, columns) => (rows || []).filter((row) => rowFilled(row
 
 export const allFields = (module) => module.sections.flatMap((s) => s.fields);
 
+/** Bloco opcional (válvula adicional VL / VM) só existe no relatório em que foi incluído. */
+export const secaoAtiva = (s, data = {}) => !s.opcional || (data._valvulas_extras || []).includes(s.opcional);
+/** Campos dos blocos que existem neste relatório (para validação e progresso). */
+const camposAtivos = (module, data) => module.sections.filter((s) => secaoAtiva(s, data)).flatMap((s) => s.fields);
+
 // ---------- Coordenadas ----------
 
 const toNum = (s) => parseFloat(String(s ?? '').trim().replace(',', '.'));
@@ -90,7 +95,7 @@ export function hasContent(f, data, photos = []) {
 /** Seções sem nenhum campo obrigatório e sem nenhum dado (não entram no PDF). */
 export function emptyOptionalSections(module, data, photos = []) {
   return module.sections
-    .filter((s) => !s.legacy && !s.fields.some((f) => f.required) && !s.fields.some((f) => hasContent(f, data, photos)))
+    .filter((s) => !s.legacy && !s.controle && secaoAtiva(s, data) && !s.fields.some((f) => f.required) && !s.fields.some((f) => hasContent(f, data, photos)))
     .map((s) => s.short || s.title);
 }
 
@@ -162,18 +167,18 @@ export function sectionStatus(module, data, photos = []) {
     const missing = required.filter((f) => fieldMissing(f, data)).length;
     const filled = s.fields.some((f) => hasContent(f, data, photos));
     const state = required.length ? (missing ? 'pending' : 'done') : (filled ? 'done' : 'optional');
-    return { index, title: s.title, short: s.short || s.title, icon: s.icon, required: required.length, missing, state, legacy: s.legacy };
-  }).filter((st) => !st.legacy); // seções do formato anterior não aparecem no formulário
+    return { index, title: s.title, short: s.short || s.title, icon: s.icon, required: required.length, missing, state, legacy: s.legacy || !secaoAtiva(s, data) };
+  }).filter((st) => !st.legacy); // seções do formato anterior e válvulas adicionais não incluídas não aparecem
 }
 
 export function requiredProgress(module, data) {
-  const req = allFields(module).filter((f) => f.required);
+  const req = camposAtivos(module, data).filter((f) => f.required);
   return { total: req.length, filled: req.filter((f) => !fieldMissing(f, data)).length };
 }
 
 /** Valida o rascunho. Retorna [{ field, label, message }]. */
 export function validate(module, data) {
-  const fields = allFields(module);
+  const fields = camposAtivos(module, data);
   const sectionOf = new Map(module.sections.flatMap((s) => s.fields.map((f) => [f, s.short || s.title])));
   const errors = [];
   for (const f of fields) {
@@ -250,6 +255,7 @@ export class FormView {
     this.el.className = 'report-form';
     this.el.noValidate = true;
     this.el.innerHTML = module.sections.map((s, i) => (s.legacy ? '' : this.sectionHtml(s, i))).join('');
+    this.renumerarSecoes();
     this.el.addEventListener('input', (e) => this.handleInput(e));
     this.el.addEventListener('change', (e) => this.handleInput(e));
     this.el.addEventListener('click', (e) => this.handleClick(e));
@@ -508,7 +514,7 @@ export class FormView {
 
   sectionHtml(section, i) {
     return `
-      <section class="card form-section" id="sec-${i}" data-section="${i}">
+      <section class="card form-section" id="sec-${i}" data-section="${i}"${section.opcional ? ` data-opcional="${esc(section.opcional)}"` : ''}${secaoAtiva(section, this.draft.data) ? '' : ' hidden'}>
         <header class="form-section__head">
           <span class="form-section__icon">${icon(section.icon || 'clipboard', 20)}</span>
           <div class="form-section__titles">
@@ -526,6 +532,82 @@ export class FormView {
     if (f.span) return f.span;
     if (f.full || ['table', 'photos', 'signature', 'geo', 'textarea', 'checklist', 'consolidation'].includes(f.type)) return 12;
     return 3;
+  }
+
+  // ---------- Válvulas adicionais (VL / VM) ----------
+
+  valvulasExtrasHtml() {
+    const ativas = this.draft.data._valvulas_extras || [];
+    const opcionais = this.module.sections.filter((s) => s.opcional);
+    const tipos = [...new Set(opcionais.map((s) => s.opcional.replace(/\d+$/, '').toUpperCase()))];
+    const rotulo = { VL: 'VL — Válvula Lateral', VM: 'VM — Válvula Mestre' };
+    const livres = (t) => opcionais.filter((s) => s.opcional.toUpperCase().startsWith(t) && !ativas.includes(s.opcional));
+    const incluidas = opcionais.filter((s) => ativas.includes(s.opcional));
+    return `
+      <div class="valvulas-extras" data-valvulas-extras>
+        <div class="valvulas-extras__botoes">
+          ${tipos.map((t) => `<button type="button" class="btn btn--ghost btn--sm" data-action="add-valvula" data-tipo="${esc(t)}"${livres(t).length ? '' : ' disabled'}>${icon('plus', 15)} Incluir ${esc(rotulo[t] || t)}</button>`).join('')}
+        </div>
+        ${incluidas.length ? `<ul class="valvulas-extras__lista">${incluidas.map((s) => `
+          <li data-valvula-extra="${esc(s.opcional)}"><span>${esc(s.short)}</span>
+            <button type="button" class="btn btn--ghost btn--sm btn--danger-text" data-action="remove-valvula" data-p="${esc(s.opcional)}">${icon('trash', 14)} Remover</button></li>`).join('')}</ul>`
+          : '<p class="muted small">Nenhuma válvula adicional neste poço.</p>'}
+      </div>`;
+  }
+
+  /** Mostra / esconde os blocos das válvulas adicionais e refaz o controle. */
+  atualizarValvulasExtras() {
+    for (const sec of $$('[data-opcional]', this.el)) sec.hidden = !(this.draft.data._valvulas_extras || []).includes(sec.dataset.opcional);
+    const box = $('[data-valvulas-extras]', this.el);
+    if (box) box.outerHTML = this.valvulasExtrasHtml();
+    this.renumerarSecoes();
+  }
+
+  /** Número do bloco = posição entre os blocos visíveis (válvula adicional escondida não abre buraco). */
+  renumerarSecoes() {
+    let n = 0;
+    for (const sec of $$('section.form-section[data-section]', this.el)) {
+      if (sec.hidden) continue;
+      n += 1;
+      const num = $('.form-section__num', sec);
+      if (num) num.textContent = `${n}.`;
+    }
+  }
+
+  incluirValvula(tipo) {
+    const d = this.draft.data;
+    const livre = this.module.sections.find((s) => s.opcional && s.opcional.toUpperCase().startsWith(tipo) && !(d._valvulas_extras || []).includes(s.opcional));
+    if (!livre) return;
+    d._valvulas_extras = [...(d._valvulas_extras || []), livre.opcional];
+    this.atualizarValvulasExtras();
+    this.onChange(this.draft);
+    const sec = $(`[data-opcional="${CSS.escape(livre.opcional)}"]`, this.el);
+    sec?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    toast(`${livre.short} incluída. Preencha o bloco "${livre.title}".`, 'success');
+  }
+
+  async removerValvula(p) {
+    const d = this.draft.data;
+    const idx = this.module.sections.findIndex((s) => s.opcional === p);
+    const secao = this.module.sections[idx];
+    if (!secao) return;
+    const temDados = secao.fields.some((f) => f.id && hasContent(f, d, this.draft.photos));
+    if (temDados) {
+      const ok = await confirmDialog({
+        title: `Remover a ${secao.short}?`,
+        message: 'Os dados e as fotos desta válvula neste relatório serão apagados.',
+        confirmLabel: 'Remover', danger: true, iconName: 'trash'
+      });
+      if (!ok) return;
+    }
+    for (const f of secao.fields) if (f.id) delete d[f.id];
+    const fotosCampo = new Set(secao.fields.filter((f) => f.type === 'photos').map((f) => f.id));
+    this.draft.photos = this.draft.photos.filter((ph) => !fotosCampo.has(ph.field));
+    d._valvulas_extras = (d._valvulas_extras || []).filter((x) => x !== p);
+    const el = $(`#sec-${idx}`, this.el);
+    if (el) el.outerHTML = this.sectionHtml(secao, idx); // volta vazio (e escondido) se incluir de novo
+    this.atualizarValvulasExtras();
+    this.onChange(this.draft);
   }
 
   fieldHtml(f) {
@@ -562,6 +644,9 @@ export class FormView {
 
       case 'flangeCard':
         return this.flangeCardHtml(f.flange);
+
+      case 'valvulasExtras':
+        return this.valvulasExtrasHtml();
 
       case 'contrato':
         return contratoSelectHtml({ id: `f-${f.id}`, attrs: `data-field="${id}"`, valor: v });
@@ -1098,6 +1183,8 @@ export class FormView {
     if (!btn) return;
     const { action, table } = btn.dataset;
 
+    if (action === 'add-valvula') return this.incluirValvula(btn.dataset.tipo);
+    if (action === 'remove-valvula') return this.removerValvula(btn.dataset.p);
     if (action === 'flange-opcao' || action === 'flange-limpar') {
       const p = btn.dataset.target;
       if (action === 'flange-opcao') escolherLinha(this.draft.data, p, Number(btn.dataset.linha));
@@ -1473,6 +1560,10 @@ export class FormView {
     const rec = ref ? await get(STORES.history, ref) : null;
     const notas = rec && this.module.notasDaVisita ? this.module.notasDaVisita(rec.data || {}) : {};
     if (!this.el.isConnected) return;
+    // válvulas adicionais (VL / VM) que a Visita tinha: a Execução também passa a ter o bloco delas
+    const daVisita = (rec?.data?._valvulas_extras || []).filter((p) => this.module.sections.some((s) => s.opcional === p));
+    const novas = daVisita.filter((p) => !(d._valvulas_extras || []).includes(p));
+    if (novas.length) { d._valvulas_extras = [...(d._valvulas_extras || []), ...novas]; this.atualizarValvulasExtras(); }
     for (const f of campos) {
       d[f.id] = notas[f.comp] || '';
       this.refreshField(f.id);

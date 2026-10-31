@@ -1373,3 +1373,9 @@ input[data-expand] { cursor: text; text-overflow: ellipsis; }
 /* Base de poços: ações do status (Enviar para a equipe · Limpar Base) */
 .pocos-status > .pocos-status__acoes { display: flex; flex-direction: row; flex: none; flex-wrap: wrap; gap: 6px; margin-left: auto; }
 .pocos-status > .pocos-status__acoes:empty { display: none; }
+
+/* Válvulas adicionais (VL / VM): botões para incluir e lista das incluídas */
+.valvulas-extras { display: flex; flex-direction: column; gap: 10px; }
+.valvulas-extras__botoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.valvulas-extras__lista { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.valvulas-extras__lista li { display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); font-weight: 600; }

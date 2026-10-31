@@ -3,7 +3,7 @@
 // componente com o SEU bloco de fotos → outras fotos → recomendações e assinatura.
 import {
   pocoHerdado, herancaBdo, pressoes, coordenadas, fotosDe, paragrafoAbertura, equipe, PRIORIDADES, TURNOS,
-  FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, FLANGES,
+  FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, VALVULAS_EXTRAS, TODAS_VALVULAS, blocoValvulasExtras, FLANGES,
   ESTANQUEIDADE, ABERTURA, CORROSAO
 } from './common.js';
 import { MODELOS, PRESSOES, NOTA_TORQUE } from '../core/flange.js';
@@ -56,7 +56,7 @@ export function acoesAutomaticas(d) {
       detalhe: diagnostico([[r.item, 'Sim']])
     });
   }
-  for (const v of VALVULAS_CABECA) {
+  for (const v of TODAS_VALVULAS) {
     if (d[`${v.p}_intervencao`] !== 'Sim') continue;
     const est = d[`${v.p}_estanqueidade`];
     const ab = d[`${v.p}_abertura`];
@@ -77,7 +77,8 @@ export function acoesAutomaticas(d) {
 }
 
 const valvula = (v, n) => ({
-  title: `${n}. ${v.nome}`,
+  title: v.opcional ? `Válvula adicional · ${v.nome}` : `${n}. ${v.nome}`,
+  opcional: v.opcional ? v.p : undefined,
   short: v.short,
   icon: 'gauge',
   hint: 'Deixe em branco se a válvula não existir neste poço.',
@@ -193,6 +194,8 @@ export default {
       ]
     },
     ...VALVULAS_CABECA.map((v, i) => valvula(v, i + 2)),
+    ...VALVULAS_EXTRAS.map((v) => valvula(v)),
+    blocoValvulasExtras(),
     ...FLANGES.map((fl, i) => flange(fl, i + 2 + VALVULAS_CABECA.length)),
     {
       title: 'Outras fotos',

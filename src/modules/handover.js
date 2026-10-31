@@ -3,7 +3,7 @@
 // "Antes" vêm da última Visita Técnica do poço finalizada neste aparelho (ver consolidação).
 import {
   pocoHerdado, herancaBdo, pressoes, coordenadas, fotosDe, paragrafoAbertura, equipe, duracao, PRIORIDADES,
-  FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, FLANGES,
+  FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, VALVULAS_EXTRAS, TODAS_VALVULAS, blocoValvulasExtras, FLANGES,
   ESTANQUEIDADE, CORROSAO
 } from './common.js';
 
@@ -26,7 +26,7 @@ export function notasDaVisita(dv = {}) {
   const constatado = (dv.antepoco_checklist || []).filter((r) => r.situacao === 'Sim').map((r) => r.item);
   const ant = juntar([dv.estado_antepoco, constatado.length ? `necessário: ${constatado.join(', ')}` : ''], dv.obs_antepoco);
   if (ant) notas[ANTEPOCO.p] = prefixo + ant;
-  for (const v of VALVULAS_CABECA) {
+  for (const v of TODAS_VALVULAS) {
     const t = juntar([dv[`${v.p}_estanqueidade`], dv[`${v.p}_abertura`], dv[`${v.p}_intervencao`] === 'Sim' ? 'necessita intervenção' : ''], dv[`${v.p}_obs`]);
     if (t) notas[v.p] = prefixo + t;
   }
@@ -45,7 +45,7 @@ export function notasDaVisita(dv = {}) {
  */
 export function pendenciasAutomaticas(d) {
   const out = [];
-  for (const v of VALVULAS_CABECA) {
+  for (const v of TODAS_VALVULAS) {
     const sit = d[`${v.p}_situacao`];
     if (sit === 'Sem estanqueidade (vazamento)') {
       out.push({ _auto: v.p, descricao: `${v.short}: Necessária a substituição da válvula devido à falta de estanqueidade`, recurso: `Válvula para a posição ${v.short}` });
@@ -70,7 +70,7 @@ export function pendenciasAutomaticas(d) {
  * "Serviço executado" preenchido — "VA-2: Instalação de uma kerotest". Componente sem serviço não entra.
  */
 export function resumoIntervencoes(d = {}) {
-  return [ANTEPOCO, ...VALVULAS_CABECA, ...FLANGES]
+  return [ANTEPOCO, ...TODAS_VALVULAS, ...FLANGES]
     .map((c) => [c.short || c.nome, String(d[`${c.p}_servico`] || '').trim()])
     .filter(([, s]) => s)
     .map(([nome, s]) => `${nome}: ${s}`)
@@ -85,8 +85,9 @@ export function execucaoDosBdos(d) {
   }));
 }
 
-const componente = ({ p, nome, short, fotos }, n, situacao) => ({
-  title: `${n}. ${nome}`,
+const componente = ({ p, nome, short, fotos, opcional }, n, situacao) => ({
+  title: opcional ? `Válvula adicional · ${nome}` : `${n}. ${nome}`,
+  opcional: opcional ? p : undefined,
   short: short || nome,
   icon: p.startsWith('flange') ? 'wrench' : p === 'antepoco' ? 'map' : 'gauge',
   fields: [
@@ -182,6 +183,8 @@ export default {
     },
     componente(ANTEPOCO, 1, { label: 'Situação final', options: ['Limpo', 'Limpeza parcial', 'Necessita nova limpeza'] }),
     ...VALVULAS_CABECA.map((v, i) => componente(v, i + 2, { label: 'Estanqueidade final', options: ESTANQUEIDADE })),
+    ...VALVULAS_EXTRAS.map((v) => componente(v, 0, { label: 'Estanqueidade final', options: ESTANQUEIDADE })),
+    blocoValvulasExtras(),
     ...FLANGES.map((fl, i) => componente(fl, i + 2 + VALVULAS_CABECA.length, { label: 'Situação final', options: ['Parafusos substituídos', 'Reapertado', ...CORROSAO.map((c) => `Corrosão: ${c.toLowerCase()}`)] })),
     {
       title: 'Outras fotos',
