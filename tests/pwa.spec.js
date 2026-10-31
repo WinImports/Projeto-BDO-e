@@ -175,6 +175,7 @@ test('PWA: relatório finalizado fica no Histórico do navegador, reabre na pré
     await page.locator('#view[data-ready]').waitFor();
     const tab = async (id) => { await page.locator(`#tabs [data-tab=${id}]`).click(); await page.locator(`#view[data-ready=${id}]`).waitFor(); };
 
+    await page.evaluate(() => localStorage.setItem('bdoe.pref.etapas', 'false')); // formulário todo aberto (sem etapas)
     await tab('visita_tecnica');
     await preencherVisita(page);
     await page.locator('.route-prompt [data-route-close]').first().click().catch(() => {});
