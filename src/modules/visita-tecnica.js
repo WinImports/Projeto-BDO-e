@@ -3,7 +3,7 @@
 // componente com o SEU bloco de fotos → outras fotos → recomendações e assinatura.
 import {
   pocoHerdado, herancaBdo, pressoes, coordenadas, fotosDe, paragrafoAbertura, equipe, PRIORIDADES, TURNOS,
-  FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, VALVULAS_EXTRAS, TODAS_VALVULAS, blocoValvulasExtras, FLANGES,
+  FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, VALVULAS_EXTRAS, TODAS_VALVULAS, blocoValvulasExtras, FLANGES, TODOS_FLANGES, tituloAdicional,
   ESTANQUEIDADE, ABERTURA, CORROSAO
 } from './common.js';
 import { MODELOS, PRESSOES, NOTA_TORQUE } from '../core/flange.js';
@@ -65,7 +65,7 @@ export function acoesAutomaticas(d) {
       detalhe: diagnostico([['Estanqueidade', est], ['Abertura / fechamento', ab], ['Necessita intervenção', 'Sim']])
     });
   }
-  for (const fl of FLANGES) {
+  for (const fl of TODOS_FLANGES) {
     if (d[`${fl.p}_intervencao`] !== 'Sim') continue;
     const cor = d[`${fl.p}_corrosao`];
     out.push({
@@ -77,7 +77,7 @@ export function acoesAutomaticas(d) {
 }
 
 const valvula = (v, n) => ({
-  title: v.opcional ? `Válvula adicional · ${v.nome}` : `${n}. ${v.nome}`,
+  title: v.opcional ? tituloAdicional(v) : `${n}. ${v.nome}`,
   opcional: v.opcional ? v.p : undefined,
   short: v.short,
   icon: 'gauge',
@@ -93,7 +93,8 @@ const valvula = (v, n) => ({
 });
 
 const flange = (fl, n) => ({
-  title: `${n}. ${fl.nome}`,
+  title: fl.opcional ? tituloAdicional(fl) : `${n}. ${fl.nome}`,
+  opcional: fl.opcional ? fl.p : undefined,
   short: fl.short,
   icon: 'wrench',
   fields: [
@@ -197,7 +198,7 @@ export default {
     ...VALVULAS_CABECA.map((v, i) => valvula(v, i + 2)),
     ...VALVULAS_EXTRAS.map((v) => valvula(v)),
     blocoValvulasExtras(),
-    ...FLANGES.map((fl, i) => flange(fl, i + 2 + VALVULAS_CABECA.length)),
+    ...TODOS_FLANGES.map((fl) => flange(fl, FLANGES.indexOf(fl) + 2 + VALVULAS_CABECA.length)),
     {
       title: 'Outras fotos',
       short: 'Outras fotos',

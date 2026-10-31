@@ -637,7 +637,7 @@ export class FormView {
     const ativas = this.draft.data._valvulas_extras || [];
     const opcionais = this.module.sections.filter((s) => s.opcional);
     const tipos = [...new Set(opcionais.map((s) => s.opcional.replace(/\d+$/, '').toUpperCase()))];
-    const rotulo = { VL: 'VL — Válvula Lateral', VM: 'VM — Válvula Mestre' };
+    const rotulo = { VL: 'VL — Válvula Lateral', VM: 'VM — Válvula Mestre', FLANGE_INT: 'Flange intermediário' };
     const livres = (t) => opcionais.filter((s) => s.opcional.toUpperCase().startsWith(t) && !ativas.includes(s.opcional));
     const incluidas = opcionais.filter((s) => ativas.includes(s.opcional));
     return `
@@ -648,7 +648,7 @@ export class FormView {
         ${incluidas.length ? `<ul class="valvulas-extras__lista">${incluidas.map((s) => `
           <li data-valvula-extra="${esc(s.opcional)}"><span>${esc(s.short)}</span>
             <button type="button" class="btn btn--ghost btn--sm btn--danger-text" data-action="remove-valvula" data-p="${esc(s.opcional)}">${icon('trash', 14)} Remover</button></li>`).join('')}</ul>`
-          : '<p class="muted small">Nenhuma válvula adicional neste poço.</p>'}
+          : '<p class="muted small">Nenhum componente adicional neste poço.</p>'}
       </div>`;
   }
 
@@ -680,7 +680,7 @@ export class FormView {
     this.onChange(this.draft);
     const sec = $(`[data-opcional="${CSS.escape(livre.opcional)}"]`, this.el);
     sec?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    toast(`${livre.short} incluída. Preencha o bloco "${livre.title}".`, 'success');
+    toast(`Bloco "${livre.title}" incluído.`, 'success');
   }
 
   async removerValvula(p) {
@@ -691,8 +691,8 @@ export class FormView {
     const temDados = secao.fields.some((f) => f.id && hasContent(f, d, this.draft.photos));
     if (temDados) {
       const ok = await confirmDialog({
-        title: `Remover a ${secao.short}?`,
-        message: 'Os dados e as fotos desta válvula neste relatório serão apagados.',
+        title: `Remover ${secao.short}?`,
+        message: 'Os dados e as fotos deste componente neste relatório serão apagados.',
         confirmLabel: 'Remover', danger: true, iconName: 'trash'
       });
       if (!ok) return;

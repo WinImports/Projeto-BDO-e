@@ -43,7 +43,7 @@ test('Visita: inclui VL e VM (até 2 de cada), preenche como as outras válvulas
   await expect(page.locator('[data-field=vl1_estanqueidade]')).toHaveValue('Sem estanqueidade (vazamento)');
 
   await page.locator('[data-action=remove-valvula][data-p=vl1]').click();
-  await expect(page.locator('dialog.modal--confirm[open]')).toContainText('Remover a VL-1?');
+  await expect(page.locator('dialog.modal--confirm[open]')).toContainText('Remover VL-1?');
   await page.locator('dialog.modal--confirm[open] [data-ok]').click();
   await expect(page.locator('[data-opcional=vl1]')).toBeHidden();
   await expect(page.locator('[data-wrap=correcoes] [data-col=acao]', { hasText: 'VL-1' })).toHaveCount(0);
@@ -69,4 +69,32 @@ test('a válvula adicional da Visita aparece na prévia e passa para a Execuçã
   await expect(page.locator('[data-opcional=vm1]')).toBeVisible();
   await expect(page.locator('[data-visita-nota=vm1_na_visita]')).toContainText('Estanque — Válvula mestre nova');
   await expect(page.locator('[data-opcional=vl1]')).toBeHidden();
+});
+
+test('flange intermediário (até 2): bloco entre o superior e o inferior, com o assistente de flanges, e vai para a Execução', async () => {
+  const { page } = ctx;
+  await openTab(page, 'visita_tecnica');
+  await expect(page.locator('[data-opcional=flange_int1]')).toBeHidden();
+  await page.locator('[data-action=add-valvula][data-tipo=FLANGE_INT]').click();
+  await expect(page.locator('[data-opcional=flange_int1] .form-section__title')).toContainText('Flange adicional · Flange intermediário 1');
+  await expect(page.locator('#section-nav .section-nav__label')).toContainText(['Flange superior', 'Flange intermediário 1', 'Flange inferior']);
+  await page.locator('[data-action=add-valvula][data-tipo=FLANGE_INT]').click();
+  await expect(page.locator('[data-action=add-valvula][data-tipo=FLANGE_INT]')).toBeDisabled();
+  await page.locator('[data-action=remove-valvula][data-p=flange_int2]').click();
+  await expect(page.locator('[data-opcional=flange_int2]')).toBeHidden();
+  await expect(page.locator('[data-opcional=flange_int1] [data-flange-card]')).toBeAttached();
+
+  await preencherVisita(page, 'TST-FI');
+  await fill(page, 'flange_int1_corrosao', 'Severa');
+  await page.locator('[data-field=flange_int1_intervencao][value=Sim]').check();
+  await expect(page.locator('[data-wrap=correcoes] [data-col=acao]').last()).toHaveValue(/^Flange intermediário 1: /);
+  await page.locator('#btn-finalize').click();
+  await expect(page.locator('dialog.modal[open]')).toContainText('Flange intermediário 1');
+  await page.locator('dialog.modal[open] [data-confirm]').click();
+
+  await openTab(page, 'handover');
+  await fill(page, 'poco', 'TST-FI');
+  await page.locator('[data-field=poco]').press('Tab');
+  await expect(page.locator('[data-opcional=flange_int1]')).toBeVisible();
+  await expect(page.locator('[data-visita-nota=flange_int1_na_visita]')).toContainText(/corrosão severa/i);
 });

@@ -144,11 +144,11 @@ export const VALVULAS_EXTRAS = [
 export const TODAS_VALVULAS = [...VALVULAS_CABECA, ...VALVULAS_EXTRAS];
 /** Bloco do formulário para incluir / remover as válvulas adicionais (sem dados próprios, não sai no relatório). */
 export const blocoValvulasExtras = () => ({
-  title: 'Válvulas adicionais (VL / VM)',
-  short: 'Válvulas adicionais',
+  title: 'Componentes adicionais (VL / VM / flange intermediário)',
+  short: 'Componentes adicionais',
   icon: 'plus',
   controle: true,
-  hint: 'Se o poço tiver válvula lateral (VL) ou válvula mestre (VM), inclua aqui — até 2 de cada. Cada uma ganha um bloco com os mesmos campos e fotos.',
+  hint: 'Se o poço tiver válvula lateral (VL), válvula mestre (VM) ou flange intermediário, inclua aqui — até 2 de cada. Cada um ganha um bloco com os mesmos campos e fotos.',
   fields: [{ type: 'valvulasExtras', full: true }]
 });
 
@@ -156,6 +156,16 @@ export const FLANGES = [
   { p: 'flange_sup', nome: 'Flange da cabeça superior', short: 'Flange superior', fotos: ['Medição com paquímetro / trena', 'Vista do flange'] },
   { p: 'flange_inf', nome: 'Flange inferior — cabeça de revestimento', short: 'Flange inferior', fotos: ['Medição com paquímetro / trena', 'Vista do flange'] }
 ];
+// Flanges ADICIONAIS (opcionais, como as válvulas VL / VM): incluídos pelo mesmo bloco de controle, até 2,
+// entre o flange superior e o inferior (lista em data._valvulas_extras).
+export const FLANGES_EXTRAS = [
+  { p: 'flange_int1', nome: 'Flange intermediário 1', short: 'Flange intermediário 1', opcional: true, fotos: ['Medição com paquímetro / trena', 'Vista do flange'] },
+  { p: 'flange_int2', nome: 'Flange intermediário 2', short: 'Flange intermediário 2', opcional: true, fotos: ['Medição com paquímetro / trena', 'Vista do flange'] }
+];
+/** Todos os flanges na ordem da cabeça de poço: superior, intermediários (se incluídos), inferior. */
+export const TODOS_FLANGES = [FLANGES[0], ...FLANGES_EXTRAS, FLANGES[1]];
+/** Título do bloco de um componente opcional. */
+export const tituloAdicional = (c) => `${c.p.startsWith('flange') ? 'Flange adicional' : 'Válvula adicional'} · ${c.nome}`;
 
 export const ESTANQUEIDADE = ['Estanque', 'Sem estanqueidade (vazamento)', 'Não testada'];
 export const ABERTURA = ['Abre e fecha normalmente', 'Abre / fecha com dificuldade', 'Não opera (travada)', 'Não testada'];

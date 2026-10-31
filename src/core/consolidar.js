@@ -4,7 +4,7 @@
 import { STORES, getAll, get } from './db.js';
 import { normalizeWell, listaPocos } from './pocos.js';
 import { isTravel } from './deslocamento.js';
-import { ANTEPOCO, TODAS_VALVULAS, FLANGES } from '../modules/common.js';
+import { ANTEPOCO, TODAS_VALVULAS, TODOS_FLANGES } from '../modules/common.js';
 
 export const listHistory = () => getAll(STORES.history);
 
@@ -32,7 +32,7 @@ function resumoVisita(d) {
     if (status || d[`${v.p}_obs`]) valvulas.push({ item: v.short, status, obs: juntar(d[`${v.p}_config`], d[`${v.p}_obs`]) });
   }
   const fixadores = (d.fixadores || []).map((v) => ({ item: v.item, status: v.status || '', obs: v.obs || '' }));
-  for (const fl of FLANGES) {
+  for (const fl of TODOS_FLANGES) {
     const status = juntar(d[`${fl.p}_corrosao`] && `Corrosão: ${d[`${fl.p}_corrosao`].toLowerCase()}`, d[`${fl.p}_intervencao`] === 'Sim' && 'Necessita intervenção');
     const medidas = juntar(d[`${fl.p}_parafusos`] && `${d[`${fl.p}_parafusos`]} parafusos`, d[`${fl.p}_tamanho`], d[`${fl.p}_prisioneiros`] === 'Sim' && 'com prisioneiros');
     if (status || medidas || d[`${fl.p}_obs`]) fixadores.push({ item: fl.short, status, obs: juntar(medidas, d[`${fl.p}_obs`]) });
