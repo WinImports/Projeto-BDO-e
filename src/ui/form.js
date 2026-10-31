@@ -19,6 +19,7 @@ import { STORES, get } from '../core/db.js';
 import { getModule } from '../modules/index.js';
 import { meusContratos, valorContrato, objetivoDoContrato } from '../core/contratos.js';
 import { podeGerirBase } from '../core/base-equipe.js';
+import { getPref } from '../core/prefs.js';
 import { contratoSelectHtml } from './contrato-campo.js';
 import { abrirEditorTexto, usarEditorAmpliado } from './texto-expandido.js';
 import { analisar, aplicarSugestao, opcoesDe, sugestoes, rotuloLinha, escolherLinha, limparCampo, NOTA_TORQUE, ROTULOS, CAMPOS, FLANGE_TABLE } from '../core/flange.js';
@@ -254,6 +255,11 @@ export class FormView {
     this.el = document.createElement('form');
     this.el.className = 'report-form';
     this.el.noValidate = true;
+    // Relatório em ETAPAS (Visita / Execução, `module.etapas`): seções recolhidas, só com o título; tocar abre;
+    // "Concluir etapa" confere os obrigatórios, marca como concluída, fecha e abre a próxima. Preferência
+    // "etapas" (Ajustes) desliga e mostra tudo aberto.
+    this.etapas = Boolean(module.etapas) && getPref('etapas', true) !== false;
+    this.aberta = null;
     this.el.innerHTML = module.sections.map((s, i) => (s.legacy ? '' : this.sectionHtml(s, i))).join('');
     this.renumerarSecoes();
     this.el.addEventListener('input', (e) => this.handleInput(e));
@@ -513,8 +519,33 @@ export class FormView {
   // ---------- HTML ----------
 
   sectionHtml(section, i) {
+    const grade = `<div class="form-grid">${section.fields.filter((f) => !f.formHidden && !ocultoParaTecnico(f)).map((f) => this.fieldHtml(f)).join('')}</div>`;
+    const atributos = `id="sec-${i}" data-section="${i}"${section.opcional ? ` data-opcional="${esc(section.opcional)}"` : ''}${secaoAtiva(section, this.draft.data) ? '' : ' hidden'}`;
+    if (this.etapas) {
+      const concluida = this.etapaConcluida(section);
+      const aberta = this.aberta === i;
+      return `
+      <section class="card form-section etapa${concluida ? ' etapa--concluida' : ''}${aberta ? ' is-open' : ''}" ${atributos}>
+        <button type="button" class="form-section__head etapa__head" data-etapa-toggle="${i}" aria-expanded="${aberta}" aria-controls="etapa-body-${i}">
+          <span class="form-section__icon">${icon(concluida ? 'check' : (section.icon || 'clipboard'), 20)}</span>
+          <span class="form-section__titles">
+            <span class="form-section__title"><span class="form-section__num">${i + 1}.</span> ${esc(section.title)}</span>
+            <span class="etapa__estado" data-etapa-estado>${concluida ? 'Concluída · toque para conferir' : 'Toque para preencher'}</span>
+          </span>
+          <span class="section-badge" data-section-badge="${i}"></span>
+          <span class="etapa__chevron" aria-hidden="true">${icon('chevronDown', 18)}</span>
+        </button>
+        <div class="etapa__body" id="etapa-body-${i}"${aberta ? '' : ' hidden'}>
+          ${section.hint ? `<p class="form-section__hint etapa__hint">${esc(section.hint)}</p>` : ''}
+          ${grade}
+          <div class="etapa__acoes">
+            <button type="button" class="btn btn--primary" data-action="concluir-etapa" data-section="${i}">${icon('check', 17)} Concluir etapa</button>
+          </div>
+        </div>
+      </section>`;
+    }
     return `
-      <section class="card form-section" id="sec-${i}" data-section="${i}"${section.opcional ? ` data-opcional="${esc(section.opcional)}"` : ''}${secaoAtiva(section, this.draft.data) ? '' : ' hidden'}>
+      <section class="card form-section" ${atributos}>
         <header class="form-section__head">
           <span class="form-section__icon">${icon(section.icon || 'clipboard', 20)}</span>
           <div class="form-section__titles">
@@ -523,8 +554,74 @@ export class FormView {
           </div>
           <span class="section-badge" data-section-badge="${i}"></span>
         </header>
-        <div class="form-grid">${section.fields.filter((f) => !f.formHidden && !ocultoParaTecnico(f)).map((f) => this.fieldHtml(f)).join('')}</div>
+        ${grade}
       </section>`;
+  }
+
+  // ---------- Etapas (seções recolhidas) ----------
+
+  chaveEtapa(section) { return section.opcional || section.short || section.title; }
+  etapaConcluida(section) { return (this.draft.data._etapas || []).includes(this.chaveEtapa(section)); }
+
+  /** Abre a seção i (e fecha a que estava aberta). Sem etapas, só rola até ela. */
+  abrirSecao(i, { rolar = true } = {}) {
+    const sec = $(`#sec-${i}`, this.el);
+    if (!sec) return;
+    if (this.etapas) {
+      if (this.aberta !== null && this.aberta !== i) this.fecharSecao(this.aberta);
+      this.aberta = i;
+      sec.classList.add('is-open');
+      $('.etapa__body', sec).hidden = false;
+      $('[data-etapa-toggle]', sec).setAttribute('aria-expanded', 'true');
+    }
+    if (rolar) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  fecharSecao(i) {
+    const sec = $(`#sec-${i}`, this.el);
+    if (!sec) return;
+    sec.classList.remove('is-open');
+    const body = $('.etapa__body', sec);
+    if (body) body.hidden = true;
+    $('[data-etapa-toggle]', sec)?.setAttribute('aria-expanded', 'false');
+    if (this.aberta === i) this.aberta = null;
+  }
+
+  /** Confere os obrigatórios da seção; tudo certo → concluída, fecha e abre a próxima pendente. */
+  concluirEtapa(i) {
+    const section = this.module.sections[i];
+    if (!section) return;
+    const faltando = section.fields.filter((f) => f.id && !f.formHidden && !ocultoParaTecnico(f) && fieldMissing(f, this.draft.data)
+      && !(f.type === 'contrato' && !meusContratos().length));
+    if (faltando.length) {
+      this.showErrors(faltando.map((f) => ({ field: f.id, label: f.label, message: f.type === 'table' ? 'Preencha ao menos uma linha' : 'Campo obrigatório' })));
+      toast(`Falta preencher: ${faltando.map((f) => f.label || f.id).join(', ')}.`, 'warn', 6000);
+      return;
+    }
+    const chave = this.chaveEtapa(section);
+    const d = this.draft.data;
+    if (!(d._etapas || []).includes(chave)) d._etapas = [...(d._etapas || []), chave];
+    this.atualizarEstadoEtapa(i);
+    this.fecharSecao(i);
+    this.onChange(this.draft);
+    const proxima = this.module.sections.findIndex((s, j) => j > i && !s.legacy && !s.controle && secaoAtiva(s, d) && !this.etapaConcluida(s));
+    if (proxima >= 0) this.abrirSecao(proxima);
+    else {
+      $(`#sec-${i}`, this.el)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      toast('Todas as etapas concluídas. Confira e toque em "Salvar e Finalizar".', 'success', 6000);
+    }
+  }
+
+  atualizarEstadoEtapa(i) {
+    const sec = $(`#sec-${i}`, this.el);
+    const section = this.module.sections[i];
+    if (!sec || !section || !this.etapas) return;
+    const concluida = this.etapaConcluida(section);
+    sec.classList.toggle('etapa--concluida', concluida);
+    const est = $('[data-etapa-estado]', sec);
+    if (est) est.textContent = concluida ? 'Concluída · toque para conferir' : 'Toque para preencher';
+    const ic = $('.etapa__head .form-section__icon', sec);
+    if (ic) ic.innerHTML = icon(concluida ? 'check' : (section.icon || 'clipboard'), 20);
   }
 
   // Grade de 12 colunas: f.span define a largura; campos longos ocupam a linha toda
@@ -1179,10 +1276,16 @@ export class FormView {
       e.target._fotoLigada = true;
       e.target.addEventListener('change', (ev) => { ev.stopPropagation(); this.receberFotos(ev.target); });
     }
+    const tog = e.target.closest('[data-etapa-toggle]');
+    if (tog) {
+      const i = Number(tog.dataset.etapaToggle);
+      return this.aberta === i ? this.fecharSecao(i) : this.abrirSecao(i, { rolar: false });
+    }
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     const { action, table } = btn.dataset;
 
+    if (action === 'concluir-etapa') return this.concluirEtapa(Number(btn.dataset.section));
     if (action === 'add-valvula') return this.incluirValvula(btn.dataset.tipo);
     if (action === 'remove-valvula') return this.removerValvula(btn.dataset.p);
     if (action === 'flange-opcao' || action === 'flange-limpar') {
@@ -1763,6 +1866,10 @@ export class FormView {
 
   showErrors(errors) {
     $$('.field.has-error', this.el).forEach((w) => this.clearError(w.dataset.wrap));
+    // em etapas: abre a seção do primeiro erro (campo escondido não recebe o foco)
+    const primeiro = errors[0] && $(`[data-wrap="${CSS.escape(errors[0].field)}"]`, this.el);
+    const secPrimeiro = primeiro?.closest('section[data-section]');
+    if (this.etapas && secPrimeiro) this.abrirSecao(Number(secPrimeiro.dataset.section), { rolar: false });
     for (const err of errors) {
       const wrap = $(`[data-wrap="${CSS.escape(err.field)}"]`, this.el);
       if (!wrap) continue;

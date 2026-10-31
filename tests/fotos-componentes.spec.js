@@ -14,7 +14,7 @@ const hojeBR = () => { const d = new Date(); return `${pad(d.getDate())}/${pad(d
 const vaga = (page, field, category, fase) =>
   page.locator(`input[data-kind=photos][data-photos-field="${field}"][data-category="${category}"]${fase ? `[data-fase="${fase}"]` : ''}`);
 
-const ORDEM_VISITA = ['Cabeçalho', 'Chegada ao poço', 'Pressões', 'Antipoço', 'VC', 'VA-1', 'VA-2', 'VB-1', 'VB-2',
+const ORDEM_VISITA = ['Cabeçalho', 'Chegada ao poço', 'Pressões', 'Antipoço', 'VC', 'VA-1', 'VA-2', 'VB-1', 'VB-2', 'Válvulas adicionais',
   'Flange superior', 'Flange inferior', 'Outras fotos', 'Recomendações'];
 const BLOCOS_FOTOS = ['fotos_chegada', 'fotos_manometros', 'fotos_antepoco', 'fotos_vc', 'fotos_va1', 'fotos_va2',
   'fotos_vb1', 'fotos_vb2', 'fotos_flange_sup', 'fotos_flange_inf', 'fotos'];

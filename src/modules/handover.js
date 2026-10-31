@@ -101,6 +101,7 @@ const componente = ({ p, nome, short, fotos, opcional }, n, situacao) => ({
 });
 
 export default {
+  etapas: true, // seções recolhidas: tocar abre, "Concluir etapa" fecha e abre a próxima (form.js)
   id: 'handover',
   title: 'Relatório de Execução',
   shortTitle: 'Relatório de Execução',

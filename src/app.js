@@ -277,7 +277,7 @@ async function showTab(tab) {
     const item = e.target.closest('[data-goto-section]');
     if (!item) return;
     e.preventDefault();
-    $(`#sec-${item.dataset.gotoSection}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    state.formView?.abrirSecao(Number(item.dataset.gotoSection)); // em etapas também abre a seção
   });
 
   refreshFormChrome();

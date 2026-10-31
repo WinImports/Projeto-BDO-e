@@ -16,6 +16,7 @@ import visitaTecnica from '../modules/visita-tecnica.js';
 import handover from '../modules/handover.js';
 import { podeGerirBase, contaNoServidor, enviarBaseEquipe, apagarBaseEquipe, onBaseEquipeChange } from '../core/base-equipe.js';
 import { getClient } from '../core/supabase.js';
+import { getPref, setPref } from '../core/prefs.js';
 
 const ORIGEM_SERVIDOR = {
   aparelho: 'Configurado neste aparelho',
@@ -110,6 +111,19 @@ export class SettingsView {
         </div>
       </div>
       ${this.contaSectionHtml()}
+      <section class="card form-section" id="exibicao-section">
+        <header class="form-section__head">
+          <span class="form-section__icon">${icon('listChecks', 20)}</span>
+          <div class="form-section__titles">
+            <h3 class="form-section__title">Exibição dos relatórios</h3>
+            <p class="form-section__hint">Neste aparelho. Vale na hora (não precisa "Salvar configurações").</p>
+          </div>
+        </header>
+        <label class="check" id="pref-etapas">
+          <input type="checkbox" data-pref-etapas${getPref('etapas', true) !== false ? ' checked' : ''}>
+          <span>Visita Técnica e Relatório de Execução em etapas: cada seção abre ao tocar e fecha com "Concluir etapa"</span>
+        </label>
+      </section>
       ${this.pocosSectionHtml()}
       <form class="report-form settings-form" novalidate>
         ${GROUPS.map((g) => g.logo && porContrato ? this.empresaContratoHtml(g) : `
@@ -562,6 +576,11 @@ export class SettingsView {
   }
 
   async handleChange(e) {
+    if (e.target.matches('[data-pref-etapas]')) {
+      setPref('etapas', e.target.checked);
+      toast(e.target.checked ? 'Relatórios em etapas ligados.' : 'Relatórios com todas as seções abertas.', 'info');
+      return;
+    }
     if (e.target.dataset.setting === 'whatsapp_padrao') {
       // ao sair do campo: só dígitos, com o 55 do Brasil — ex.: (71) 99961-2118 → 5571999612118
       const raw = e.target.value.trim();

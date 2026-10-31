@@ -1379,3 +1379,25 @@ input[data-expand] { cursor: text; text-overflow: ellipsis; }
 .valvulas-extras__botoes { display: flex; flex-wrap: wrap; gap: 8px; }
 .valvulas-extras__lista { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .valvulas-extras__lista li { display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); font-weight: 600; }
+
+/* Relatório em etapas (Visita / Execução): seção recolhida só com o título; aberta para preencher */
+.form-section.etapa { padding: 0; overflow: hidden; }
+.etapa__head {
+  width: 100%; display: flex; align-items: center; gap: 12px; padding: 16px 18px; margin: 0;
+  background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
+  border-bottom: 1px solid transparent; min-height: 64px;
+}
+.etapa.is-open .etapa__head { border-bottom-color: var(--border); }
+.etapa__head .form-section__titles { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.etapa__head .form-section__title { font-size: 1.02rem; font-weight: 700; }
+.etapa__estado { color: var(--text-muted); font-size: .85rem; }
+.etapa__chevron { display: grid; place-items: center; color: var(--text-muted); transition: transform .15s ease; }
+.etapa.is-open .etapa__chevron { transform: rotate(180deg); }
+.etapa--concluida .form-section__icon { background: var(--ok-soft); color: var(--ok); }
+.etapa--concluida .etapa__estado { color: var(--ok); font-weight: 600; }
+.etapa__body { padding: 16px 18px 18px; }
+.etapa__hint { margin: 0 0 12px; }
+.etapa__acoes { display: flex; justify-content: flex-end; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+@media (pointer: coarse), (max-width: 640px) {
+  .etapa__acoes .btn { width: 100%; justify-content: center; min-height: 48px; }
+}

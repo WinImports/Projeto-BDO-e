@@ -120,6 +120,7 @@ const flange = (fl, n) => ({
 });
 
 export default {
+  etapas: true, // seções recolhidas: tocar abre, "Concluir etapa" fecha e abre a próxima (form.js)
   id: 'visita_tecnica',
   title: 'Relatório de Visita Técnica',
   shortTitle: 'Relatório de Visita Técnica',

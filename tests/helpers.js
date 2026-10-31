@@ -7,10 +7,10 @@ const path = require('path');
 const newUserData = () => fs.mkdtempSync(path.join(os.tmpdir(), 'bdoe-test-'));
 
 /**
- * @param {{ userData?: string, login?: boolean }} [opts] reutilize `userData` para simular reabrir o app;
+ * @param {{ userData?: string, login?: boolean, etapas?: boolean }} [opts] reutilize `userData` para simular reabrir o app;
  *   login: false para parar na tela de login (por padrão entra com um usuário local de teste)
  */
-async function launchApp({ userData = newUserData(), env: extraEnv = {}, login = true, licenca = false } = {}) {
+async function launchApp({ userData = newUserData(), env: extraEnv = {}, login = true, licenca = false, etapas = false } = {}) {
   // licença desligada por padrão (BDOE_LICENCA=off só vale fora do app empacotado); licenca: true liga a trava
   const env = { ...process.env, BDOE_USER_DATA: userData, ...(licenca ? {} : { BDOE_LICENCA: 'off' }), ...extraEnv };
   delete env.ELECTRON_RUN_AS_NODE; // o VS Code define essa variável e ela impede a janela de abrir
@@ -18,6 +18,8 @@ async function launchApp({ userData = newUserData(), env: extraEnv = {}, login =
   const app = await electron.launch({ args: [path.join(__dirname, '..')], env });
   const page = await app.firstWindow();
   await page.waitForSelector('#tabs .tab, #login-form, #licenca-form');
+  // relatório em etapas (seções recolhidas) desligado por padrão nos testes antigos; etapas: true liga
+  if (!etapas) await page.evaluate(() => localStorage.setItem('bdoe.pref.etapas', 'false'));
   if (login && await page.locator('#login-form').count()) await entrar(page);
 
   /** Fecha o app; com keepData mantém a pasta para reabrir depois. */
