@@ -8,6 +8,7 @@
 
 import { STORES, get, getAll } from './db.js';
 import { ultimoPoco } from './pocos.js';
+import { meusContratos, normContrato } from './contratos.js';
 
 const vazio = (v) => v == null || v === '' || (typeof v === 'object' && !Object.keys(v).length);
 const igual = (a, b) => JSON.stringify(a ?? '') === JSON.stringify(b ?? '');
@@ -35,7 +36,10 @@ export async function bdoAtivo(moduleId = null) {
   let atual = null;
   if (rascunho?.data?.poco) atual = { data: rascunho.data, origem: 'rascunho', uniqueId: rascunho.uniqueId };
   else {
-    const finalizados = (await getAll(STORES.history, 'module')).filter((r) => r.module === 'bdo' && r.data?.poco);
+    // BDO-e de outro contrato (conta anterior neste aparelho) não é herdado
+    const meus = new Set(meusContratos().map(normContrato));
+    const doContrato = (r) => !meus.size || !r.data?.contrato || meus.has(normContrato(r.data.contrato));
+    const finalizados = (await getAll(STORES.history, 'module')).filter((r) => r.module === 'bdo' && r.data?.poco && doContrato(r));
     finalizados.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     if (finalizados[0]) atual = { data: finalizados[0].data, origem: 'finalizado', uniqueId: finalizados[0].uniqueId };
   }

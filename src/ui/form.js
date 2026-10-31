@@ -17,7 +17,7 @@ import { routeLinks, showRoutePrompt } from './route-prompt.js';
 import { assignPhotoFields, photoFields, photosOf, photoMeta, rotuloFotos, TITULO_EXECUCAO } from '../core/fotos.js';
 import { STORES, get } from '../core/db.js';
 import { getModule } from '../modules/index.js';
-import { meusContratos, valorContrato, objetivoDoContrato, nomesDoContrato } from '../core/contratos.js';
+import { meusContratos, valorContrato, objetivoDoContrato, nomesDoContrato, contratoDaLista } from '../core/contratos.js';
 import { comNomes, limparNomes } from '../modules/common.js';
 import { podeGerirBase } from '../core/base-equipe.js';
 import { getPref } from '../core/prefs.js';
@@ -538,6 +538,8 @@ export class FormView {
         if (v !== undefined) this.draft.data[f.id] = v;
         continue;
       }
+      // cliente padrão é do CONTRATO padrão: conta de outro contrato (outra empresa) abre com o cliente em branco
+      if (f.settingsKey === 'cliente_padrao' && meusContratos().length && !contratoDaLista(settings.contrato_padrao)) continue;
       if (f.settingsKey && settings[f.settingsKey]) this.draft.data[f.id] ??= settings[f.settingsKey];
       if (f.defaultValue != null) this.draft.data[f.id] ??= f.defaultValue;
       if (f.type === 'table' && f.defaultRows && this.draft.data[f.id] === undefined) this.draft.data[f.id] = f.defaultRows(settings);

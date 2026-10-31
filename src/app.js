@@ -2,7 +2,7 @@
 
 import { MODULES, getModule } from './modules/index.js';
 import { openDb, requestPersistence } from './core/db.js';
-import { loadDraft, saveDraft, discardDraft, hasDraft, restoreDraft, trocarTecnicoNosRascunhos } from './core/drafts.js';
+import { loadDraft, saveDraft, discardDraft, hasDraft, restoreDraft, trocarTecnicoNosRascunhos, separarRascunhosPorContrato } from './core/drafts.js';
 import { enqueue, pendingCount, onOutboxChange, takeBack, saveLocalOnly, sendFromHistory, takeBackLocal, pausarEnvio } from './core/outbox.js';
 import { shareMessage, waUrl, publishReportDocuments, whatsappConfigurado } from './core/share.js';
 import { reportFiles } from './ui/report-pdf.js';
@@ -205,6 +205,8 @@ async function showTab(tab) {
   }
 
   const module = getModule(tab);
+  // conta de outro contrato: rascunhos de contratos que não são dela ficam guardados à parte (formulário em branco)
+  await separarRascunhosPorContrato(MODULES.map((m) => m.id));
   const draft = await loadDraft(module.id);
   // Visita Técnica / Execução: Poço, Locação, Data e Cliente vêm do BDO-e ativo
   const bdo = module.herdaDoBdo ? await bdoAtivo(draft.isNew ? module.id : null) : null;
@@ -820,7 +822,13 @@ async function init() {
   settingsView.onServerChanged = () => syncNow({ force: true });
   onSettingsChange(() => { settingsView.refreshStatus(); renderUser(); });
   // lista de contratos chegou do servidor (login / sincronização): refaz o campo Contrato aberto
-  onContratosChange(() => {
+  onContratosChange(async () => {
+    // lista de contratos chegou / mudou: rascunho de contrato que não é da conta sai da tela (fica guardado)
+    if (state.formView && state.module) {
+      await flushSave();
+      const mudou = await separarRascunhosPorContrato(MODULES.map((m) => m.id));
+      if (mudou.includes(state.module.id) && getModule(state.tab)) { state.draft = null; await showTab(state.tab); }
+    }
     state.formView?.atualizarContratos();
     refreshCompanyChip(); // empresa/logo dos contratos pode ter mudado
     if (state.tab === SETTINGS_TAB && !settingsView.dirty) settingsView.render();
