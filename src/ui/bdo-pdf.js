@@ -15,7 +15,8 @@ const BORDA = [208, 214, 222];
 const TEXTO = [17, 24, 39];
 const CINZA = [91, 102, 118];
 const AMBAR = [232, 119, 34]; // laranja de segurança (#E87722), o mesmo destaque do app
-const ESCALAS = [1, 0.93, 0.86, 0.8, 0.74, 0.68, 0.63];
+// letras maiores (pedido do gestor, nov/2026): começa 25% maior e só diminui o necessário para caber em 1 página
+const ESCALAS = [1.25, 1.17, 1.09, 1, 0.93, 0.86, 0.8, 0.74, 0.68, 0.63];
 
 const brData = (iso) => (/^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(0, 10).split('-').reverse().join('/') : '');
 const hora = (t) => (/^\d{2}:\d{2}$/.test(t || '') ? t : '');
