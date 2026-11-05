@@ -2,7 +2,7 @@
 // o bloco só aparece no relatório em que foi incluído, entra no Quadro de Ações / prévia e passa da Visita
 // para a Execução de referência.
 const { test, expect } = require('@playwright/test');
-const { launchApp, fill, openTab, preencherVisita } = require('./helpers');
+const { launchApp, fill, openTab, preencherVisita, anexarFoto } = require('./helpers');
 
 let ctx;
 test.beforeEach(async () => { ctx = await launchApp(); });
@@ -58,6 +58,7 @@ test('a válvula adicional da Visita aparece na prévia e passa para a Execuçã
   await page.locator('[data-action=add-valvula][data-tipo=VM]').click();
   await fill(page, 'vm1_estanqueidade', 'Estanque');
   await fill(page, 'vm1_obs', 'Válvula mestre nova');
+  await anexarFoto(page, 'fotos_vm1'); // componente preenchido: foto obrigatória
   await page.locator('#btn-finalize').click();
   await expect(page.locator('dialog.modal[open]')).toContainText('VM-1 — Válvula Mestre 1');
   await page.locator('dialog.modal[open] [data-confirm]').click();
@@ -88,6 +89,7 @@ test('flange intermediário (até 2): bloco entre o superior e o inferior, com o
   await fill(page, 'flange_int1_corrosao', 'Severa');
   await page.locator('[data-field=flange_int1_intervencao][value=Sim]').check();
   await expect(page.locator('[data-wrap=correcoes] [data-col=acao]').last()).toHaveValue(/^Flange intermediário 1: /);
+  await anexarFoto(page, 'fotos_flange_int1'); // componente preenchido: foto obrigatória
   await page.locator('#btn-finalize').click();
   await expect(page.locator('dialog.modal[open]')).toContainText('Flange intermediário 1');
   await page.locator('dialog.modal[open] [data-confirm]').click();

@@ -18,6 +18,12 @@ export const contaNoServidor = () => isSupabaseConfigured() && Boolean(currentUs
 /** Importar / limpar a base: só o gestor (ou quem usa o app sem servidor). */
 export const podeGerirBase = () => !contaNoServidor() || souGestor();
 
+/**
+ * PDF só para o gestor (ou quem usa o app sem servidor): o técnico salva e envia em Word (.docx), e o gestor faz a
+ * validação final e gera o PDF. A cópia PDF continua indo para o servidor junto com o Word.
+ */
+export const podeGerarPdf = () => podeGerirBase();
+
 const semMigracao = (e) => /PGRST202|my_pocos_base|team_set_pocos|team_clear_pocos/i.test(`${e?.code} ${e?.message}`);
 
 async function guardar(base, contrato) {

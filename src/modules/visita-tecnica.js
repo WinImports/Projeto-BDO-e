@@ -4,7 +4,7 @@
 import {
   pocoHerdado, herancaBdo, pressoes, coordenadas, fotosDe, paragrafoAbertura, equipe, PRIORIDADES, TURNOS,
   FOTOS_CHEGADA, FOTOS_MANOMETROS, FOTOS_OUTRAS, ANTEPOCO, VALVULAS_CABECA, VALVULAS_EXTRAS, TODAS_VALVULAS, blocoValvulasExtras, FLANGES, TODOS_FLANGES, nomeDe, tituloAdicional,
-  ESTANQUEIDADE, ABERTURA, CORROSAO
+  ESTANQUEIDADE, ABERTURA, CORROSAO, validarPressoes, temDadosComp
 } from './common.js';
 import { MODELOS, PRESSOES, NOTA_TORQUE } from '../core/flange.js';
 
@@ -76,6 +76,12 @@ export function acoesAutomaticas(d) {
   return out;
 }
 
+/** Válvula com estanqueidade ou abertura "Não testada": o motivo é obrigatório. */
+export const naoTestada = (d, p) => d[`${p}_estanqueidade`] === 'Não testada' || d[`${p}_abertura`] === 'Não testada';
+
+/** Fotos exigidas do componente p quando ele foi preenchido (componente em branco = não existe no poço). */
+const fotosSePreenchido = (p) => (d) => temDadosComp(d, p);
+
 const valvula = (v, n) => ({
   title: v.opcional ? tituloAdicional(v) : `${n}. ${v.nome}`,
   opcional: v.opcional ? v.p : undefined,
@@ -87,9 +93,14 @@ const valvula = (v, n) => ({
     { id: `${v.p}_config`, label: 'Configuração', type: 'text', span: 6, placeholder: 'Ex.: gaveta 2 1/16" 5.000 psi, flangeada' },
     ...(v.abertura ? [{ id: `${v.p}_abertura`, label: 'Abertura / fechamento', type: 'select', span: 6, options: ABERTURA }] : []),
     { id: `${v.p}_estanqueidade`, label: 'Estanqueidade', type: 'select', span: 6, options: ESTANQUEIDADE },
+    {
+      id: `${v.p}_motivo_nao_testada`, label: 'Motivo de não ter testado', type: 'textarea',
+      placeholder: 'Ex.: válvula sem acesso, poço sem pressão para o teste, falta de equipamento',
+      showIf: (d) => naoTestada(d, v.p), requiredIf: (d) => naoTestada(d, v.p)
+    },
     { id: `${v.p}_intervencao`, label: 'Necessita intervenção?', type: 'yesno', span: 6 },
     { id: `${v.p}_obs`, label: 'Observações', type: 'textarea' },
-    fotosDe(`fotos_${v.p}`, `Fotos — ${v.short}`, v.fotos)
+    fotosDe(`fotos_${v.p}`, `Fotos — ${v.short}`, v.fotos, { requiredIf: fotosSePreenchido(v.p) })
   ]
 });
 
@@ -102,28 +113,30 @@ const flange = (fl, n) => ({
   fields: [
     // Assistente Técnico de Flanges (core/flange.js): busca cruzada — preencha qualquer campo, em qualquer ordem;
     // as caixas oferecem só o que ainda combina e, sobrando um flange, o resto é completado
-    { type: 'divider', label: 'Flange, prisioneiros e torque — preencha qualquer campo, em qualquer ordem', icon: 'wrench' },
+    { type: 'divider', label: 'Flange, parafusos e torque — preencha qualquer campo, em qualquer ordem', icon: 'wrench' },
     { id: `${fl.p}_modelo`, label: 'Flange', pdfLabel: 'Modelo do flange', type: 'select', options: MODELOS, reportAlways: true, flange: fl.p, flangeCampo: 'modelo' },
     { id: `${fl.p}_pressao`, label: 'Pressão', pdfLabel: 'Pressão do flange', type: 'select', options: PRESSOES, reportAlways: true, flange: fl.p, flangeCampo: 'pressao' },
     { id: `${fl.p}_parafusos`, label: 'Nº de parafusos (furos)', type: 'number', min: 0, step: 1, flange: fl.p, flangeCampo: 'parafusos' },
     { id: `${fl.p}_anel`, label: 'Anel de vedação', pdfLabel: 'Tipo de anel de vedação', type: 'text', reportAlways: true, placeholder: 'Ex.: R-45, BX-160', flange: fl.p, flangeCampo: 'anel' },
-    { id: `${fl.p}_diametro`, label: 'Diâmetro do prisioneiro', type: 'text', span: 6, placeholder: 'Pol ou mm. Ex.: 7/8" ou 22,23', flange: fl.p, flangeCampo: 'diametro' },
-    { id: `${fl.p}_comprimento`, label: 'Comprimento do prisioneiro', type: 'text', span: 6, placeholder: 'Pol ou mm. Ex.: 6" ou 152,4', flange: fl.p, flangeCampo: 'comprimento' },
+    { id: `${fl.p}_diametro`, label: 'Diâmetro do parafuso', type: 'text', span: 6, placeholder: 'Pol ou mm. Ex.: 7/8" ou 22,23', flange: fl.p, flangeCampo: 'diametro' },
+    { id: `${fl.p}_comprimento`, label: 'Comprimento do parafuso', type: 'text', span: 6, placeholder: 'Pol ou mm. Ex.: 6" ou 152,4', flange: fl.p, flangeCampo: 'comprimento' },
     { id: `${fl.p}_chave`, label: 'Chave', pdfLabel: 'Tamanho da chave', type: 'text', span: 6, reportAlways: true, placeholder: 'mm ou pol. Ex.: 36 ou 1-7/16"', flange: fl.p, flangeCampo: 'chave' },
     { id: `${fl.p}_torque`, label: 'Torque recomendado', pdfLabel: 'Torque recomendado (Nm / lbf·ft)', type: 'text', span: 6, reportAlways: true, reportNote: NOTA_TORQUE, placeholder: 'Nm ou lbf·ft', flange: fl.p, flangeCampo: 'torque' },
     { id: `${fl.p}_apoio`, type: 'flangeCard', flange: fl.p, full: true },
     // relatórios antigos: o tamanho digitado à mão continua no PDF/Word (fora do formulário)
     { id: `${fl.p}_tamanho`, label: 'Tamanho dos parafusos', type: 'text', formHidden: true },
     { id: `${fl.p}_corrosao`, label: 'Corrosão', type: 'select', options: CORROSAO },
-    { id: `${fl.p}_prisioneiros`, label: 'Prisioneiros?', type: 'yesno' },
+    // "prisioneiro" só aqui embaixo: a pergunta se os fixadores são prisioneiros (os campos de cima dizem "parafuso")
+    { id: `${fl.p}_prisioneiros`, label: 'Os parafusos são prisioneiros?', pdfLabel: 'Prisioneiros?', type: 'yesno' },
     { id: `${fl.p}_intervencao`, label: 'Necessita intervenção?', type: 'yesno', span: 6 },
     { id: `${fl.p}_obs`, label: 'Observações', type: 'textarea' },
-    fotosDe(`fotos_${fl.p}`, `Fotos — ${fl.short} (medições e vistas)`, fl.fotos)
+    fotosDe(`fotos_${fl.p}`, `Fotos — ${fl.short} (medições e vistas)`, fl.fotos, { requiredIf: fotosSePreenchido(fl.p) })
   ]
 });
 
 export default {
   etapas: true, // seções recolhidas: tocar abre, "Concluir etapa" fecha e abre a próxima (form.js)
+  paisagem: false, // PDF e Word em A4 em pé (o BDO-e e a Execução ficam deitados) — pdf-doc.js paisagemDe
   id: 'visita_tecnica',
   title: 'Relatório de Visita Técnica',
   shortTitle: 'Relatório de Visita Técnica',
@@ -163,7 +176,7 @@ export default {
       short: 'Chegada ao poço',
       icon: 'camera',
       fields: [
-        fotosDe('fotos_chegada', 'Placa do poço e conjunto / árvore de natal', FOTOS_CHEGADA),
+        fotosDe('fotos_chegada', 'Placa do poço e conjunto / árvore de natal', FOTOS_CHEGADA, { required: true }),
         { id: 'status_locacao', label: 'Status da locação', type: 'select', span: 6, options: ['OK', 'Necessita Limpeza', 'Acesso Obstruído'] },
         { id: 'obs_iniciais', label: 'Observações iniciais', type: 'textarea' }
       ]
@@ -173,9 +186,13 @@ export default {
       short: 'Pressões',
       icon: 'activity',
       fields: [
-        { id: 'hora_leitura', label: 'Hora da leitura', type: 'time' },
-        pressoes(),
-        fotosDe('fotos_manometros', 'Fotos dos manômetros (uma por medição)', FOTOS_MANOMETROS)
+        // a hora da leitura saiu do formulário (relatórios antigos continuam mostrando)
+        { id: 'hora_leitura', label: 'Hora da leitura', type: 'time', formHidden: true },
+        { ...pressoes({ motivo: true }), hint: 'Cada ponto precisa da pressão lida. Se não conseguiu medir, escreva o motivo na mesma linha.' },
+        // foto obrigatória quando houve ao menos uma leitura
+        fotosDe('fotos_manometros', 'Fotos dos manômetros (uma por medição)', FOTOS_MANOMETROS, {
+          requiredIf: (d) => (d.pressoes || []).some((r) => String(r.valor ?? '').trim() !== '')
+        })
       ]
     },
     {
@@ -192,9 +209,10 @@ export default {
             { id: 'obs', label: 'Observação' }
           ]
         },
-        { id: 'estado_antepoco', label: 'Estado do antipoço', type: 'select', span: 6, options: ['Limpo', 'Cheio de Fluido', 'Necessita Carro Sugador'] },
+        // "Estado do antipoço" saiu do formulário: a verificação acima já diz se precisa de sugador / limpeza
+        { id: 'estado_antepoco', label: 'Estado do antipoço', type: 'select', span: 6, formHidden: true, options: ['Limpo', 'Cheio de Fluido', 'Necessita Carro Sugador'] },
         { id: 'obs_antepoco', label: 'Observações', type: 'textarea' },
-        fotosDe(`fotos_${ANTEPOCO.p}`, 'Fotos — Antipoço', ANTEPOCO.fotos)
+        fotosDe(`fotos_${ANTEPOCO.p}`, 'Fotos — Antipoço', ANTEPOCO.fotos, { required: true })
       ]
     },
     ...VALVULAS_CABECA.map((v, i) => valvula(v, i + 2)),
@@ -253,6 +271,9 @@ export default {
       ]
     }
   ],
+  validate(d) {
+    return validarPressoes(d);
+  },
   herdaDoBdo: herancaBdo('data'),
   autoRows: { table: 'correcoes', col: 'acao', label: 'Quadro de Ações', defaults: { necessario: true, prioridade: 'Alta' }, rows: acoesAutomaticas }
 };

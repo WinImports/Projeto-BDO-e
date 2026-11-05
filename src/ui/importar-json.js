@@ -10,6 +10,7 @@ import { enqueue, saveLocalOnly } from '../core/outbox.js';
 import { contratoSelectHtml } from './contrato-campo.js';
 import { openPreview } from './preview.js';
 import { savePdf } from './report-pdf.js';
+import { podeGerarPdf } from '../core/base-equipe.js';
 import { icon } from './icons.js';
 import { $, esc } from './dom.js';
 import { toast } from './toast.js';
@@ -71,7 +72,7 @@ function dialogo({ relatorios, fotosIgnoradas }, nomeArquivo) {
       </div>
       <div class="modal__footer">
         ${um ? `<button type="button" class="btn btn--ghost" data-imp-ver>${icon('eye', 17)} Visualizar</button>
-        <button type="button" class="btn btn--ghost" data-imp-pdf>${icon('download', 17)} Gerar PDF</button>` : ''}
+        ${podeGerarPdf() ? `<button type="button" class="btn btn--ghost" data-imp-pdf>${icon('download', 17)} Gerar PDF</button>` : ''}` : ''}
         <span class="modal__spacer"></span>
         <button type="button" class="btn btn--ghost" data-imp-local>${icon('save', 17)} Só salvar no aparelho</button>
         <button type="button" class="btn btn--primary" data-imp-enviar>${icon('send', 17)} Importar e enviar</button>

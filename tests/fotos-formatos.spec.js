@@ -86,7 +86,7 @@ test('iPhone: foto que aparece na tela mas não deixa ler os bytes ainda entra n
   expect(await page.locator('#toasts').count() ? await page.locator('#toasts').innerText() : '').not.toContain('não pôde ser incluída');
 });
 
-test('PDF compacto: 4 fotos por linha (Antes x Depois com 2 de cada lado), sem uma foto por página', async () => {
+test('PDF compacto: fotos maiores, 3 por linha na página deitada (Antes x Depois com 2 de cada lado), sem uma foto por página', async () => {
   const { page } = ctx;
   const res = await page.evaluate(async (b64) => {
     const { getModule } = await import('./src/modules/index.js');
@@ -109,7 +109,7 @@ test('PDF compacto: 4 fotos por linha (Antes x Depois com 2 de cada lado), sem u
     return { paginas: (t.match(/\/Type\s*\/Page[^s]/g) || []).length, imagens: desenhadas };
   }, WEBP);
   expect(res.imagens).toBe(40);
-  expect(res.paginas).toBeLessThanOrEqual(8); // antes: ~1 linha (2 fotos) por página → mais de 20 páginas
+  expect(res.paginas).toBeLessThanOrEqual(11); // fotos maiores (3 por linha); uma foto por página daria mais de 20
 });
 
 test('fotos ficam guardadas como bytes e voltam como foto legível no rascunho, no histórico e na fila', async () => {

@@ -28,6 +28,10 @@ const atividadesDe = (d) => (Array.isArray(d.atividades) ? d.atividades : []).fi
 const paradasDe = (d) => (Array.isArray(d.paradas) ? d.paradas : []).filter((p) => !vazio(p.motivo) || hora(p.inicio) || hora(p.fim));
 const materiaisDe = (d) => (Array.isArray(d.materiais) ? d.materiais : []).filter((m) => !vazio(m.descricao) || !vazio(m.quantidade));
 
+/** Boletim com algum dado de SMS & Segurança (só os antigos: a seção saiu do formulário). */
+export const temSms = (d) => ['rpt', 'ocorrencia_sms', 'descricao_sms', 'reuniao_pre_tarefa', 'reuniao_hora', 'reuniao_assuntos', 'tst_nome', 'tst_matricula']
+  .some((k) => !vazio(d[k]));
+
 /** Indicadores do cabeçalho. */
 export function indicadoresBdo(d) {
   const ativ = atividadesDe(d);
@@ -40,7 +44,8 @@ export function indicadoresBdo(d) {
   return [
     ['KM rodado', km || '—'],
     ['Horas apropriadas', horas ? fmtMin(horas) : '—'],
-    ['Horas paradas', paradas.length ? fmtMin(parado) : '0h00'],
+    // paradas não são mais registradas no BDO-e: o indicador só aparece em boletim antigo que as tenha
+    ...(paradas.length ? [['Horas paradas', fmtMin(parado)]] : []),
     ['Jornada', inicios.length && fins.length ? `${inicios[0]} – ${fins[fins.length - 1]}` : '—'],
     ['Atividades', String(ativ.filter((r) => !vazio(r.atividade)).length)]
   ];
@@ -226,7 +231,8 @@ function render({ jsPDF, autoTable, txt, formatOf }, { uniqueId, data: d, compan
     });
   }
 
-  // ----- SMS & Segurança -----
+  // ----- SMS & Segurança (seção retirada do formulário: só em boletim antigo que tenha esses dados) -----
+  if (temSms(d)) {
   titulo('SMS & Segurança');
   const ocorreu = d.ocorrencia_sms === 'Sim';
   const sim = (v) => (vazio(v) ? '—' : v);
@@ -245,6 +251,7 @@ function render({ jsPDF, autoTable, txt, formatOf }, { uniqueId, data: d, compan
     alternateRowStyles: {},
     columnStyles: { 0: { cellWidth: fs(44) }, 1: { cellWidth: fs(42) } }
   });
+  }
 
   // ----- Resumo executivo -----
   const resumo = resumoParaPdf(d);

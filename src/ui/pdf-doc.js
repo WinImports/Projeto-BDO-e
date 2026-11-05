@@ -13,6 +13,12 @@ import { buildBdoPdf } from './bdo-pdf.js';
 /** Relatórios com layout próprio de página única (desktop e navegador usam este mesmo gerador). */
 export const temLayoutProprio = (module) => module.id === 'bdo';
 
+/**
+ * Orientação da página: BDO-e e Execução em paisagem (A4 deitado); Visita Técnica em retrato (A4 em pé),
+ * pedido do gestor (nov/2026). O módulo diz `paisagem: false` para ficar em pé. Vale para PDF e Word.
+ */
+export const paisagemDe = (module) => (module?.base || module)?.paisagem !== false;
+
 const A4 = { w: 210, h: 297 };
 const M = 12; // margem
 const AZUL = [0, 43, 73]; // Azul Petróleo #002B49 (identidade do app e do PDF do BDO-e)
@@ -67,7 +73,7 @@ const formatOf = (dataUrl) => (/^data:image\/png/i.test(dataUrl) ? 'PNG' : 'JPEG
 // ---------- montagem ----------
 
 class Doc {
-  /** paisagem: A4 deitado (297 × 210 mm) — padrão de todos os relatórios. */
+  /** paisagem: A4 deitado (297 × 210 mm); false = A4 em pé (Visita Técnica). */
   constructor(jsPDF, autoTable, paisagem = false) {
     this.pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: paisagem ? 'landscape' : 'portrait', compress: true });
     this.W = paisagem ? A4.h : A4.w; // largura e altura da página deste documento
@@ -95,14 +101,14 @@ class Doc {
   sectionTitle(title) {
     this.ensure(14);
     this.y += 3;
-    this.text(title.toUpperCase(), M, this.y + 3, { size: 9, bold: true, color: AZUL });
-    this.y += 6;
+    this.text(title.toUpperCase(), M, this.y + 3.5, { size: 11, bold: true, color: AZUL });
+    this.y += 7;
   }
 
   subTitle(title) {
     this.ensure(10);
-    this.text(title.toUpperCase(), M, this.y + 3, { size: 7.5, bold: true, color: [51, 65, 85] });
-    this.y += 5;
+    this.text(title.toUpperCase(), M, this.y + 3.2, { size: 9, bold: true, color: [51, 65, 85] });
+    this.y += 5.5;
   }
 
   table(opts) {
@@ -111,8 +117,8 @@ class Doc {
       margin: { left: M, right: M, top: M, bottom: M + 8 },
       theme: 'grid',
       rowPageBreak: 'avoid', // rótulo e valor nunca ficam em páginas diferentes
-      styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 1.6, textColor: TEXTO, lineColor: LINHA, lineWidth: 0.2, overflow: 'linebreak' },
-      headStyles: { fillColor: [241, 244, 248], textColor: CINZA, fontStyle: 'bold', fontSize: 7 },
+      styles: { font: 'helvetica', fontSize: 10, cellPadding: 1.9, textColor: TEXTO, lineColor: LINHA, lineWidth: 0.2, overflow: 'linebreak' },
+      headStyles: { fillColor: [241, 244, 248], textColor: CINZA, fontStyle: 'bold', fontSize: 8.5 },
       ...opts
     });
     this.y = this.pdf.lastAutoTable.finalY + 3;
@@ -141,11 +147,11 @@ class Doc {
     this.table({
       body,
       // espaço no topo da célula para o rótulo (desenhado em didDrawCell)
-      styles: { fontSize: 9, cellPadding: { top: 5.4, bottom: 1.8, left: 2, right: 2 } },
+      styles: { fontSize: 10.5, cellPadding: { top: 6.2, bottom: 2, left: 2.2, right: 2.2 } },
       columnStyles: { 0: { cellWidth: this.CW / 2 }, 1: { cellWidth: this.CW / 2 } },
       didDrawCell: (h) => {
         if (h.section !== 'body' || !h.cell.raw?.label) return;
-        this.text(h.cell.raw.label, h.cell.x + 2, h.cell.y + 3.4, { size: 6.5, bold: true, color: CINZA });
+        this.text(h.cell.raw.label, h.cell.x + 2.2, h.cell.y + 3.8, { size: 7.8, bold: true, color: CINZA });
       }
     });
   }
@@ -153,10 +159,10 @@ class Doc {
   /** "Figura N — legenda" em até 2 linhas sob a foto (o resto vira "…"). */
   legendaFoto(p, n, px, w, h) {
     this.pdf.setFont('helvetica', 'normal');
-    this.pdf.setFontSize(6.5);
+    this.pdf.setFontSize(8);
     let linhas = this.pdf.splitTextToSize(txt(`Figura ${n} — ${p.legenda || p.category || p.name || ''}`), w);
     if (linhas.length > 2) linhas = [linhas[0], `${String(linhas[1]).replace(/\s*\S*$/, '')}…`];
-    linhas.forEach((l, i) => this.text(l, px, this.y + h + 2.8 + i * 2.6, { size: 6.5, color: CINZA }));
+    linhas.forEach((l, i) => this.text(l, px, this.y + h + 3.4 + i * 3.2, { size: 8, color: CINZA }));
   }
 
   /** Foto centralizada na caixa (px, y, w, h) com "Figura N — legenda" embaixo. */
@@ -181,22 +187,28 @@ class Doc {
     this.legendaFoto(p, n, px, w, h);
   }
 
-  /** Tamanho da vaga de foto: 4 por linha na largura útil (paisagem: ~64 x 48 mm), 3 linhas por página. */
-  get fotoCaixa() {
+  /** Fotos por linha: 3 na página deitada (~88 x 66 mm), 2 na página em pé (~91 x 68 mm). */
+  get fotosPorLinha() { return this.W > this.H ? 3 : 2; }
+
+  /** Tamanho da vaga de foto (n por linha na largura útil). */
+  fotoCaixaDe(n) {
     const gap = 4;
-    const w = (this.CW - 3 * gap) / 4;
-    return { gap, w, h: w * 0.75, capH: 7.5 };
+    const w = (this.CW - (n - 1) * gap) / n;
+    return { gap, w, h: w * 0.75, capH: 9 };
   }
+
+  get fotoCaixa() { return this.fotoCaixaDe(this.fotosPorLinha); }
 
   /** Altura de uma linha de fotos (para manter o título junto da 1ª linha). */
   get fotoLinhaH() { const { h, capH } = this.fotoCaixa; return h + capH + 2; }
 
-  /** Fotos lado a lado, 4 por linha. */
+  /** Fotos lado a lado (fotosPorLinha). */
   async photoGrid(list, srcOf) {
     const { gap, w, h, capH } = this.fotoCaixa;
-    for (let i = 0; i < list.length; i += 4) {
+    const n = this.fotosPorLinha;
+    for (let i = 0; i < list.length; i += n) {
       this.ensure(h + capH + 2);
-      for (const [j, p] of list.slice(i, i + 4).entries()) {
+      for (const [j, p] of list.slice(i, i + n).entries()) {
         this.fig += 1;
         await this.photoCell(p, srcOf, M + j * (w + gap), w, h, this.fig);
       }
@@ -209,14 +221,14 @@ class Doc {
    * Numeração igual à prévia: primeiro as de "Antes", depois as de "Depois".
    */
   async photoCompare(antes, depois, srcOf, tituloAntes) {
-    const { gap, w, h, capH } = this.fotoCaixa;
+    const { gap, w, h, capH } = this.fotoCaixaDe(4); // 2 de cada lado
     const meio = M + 2 * (w + gap); // início da metade "Depois"
     const base = this.fig;
     this.fig += antes.length + depois.length;
     this.ensure(5 + h + capH + 2);
-    this.text(tituloAntes, M, this.y + 2.5, { size: 7.5, bold: true, maxWidth: 2 * w + gap });
-    this.text('Depois — Execução', meio, this.y + 2.5, { size: 7.5, bold: true, color: [21, 128, 61], maxWidth: 2 * w + gap });
-    this.y += 4;
+    this.text(tituloAntes, M, this.y + 2.8, { size: 8.5, bold: true, maxWidth: 2 * w + gap });
+    this.text('Depois — Execução', meio, this.y + 2.8, { size: 8.5, bold: true, color: [21, 128, 61], maxWidth: 2 * w + gap });
+    this.y += 4.5;
     const linhas = Math.max(Math.ceil(antes.length / 2), Math.ceil(depois.length / 2), 1);
     for (let i = 0; i < linhas; i++) {
       this.ensure(h + capH + 2);
@@ -241,7 +253,7 @@ function header(doc, { module, uniqueId, data, company, draft, logo }) {
   }
   let y = M + 3;
   if (company?.nome) { doc.text(`${company.nome}${company.cnpj ? `  ·  CNPJ ${company.cnpj}` : ''}`, x, y, { size: 8.5, bold: true }); y += 5; }
-  doc.text(module.title, x, y + 1, { size: 14, bold: true }); y += 6;
+  doc.text(module.title, x, y + 1, { size: 16, bold: true }); y += 7;
   const generated = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   if (draft) doc.text('RASCUNHO — NÃO FINALIZADO', doc.W - M, M + 3, { size: 9, bold: true, color: [180, 35, 24], align: 'right' });
   doc.text(`Gerado em ${generated}`, doc.W - M, M + 8, { size: 7.5, color: CINZA, align: 'right' });
@@ -286,9 +298,9 @@ export async function buildPdfBlob({ module, uniqueId, data, photos = [], compan
   const { jsPDF, autoTable } = await libs();
   module = comNomes(module, data); // nomes das válvulas / flanges definidos pelo gestor
   const company = empresaDoRelatorio(empresa); // sem empresa configurada: "Empresa Prestadora"
-  // todos os relatórios em paisagem (A4 deitado); o BDO-e mantém o layout próprio, também deitado
+  // BDO-e: layout próprio deitado; Execução deitada; Visita Técnica em pé (paisagemDe)
   if (temLayoutProprio(module)) return buildBdoPdf({ jsPDF, autoTable, txt, formatOf, imageSize }, { uniqueId, data, company, draft });
-  const doc = new Doc(jsPDF, autoTable, true);
+  const doc = new Doc(jsPDF, autoTable, paisagemDe(module));
   assignPhotoFields(module, photos);
   data = dadosParaRelatorio(module, data, photos); // campos fixos da seção ("—") e nota do torque
   const srcOf = new Map();

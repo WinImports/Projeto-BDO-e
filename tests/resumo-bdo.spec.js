@@ -46,13 +46,9 @@ test('o resumo acompanha a apropriação; editado à mão fica como está até "
   await page.locator('[data-action=add-row][data-table=atividades]').click();
   await cell(page, 'atividades', 1, 'atividade').fill('Troca da válvula VM');
   await cell(page, 'atividades', 1, 'hora_fim').fill('11:30');
-  await cell(page, 'paradas', 0, 'inicio').fill('10:00');
-  await cell(page, 'paradas', 0, 'fim').fill('10:30');
-  await cell(page, 'paradas', 0, 'motivo').fill('Aguardando carro sugador');
 
   await expect(resumo).toHaveValue(/a jornada teve início às 07:00 e término às 11:30, totalizando 4h30/);
   await expect(resumo).toHaveValue(/das 07:00 às 07:30, reunião de pré-tarefa \(RPT\); das 07:30 às 11:30, troca da válvula VM\./);
-  await expect(resumo).toHaveValue(/Parada operacional: das 10:00 às 10:30 \(0h30\), aguardando carro sugador/);
   await expect(status).toHaveText('Atualizado automaticamente com a apropriação.');
   await expect(page.locator('[data-action=regen-text]')).toBeHidden();
 

@@ -141,7 +141,7 @@ test('sem internet o relatório fica "Pendente de Envio"; ao voltar a conexão s
   expect(envio).toMatchObject({ module: 'visita_tecnica', user_email: 'tecnico@teste.com' });
   expect(envio.payload.poco).toBe('RCB-34');
   expect(envio.device_id).toMatch(/^[0-9a-f-]{36}$/);
-  expect(envio.photos[0].path).toMatch(/^visita_tecnica\/.+placa\.jpg$/); // fotos são comprimidas para JPEG ao entrar
+  expect(envio.photos[0].path).toMatch(/^visita_tecnica\/.+\.jpg$/); // fotos são comprimidas para JPEG ao entrar
   expect(sb.uploads).toContainEqual({ bucket: 'report-photos', path: envio.photos[0].path });
   expect(sb.rpc.find((c) => c.name === 'save_company_settings').args.p_settings).toMatchObject({ empresa_nome: 'WIN IMPORTS' });
 });

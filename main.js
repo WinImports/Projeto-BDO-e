@@ -83,8 +83,8 @@ async function renderPdf(html) {
   try {
     await fs.writeFile(tmp, html, 'utf8');
     await win.loadFile(tmp);
-    // todos os relatórios em paisagem (A4 deitado)
-    return await win.webContents.printToPDF({ pageSize: 'A4', landscape: true, printBackground: true, margins: { marginType: 'default' } });
+    // orientação pelo @page do HTML (BDO-e / Execução deitados, Visita Técnica em pé — ui/report-pdf.js)
+    return await win.webContents.printToPDF({ pageSize: 'A4', landscape: true, preferCSSPageSize: true, printBackground: true, margins: { marginType: 'default' } });
   } finally {
     win.destroy();
     fs.unlink(tmp).catch(() => {});

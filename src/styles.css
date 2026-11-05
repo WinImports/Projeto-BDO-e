@@ -620,6 +620,10 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .
 .confirm__icon--info { background: var(--primary-soft); color: var(--primary); }
 .confirm__title { font-size: 1.05rem; font-weight: 700; }
 .confirm__message { margin: 6px 0 0; color: var(--text-2); font-size: .9rem; }
+.pendencias { margin-top: 10px; max-height: min(50vh, 360px); overflow-y: auto; }
+.pendencias__secao { margin: 10px 0 2px; font-weight: 600; font-size: .9rem; color: var(--text); }
+.pendencias__lista { margin: 0; padding-left: 18px; color: var(--text-2); font-size: .88rem; }
+.pendencias__lista li { margin: 2px 0; }
 .btn--danger { background: var(--danger); color: #fff; }
 .btn--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 85%, #000); }
 :root[data-theme="dark"] .btn--danger { color: #1a0505; }

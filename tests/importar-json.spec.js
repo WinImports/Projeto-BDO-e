@@ -75,7 +75,7 @@ test('Upload de Relatório (JSON) na Execução: resumo, contrato da conta, salv
   expect(await page.evaluate(async () => (await (await import('./src/core/drafts.js')).loadDraft('handover')).data._antes_fixo)).toBe(UID);
 });
 
-test('PDF direto do JSON importado (A4 deitado, como todos os relatórios) e "Importar e enviar" coloca na fila', async () => {
+test('PDF direto do JSON importado (Visita Técnica em A4 em pé) e "Importar e enviar" coloca na fila', async () => {
   const { page, app, userData } = ctx;
   const destino = path.join(userData, 'importado.pdf');
   await salvarEm(app, destino);
@@ -86,10 +86,10 @@ test('PDF direto do JSON importado (A4 deitado, como todos os relatórios) e "Im
   await expect.poll(() => fs.existsSync(destino) && fs.statSync(destino).size > 1000).toBe(true);
   const pdf = fs.readFileSync(destino).toString('latin1');
   expect(pdf.slice(0, 5)).toBe('%PDF-');
-  // 297 × 210 mm: largura > altura (paisagem). jsPDF grava 841,89 × 595,28; o Chromium (desktop), 842,88 × 595,92
+  // Visita Técnica em pé: 210 × 297 mm (largura < altura). Pontos: ~595 × ~842 (jsPDF ou Chromium do desktop)
   const [, largura, altura] = (/\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/.exec(pdf) || []).map(Number);
-  expect(largura).toBeGreaterThan(altura);
-  expect(Math.abs(largura - 842)).toBeLessThan(2);
+  expect(largura).toBeLessThan(altura);
+  expect(Math.abs(largura - 595)).toBeLessThan(2);
 
   await dlg.locator('[data-imp-enviar]').click();
   await expect(dlg).toHaveCount(0);
@@ -114,7 +114,7 @@ test('Exportar JSON pelo Histórico e importar de volta (o mesmo relatório, com
   await expect.poll(() => fs.existsSync(destino)).toBe(true);
   const j = JSON.parse(fs.readFileSync(destino, 'utf8'));
   expect(j).toMatchObject({ formato: 'bdo-e/relatorio', versao: 1, relatorio: { module: 'visita_tecnica', data: { poco: 'RCB-34' } } });
-  expect(j.relatorio.fotos).toHaveLength(1);
+  expect(j.relatorio.fotos).toHaveLength(5); // 4 obrigatórias (preencherVisita) + placa
   expect(j.relatorio.fotos[0].dataUrl).toMatch(/^data:image\/jpeg;base64,/); // fotos são comprimidas em JPEG ao entrar
   await page.locator('dialog.modal[open] [data-close]').first().click();
 
@@ -124,7 +124,7 @@ test('Exportar JSON pelo Histórico e importar de volta (o mesmo relatório, com
     const r = lerRelatoriosJson(texto).relatorios[0];
     return { id: r.uniqueId, poco: r.data.poco, fotos: r.photos.length };
   }, fs.readFileSync(destino, 'utf8'));
-  expect(lido).toEqual({ id: j.relatorio.uniqueId, poco: 'RCB-34', fotos: 1 });
+  expect(lido).toEqual({ id: j.relatorio.uniqueId, poco: 'RCB-34', fotos: 5 });
 });
 
 test('arquivo inválido não importa e explica o motivo; também lê lista de relatórios e a linha do banco', async () => {

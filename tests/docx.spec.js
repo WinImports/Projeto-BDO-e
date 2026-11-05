@@ -41,7 +41,7 @@ test('Visita Técnica em Word: identificação sem GPS, fotos em 2 colunas e ass
 
   await vincularContratos(page, ['OS-Mans']); // Contrato = lista dos contratos da conta
   await openTab(page, 'visita_tecnica');
-  await preencherVisita(page, 'FBM-89');
+  await preencherVisita(page, 'FBM-89', { fotos: false });
   await fill(page, 'campo', 'Campo de Buracica');
   await fill(page, 'contrato', 'OS-Mans');
   await vaga(page, 'fotos_chegada', 'Placa do poço').setInputFiles(foto('placa.png'));
@@ -96,9 +96,9 @@ test('Visita Técnica em Word: identificação sem GPS, fotos em 2 colunas e ass
   expect(texto).toContain('Medição com paquímetro / trena');
   expect(texto).not.toMatch(/Coordenadas|Rota até|google\.com\/maps|waze/i);
   // grade de fotos: 2 colunas de 48% da largura útil (+ espaço no meio)
-  // página em paisagem (A4 deitado): largura útil 14570 twips; fotos em 2 colunas de 48%
-  expect(doc).toContain('<w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/>');
-  expect(doc).toContain('<w:tblGrid><w:gridCol w:w="6993"/><w:gridCol w:w="584"/><w:gridCol w:w="6993"/></w:tblGrid>');
+  // Visita Técnica em pé (A4 retrato, margem 1,5 cm): largura útil 10204 twips; fotos em 2 colunas de 48%
+  expect(doc).toContain('<w:pgSz w:w="11906" w:h="16838" w:orient="portrait"/>');
+  expect(doc).toContain('<w:tblGrid><w:gridCol w:w="4897"/><w:gridCol w:w="410"/><w:gridCol w:w="4897"/></w:tblGrid>');
   expect(texto).toContain('Assinatura do gestor técnico / responsável');
   expect(texto).toContain('Gestor Teste');
 });

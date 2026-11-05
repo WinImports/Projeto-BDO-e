@@ -13,6 +13,7 @@ import { consolidationHtml } from './consolidacao-view.js';
 import { assignPhotoFields, photosOf, rotuloFotos, TITULO_EXECUCAO } from '../core/fotos.js';
 import { relatorioParaJson, nomeArquivoJson } from '../core/relatorio-json.js';
 import { showPdfSheet } from './pdf-sheet.js';
+import { podeGerarPdf } from '../core/base-equipe.js';
 
 function fieldHtml(f, data) {
   if (f.type === 'photos') return '';
@@ -124,6 +125,7 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
   // Relatório finalizado usa a empresa "congelada" no envio; rascunho usa a atual (a do contrato do relatório)
   const company = data._empresa || companyInfo(data.contrato);
   module = comNomes(module, data);
+  const comPdf = podeGerarPdf(); // técnico: só Word (o PDF é do gestor, na validação final)
   assignPhotoFields(module, photos); // cada foto no bloco do seu componente (antigas → "Outras fotos")
   return new Promise((resolve) => {
     const urls = photos.map((p) => URL.createObjectURL(p.blob));
@@ -152,7 +154,7 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
           // relatório já finalizado (histórico): não há mais o que "voltar e preencher"
           const empty = mode === 'view' ? [] : emptyOptionalSections(module, data, photos);
           return empty.length
-            ? `<div class="notice notice--info notice--icon">${icon('info', 18)}<div><strong>Bloco${empty.length > 1 ? 's' : ''} sem dados — não aparece${empty.length > 1 ? 'm' : ''} no PDF</strong><ul class="notice__list">${empty.map((t) => `<li>${esc(t)}</li>`).join('')}</ul><span class="small">Se houve registro no turno, volte e preencha.</span></div></div>`
+            ? `<div class="notice notice--info notice--icon">${icon('info', 18)}<div><strong>Bloco${empty.length > 1 ? 's' : ''} sem dados — não aparece${empty.length > 1 ? 'm' : ''} no relatório</strong><ul class="notice__list">${empty.map((t) => `<li>${esc(t)}</li>`).join('')}</ul><span class="small">Se houve registro no turno, volte e preencha.</span></div></div>`
             : '';
         })()}
         ${reportBodyHtml(module, data, photos, urls)}
@@ -160,13 +162,13 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
       ${mode === 'confirm' ? `
       <div class="modal__footer modal__footer--finalize">
         <div class="finalize-files">
-          <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Baixar / Compartilhar PDF</button>
+          ${comPdf ? `<button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Baixar / Compartilhar PDF</button>` : ''}
           <button type="button" class="btn btn--ghost" data-docx>${icon('fileText', 17)} Baixar Word (.docx)</button>
           <button type="button" class="btn btn--ghost" data-json>${icon('upload', 17)} Exportar JSON</button>
         </div>
         <div class="finalize-ask">
           <strong>Deseja enviar este relatório?</strong>
-          <span class="muted small">Ao salvar, o relatório fica guardado neste aparelho. Para guardar o arquivo no celular, use "Baixar / Compartilhar PDF". Ao enviar, ele vai para o servidor da empresa e o WhatsApp abre com o link.</span>
+          <span class="muted small">Ao salvar, o relatório fica guardado neste aparelho. Para guardar o arquivo no celular, use "${comPdf ? 'Baixar / Compartilhar PDF' : 'Baixar Word (.docx)'}". Ao enviar, ele vai para o servidor da empresa e o WhatsApp abre com o link.</span>
         </div>
         <div class="finalize-ask__buttons">
           <button type="button" class="btn btn--ghost" data-local>${icon('save', 17)} Não, só salvar no aparelho</button>
@@ -174,7 +176,7 @@ export function openPreview({ module, uniqueId, data, photos = [], mode = 'confi
         </div>
       </div>` : `
       <div class="modal__footer">
-        <button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Baixar / Compartilhar PDF</button>
+        ${comPdf ? `<button type="button" class="btn btn--ghost" data-pdf>${icon('download', 17)} Baixar / Compartilhar PDF</button>` : ''}
         <button type="button" class="btn btn--ghost" data-docx>${icon('fileText', 17)} Baixar Word (.docx)</button>
         <button type="button" class="btn btn--ghost" data-json>${icon('upload', 17)} Exportar JSON</button>
         <span class="modal__spacer"></span>

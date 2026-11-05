@@ -156,10 +156,21 @@ export function displayCell(column, value) {
  */
 export const ocultoParaTecnico = (f) => Boolean(f.soGestor) && !podeGerirBase();
 
-/** Campo obrigatório ainda sem valor? */
-export function fieldMissing(f, data) {
-  if (!f.required || ocultoParaTecnico(f)) return false;
+/** Campo condicional (`showIf(data)`): só aparece (e só é exigido) quando a condição vale. */
+export const campoVisivel = (f, data = {}) => !f.showIf || Boolean(f.showIf(data));
+
+/**
+ * O campo é exigido agora? `required` fixo ou `requiredIf(data, photos)` (ex.: fotos de um componente que foi
+ * preenchido, motivo de válvula não testada). Campo condicional escondido nunca é exigido.
+ */
+export const exigidoAgora = (f, data = {}, photos = []) =>
+  Boolean(f.required || f.requiredIf?.(data, photos)) && campoVisivel(f, data) && !ocultoParaTecnico(f);
+
+/** Campo obrigatório ainda sem valor? (fotos: nenhuma foto neste campo) */
+export function fieldMissing(f, data, photos = []) {
+  if (!exigidoAgora(f, data, photos)) return false;
   if (f.type === 'geo') return geoBlank(data[f.id]);
+  if (f.type === 'photos') return !photos.some((p) => p.field === f.id);
   return isBlank(f.type === 'table' ? filledRows(data[f.id], f.columns) : data[f.id]);
 }
 
@@ -169,21 +180,21 @@ export function fieldMissing(f, data) {
  */
 export function sectionStatus(module, data, photos = []) {
   return module.sections.map((s, index) => {
-    const required = s.fields.filter((f) => f.required);
-    const missing = required.filter((f) => fieldMissing(f, data)).length;
+    const required = s.fields.filter((f) => exigidoAgora(f, data, photos));
+    const missing = required.filter((f) => fieldMissing(f, data, photos)).length;
     const filled = s.fields.some((f) => hasContent(f, data, photos));
     const state = required.length ? (missing ? 'pending' : 'done') : (filled ? 'done' : 'optional');
     return { index, title: s.title, short: s.short || s.title, icon: s.icon, required: required.length, missing, state, legacy: s.legacy || !secaoAtiva(s, data) };
   }).filter((st) => !st.legacy); // seções do formato anterior e válvulas adicionais não incluídas não aparecem
 }
 
-export function requiredProgress(module, data) {
-  const req = camposAtivos(module, data).filter((f) => f.required);
-  return { total: req.length, filled: req.filter((f) => !fieldMissing(f, data)).length };
+export function requiredProgress(module, data, photos = []) {
+  const req = camposAtivos(module, data).filter((f) => exigidoAgora(f, data, photos));
+  return { total: req.length, filled: req.filter((f) => !fieldMissing(f, data, photos)).length };
 }
 
-/** Valida o rascunho. Retorna [{ field, label, message }]. */
-export function validate(module, data) {
+/** Valida o rascunho. Retorna [{ field, label, section, message }]. photos: fotos do rascunho (campos de foto exigidos). */
+export function validate(module, data, photos = []) {
   const fields = camposAtivos(module, data);
   const sectionOf = new Map(module.sections.flatMap((s) => s.fields.map((f) => [f, s.short || s.title])));
   const errors = [];
@@ -193,12 +204,14 @@ export function validate(module, data) {
       if (f.required && !parseCoords(v)) errors.push({ field: f.id, label: f.label, message: 'Capture pelo GPS ou escolha o poço na base' });
       continue;
     }
-    if (!f.required || ocultoParaTecnico(f)) continue;
+    if (!exigidoAgora(f, data, photos)) continue;
     // sem contrato vinculado à conta o campo fica desabilitado: o relatório segue sem contrato
     if (f.type === 'contrato' && !meusContratos().length) continue;
-    const v = f.type === 'table' ? filledRows(data[f.id], f.columns) : data[f.id];
-    if (isBlank(v)) {
-      errors.push({ field: f.id, label: f.label || sectionOf.get(f), message: f.type === 'table' ? 'Preencha ao menos uma linha' : 'Campo obrigatório' });
+    if (fieldMissing(f, data, photos)) {
+      errors.push({
+        field: f.id, label: f.label || sectionOf.get(f), section: sectionOf.get(f),
+        message: f.type === 'table' ? 'Preencha ao menos uma linha' : f.type === 'photos' ? 'Tire ou anexe ao menos uma foto' : 'Campo obrigatório'
+      });
     }
   }
   if (typeof module.validate === 'function') {
@@ -206,7 +219,10 @@ export function validate(module, data) {
       const f = fields.find((x) => x.id === id);
       return f ? filledRows(data[id], f.columns) : [];
     };
-    errors.push(...module.validate(data, { filled }));
+    const porId = new Map(fields.filter((f) => f.id).map((f) => [f.id, f]));
+    errors.push(...module.validate(data, { filled, photos }).map((e) => ({
+      section: porId.has(e.field) ? sectionOf.get(porId.get(e.field)) : undefined, ...e
+    })));
   }
   return errors;
 }
@@ -633,11 +649,13 @@ export class FormView {
   concluirEtapa(i) {
     const section = this.module.sections[i];
     if (!section) return;
-    const faltando = section.fields.filter((f) => f.id && !f.formHidden && !ocultoParaTecnico(f) && fieldMissing(f, this.draft.data)
-      && !(f.type === 'contrato' && !meusContratos().length));
+    const ids = new Set(section.fields.map((f) => f.id).filter(Boolean));
+    // mesmas regras do "Salvar e Finalizar", só desta seção (inclui as regras do módulo, ex.: pressão ou motivo)
+    const faltando = validate(this.module, this.draft.data, this.draft.photos)
+      .filter((e) => ids.has(e.field) && !this.fields.get(e.field)?.formHidden);
     if (faltando.length) {
-      this.showErrors(faltando.map((f) => ({ field: f.id, label: f.label, message: f.type === 'table' ? 'Preencha ao menos uma linha' : 'Campo obrigatório' })));
-      toast(`Falta preencher: ${faltando.map((f) => f.label || f.id).join(', ')}.`, 'warn', 6000);
+      this.showErrors(faltando);
+      toast(`Falta preencher: ${[...new Set(faltando.map((e) => e.label || e.field))].join(', ')}.`, 'warn', 6000);
       return;
     }
     const chave = this.chaveEtapa(section);
@@ -754,13 +772,13 @@ export class FormView {
       return `<div class="field-divider span-12">${f.icon ? icon(f.icon, 15) : ''}<span>${esc(f.label)}</span></div>`;
     }
     const cls = ['field', `span-${this.fieldSpan(f)}`, f.highlight && 'field--highlight'].filter(Boolean).join(' ');
-    const oculto = f.type === 'visitaNota' && !this.draft.data[f.id] ? ' hidden' : ''; // sem Visita de referência: nada aparece
+    const oculto = (f.type === 'visitaNota' && !this.draft.data[f.id]) || !campoVisivel(f, this.draft.data) ? ' hidden' : ''; // sem Visita de referência: nada aparece
     return `<div class="${cls}" data-wrap="${esc(f.id)}"${oculto}>${this.fieldInnerHtml(f)}</div>`;
   }
 
   fieldInnerHtml(f) {
     if (f.type === 'visitaNota') return this.controlHtml(f);
-    const exigido = f.required && !(f.type === 'contrato' && !meusContratos().length); // sem contratos não é exigido
+    const exigido = (f.required || f.requiredIf) && !(f.type === 'contrato' && !meusContratos().length); // sem contratos não é exigido
     const label = f.label && !f.previewButton
       ? `<span class="field__label">${esc(f.type === 'photos' ? rotuloFotos(f, this.draft.data) : f.label)}${exigido ? '<span class="req" aria-hidden="true">*</span>' : ''}</span>`
       : '';
@@ -1911,9 +1929,23 @@ export class FormView {
     if (this.module.execucaoDoBdo && (fieldId === 'poco' || fieldId === this.module.execucaoDoBdo.campoData)) this.scheduleExecucaoBdo();
     if (fieldId === 'poco') { clearTimeout(this.routeRefreshTimer); this.routeRefreshTimer = setTimeout(() => this.refreshGeo(), 300); }
     this.clearError(fieldId);
+    this.updateCondicionais();
     this.updateComputed();
     this.updateSectionBadges();
     this.onChange(this.draft);
+  }
+
+  /** Campos com showIf aparecem / somem conforme os outros (ex.: motivo da válvula "Não testada"). */
+  updateCondicionais() {
+    for (const f of this.fields.values()) {
+      if (!f.showIf) continue;
+      const wrap = $(`[data-wrap="${CSS.escape(f.id)}"]`, this.el);
+      if (!wrap) continue;
+      const ver = campoVisivel(f, this.draft.data);
+      if (wrap.hidden === !ver) continue;
+      wrap.hidden = !ver;
+      if (!ver) this.clearError(f.id);
+    }
   }
 
   // ---------- Erros ----------

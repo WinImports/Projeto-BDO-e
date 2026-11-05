@@ -153,8 +153,7 @@ export function resumoExecutivo(d, { max = 6 } = {}) {
   if (paradas.length) {
     const parado = paradas.reduce((acc, p) => acc + minutos(p.duracao || duracao(p.inicio, p.fim)), 0);
     partes.push(`${paradas.length} parada${paradas.length > 1 ? 's' : ''} operaciona${paradas.length > 1 ? 'is' : 'l'}${parado ? `, total de ${fmtMin(parado)}` : ''}.`);
-  } else {
-    partes.push('Sem paradas operacionais.');
   }
+  // o BDO-e não registra mais paradas (seção retirada): sem paradas, o resumo não fala delas
   return partes.join(' ');
 }

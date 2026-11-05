@@ -70,15 +70,29 @@ export const UNIDADES_PRESSAO = ['psi', 'kgf/cm²'];
 
 export const PONTOS_PRESSAO = ['Coluna', 'Anular superior', 'Anular inferior'];
 
-export const pressoes = ({ id = 'pressoes', label = '', pontos = PONTOS_PRESSAO } = {}) => ({
-  id, label, type: 'table', allowAdd: false,
+// motivo: true → coluna "Motivo (se não mediu)": cada ponto precisa da pressão OU do motivo (validarPressoes)
+export const pressoes = ({ id = 'pressoes', label = '', pontos = PONTOS_PRESSAO, motivo = false, required = false } = {}) => ({
+  id, label, type: 'table', allowAdd: false, required,
   presetRows: pontos.map((item) => ({ item, unidade: 'psi' })),
   columns: [
     { id: 'item', label: 'Ponto de leitura', locked: true },
     { id: 'valor', label: 'Pressão', type: 'number', placeholder: '0' },
-    { id: 'unidade', label: 'Unidade', type: 'select', options: UNIDADES_PRESSAO, aux: true, width: 'narrow' }
+    { id: 'unidade', label: 'Unidade', type: 'select', options: UNIDADES_PRESSAO, aux: true, width: 'narrow' },
+    ...(motivo ? [{ id: 'motivo', label: 'Motivo (se não mediu)', width: 'wide', placeholder: 'Obrigatório sem leitura. Ex.: manômetro danificado' }] : [])
   ]
 });
+
+/** Pressões com motivo: ponto sem pressão precisa do motivo. → [{ field, label, message }] */
+export function validarPressoes(d, id = 'pressoes') {
+  const faltam = (d[id] || []).filter((r) => r.item && String(r.valor ?? '').trim() === '' && !String(r.motivo || '').trim());
+  return faltam.map((r) => ({ field: id, label: `Pressão — ${r.item}`, message: 'Informe a pressão ou o motivo de não ter medido' }));
+}
+
+/** O componente p tem algum dado preenchido? (fora fotos) — decide se as fotos dele são exigidas. */
+export function temDadosComp(d, p, ignorar = []) {
+  return Object.entries(d || {}).some(([k, v]) => k.startsWith(`${p}_`) && !ignorar.includes(k)
+    && v != null && v !== '' && v !== false && !(Array.isArray(v) && !v.length) && typeof v !== 'object');
+}
 
 export const PRIORIDADES = ['Alta', 'Média', 'Baixa'];
 
@@ -121,10 +135,10 @@ export const ANTEPOCO = { p: 'antepoco', nome: 'Antipoço', fotos: ['Antipoço',
 
 export const VALVULAS_CABECA = [
   { p: 'vc', nome: 'VC — Válvula da Coluna', short: 'VC', abertura: true, fotos: ['Válvula da coluna (VC)', 'Teste de estanqueidade / backup'] },
-  { p: 'va1', nome: 'VA-1 — Válvula Anular 1 Superior', short: 'VA-1', fotos: ['VA-1', 'Teste de estanqueidade'] },
-  { p: 'va2', nome: 'VA-2 — Válvula Anular 2 Superior', short: 'VA-2', fotos: ['VA-2', 'Teste de estanqueidade'] },
-  { p: 'vb1', nome: 'VB-1 — Válvula Anular Inferior 1', short: 'VB-1', fotos: ['VB-1', 'Teste com Enerpac'] },
-  { p: 'vb2', nome: 'VB-2 — Válvula Anular Inferior 2', short: 'VB-2', fotos: ['VB-2'] }
+  { p: 'va1', nome: 'VA-1 — Válvula Anular 1 Superior', short: 'VA-1', abertura: true, fotos: ['VA-1', 'Teste de estanqueidade'] },
+  { p: 'va2', nome: 'VA-2 — Válvula Anular 2 Superior', short: 'VA-2', abertura: true, fotos: ['VA-2', 'Teste de estanqueidade'] },
+  { p: 'vb1', nome: 'VB-1 — Válvula Anular Inferior 1', short: 'VB-1', abertura: true, fotos: ['VB-1', 'Teste com Enerpac'] },
+  { p: 'vb2', nome: 'VB-2 — Válvula Anular Inferior 2', short: 'VB-2', abertura: true, fotos: ['VB-2'] }
 ];
 
 // Válvulas ADICIONAIS (opcionais): o técnico inclui pelo bloco "Válvulas adicionais" — até 2 de cada tipo.

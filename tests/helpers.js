@@ -1,5 +1,5 @@
 // Abre o app Electron real com uma pasta de dados temporária (isolada dos dados do usuário).
-const { _electron: electron } = require('@playwright/test');
+const { _electron: electron, expect } = require('@playwright/test');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -72,14 +72,30 @@ async function openTab(page, tab) {
 /** Célula de tabela do formulário (data-table / data-row / data-col). */
 const cell = (page, table, row, col) => page.locator(`[data-table="${table}"][data-row="${row}"][data-col="${col}"]`);
 
-/** Preenche uma Visita Técnica pronta para finalizar (obrigatórios + alguns componentes). */
-async function preencherVisita(page, poco = 'FBM-89') {
+const PNG_1PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+
+/** Anexa uma foto (PNG 1 px) ao campo de fotos e espera ela aparecer no bloco. */
+async function anexarFoto(page, field, name = `${field}.png`) {
+  const fotos = page.locator(`[data-wrap="${field}"] .photo`);
+  const antes = await fotos.count();
+  await page.locator(`input[data-kind=photos][data-photos-field="${field}"]`).first()
+    .setInputFiles({ name, mimeType: 'image/png', buffer: PNG_1PX });
+  await expect(fotos).toHaveCount(antes + 1);
+}
+
+/**
+ * Preenche uma Visita Técnica pronta para finalizar (obrigatórios + alguns componentes). Fotos obrigatórias:
+ * chegada, antipoço e cada componente preenchido; pressões sem leitura levam o motivo (sem foto de manômetro).
+ */
+async function preencherVisita(page, poco = 'FBM-89', { fotos = true } = {}) {
   await cell(page, 'equipe', 0, 'nome').fill('João');
   for (const [f, v] of [
     ['poco', poco], ['turno', 'Diurno'], ['cliente', 'PETROBRAS'],
-    ['status_locacao', 'OK'], ['estado_antepoco', 'Limpo'],
+    ['status_locacao', 'OK'],
     ['vc_estanqueidade', 'Sem estanqueidade (vazamento)'], ['flange_inf_corrosao', 'Moderada'], ['gestor_nome', 'Gestor Teste']
   ]) await fill(page, f, v);
+  for (const r of [0, 1, 2]) await cell(page, 'pressoes', r, 'motivo').fill('Manômetro ausente');
+  if (fotos) for (const f of ['fotos_chegada', 'fotos_antepoco', 'fotos_vc', 'fotos_flange_inf']) await anexarFoto(page, f);
 }
 
 /** Configurações › "Avançado (administrador)": abre a área recolhida do servidor da empresa. */
@@ -99,4 +115,4 @@ async function definirObjetivo(page, tipo, texto, voltarPara) {
   if (voltarPara) await openTab(page, voltarPara);
 }
 
-module.exports = { launchApp, newUserData, fill, openTab, preencherVisita, cell, entrar, vincularContratos, abrirAvancado, definirObjetivo };
+module.exports = { launchApp, newUserData, fill, openTab, preencherVisita, anexarFoto, cell, entrar, vincularContratos, abrirAvancado, definirObjetivo };

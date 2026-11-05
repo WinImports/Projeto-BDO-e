@@ -21,7 +21,8 @@ import { importarArquivoJson } from './ui/importar-json.js';
 import { limparEquipeDeOutroUsuario } from './core/pull.js';
 import { photoMeta } from './core/fotos.js';
 import { FormView, validate, cleanData, requiredProgress, rehydrate } from './ui/form.js';
-import { confirmDialog } from './ui/confirm.js';
+import { confirmDialog, pendenciasDialog } from './ui/confirm.js';
+import { podeGerarPdf } from './core/base-equipe.js';
 import { closeRoutePrompt } from './ui/route-prompt.js';
 import { openPreview } from './ui/preview.js';
 import { OutboxView } from './ui/outbox-view.js';
@@ -258,7 +259,7 @@ async function showTab(tab) {
         <span id="ready-status" class="ready-status"></span>
       </div>
       <div class="action-bar__buttons">
-        <button type="button" class="btn btn--ghost" id="btn-preview">${icon('fileText', 17)}<span class="lbl">Prévia do PDF</span><span class="lbl-short">Prévia</span></button>
+        <button type="button" class="btn btn--ghost" id="btn-preview">${icon('fileText', 17)}<span class="lbl">Prévia do relatório</span><span class="lbl-short">Prévia</span></button>
         <button type="button" class="btn btn--primary" id="btn-finalize">${icon('save', 17)}<span class="lbl">Salvar e Finalizar</span><span class="lbl-short">Salvar e Finalizar</span></button>
       </div>
     </div>`;
@@ -340,7 +341,7 @@ function refreshFormChrome() {
       </a>
     </li>`).join('');
 
-  const { total, filled } = requiredProgress(module, draft.data);
+  const { total, filled } = requiredProgress(module, draft.data, draft.photos);
   const pct = total ? Math.round((filled / total) * 100) : 100;
   $('#progress-count').textContent = `${filled} de ${total}`;
   const fill = $('#progress-fill');
@@ -394,7 +395,7 @@ async function previewDraft(module) {
   await flushSave();
   await openPreview({
     module, uniqueId: draft.uniqueId, data: cleanData(module, draft.data),
-    photos: draft.photos, mode: 'draft', pending: validate(module, draft.data),
+    photos: draft.photos, mode: 'draft', pending: validate(module, draft.data, draft.photos),
     onNewReport: () => newReport(module)
   });
 }
@@ -403,11 +404,12 @@ async function finalize(module) {
   const draft = state.draft;
   if (!draft) return;
 
-  const errors = validate(module, draft.data);
+  const errors = validate(module, draft.data, draft.photos);
   if (errors.length) {
     $('#view').classList.add('is-checked'); // a partir daqui as pendências aparecem em cor de atenção
+    // janela com tudo o que falta (fotos não tiradas, leituras sem motivo…); ao fechar, vai para o 1º campo
+    await pendenciasDialog(errors);
     state.formView.showErrors(errors);
-    toast(`Verifique ${errors.length} campo${errors.length > 1 ? 's' : ''} antes de finalizar.`, 'error');
     return;
   }
 
@@ -438,13 +440,16 @@ async function finalize(module) {
   // (o rascunho novo é criado quando ele voltar a esta aba)
   if (state.navSeq === navAntes) await showTab(module.id);
   if (choice === 'local') {
-    toast(`Relatório salvo na memória local deste aparelho. Para guardar o arquivo no celular, use 'Baixar / Compartilhar PDF' (na prévia ou em Histórico › Ver / PDF). Para enviar depois: Histórico › Enviar.`, 'success', 10000);
+    toast(`Relatório salvo na memória local deste aparelho. Para guardar o arquivo no celular, use '${arquivoLabel()}' (na prévia ou em Histórico). Para enviar depois: Histórico › Enviar.`, 'success', 10000);
     return;
   }
-  toast(`${navigator.onLine ? 'Relatório na Caixa de Saída. Enviando ao servidor…' : 'Relatório na Caixa de Saída. Será enviado quando houver conexão.'} Uma cópia fica na memória local deste aparelho; para guardar o arquivo no celular, use 'Baixar / Compartilhar PDF' (na prévia ou em Histórico › Ver / PDF).`, 'success', 10000);
+  toast(`${navigator.onLine ? 'Relatório na Caixa de Saída. Enviando ao servidor…' : 'Relatório na Caixa de Saída. Será enviado quando houver conexão.'} Uma cópia fica na memória local deste aparelho; para guardar o arquivo no celular, use '${arquivoLabel()}' (na prévia ou em Histórico).`, 'success', 10000);
   syncNow();
   await shareReport(module, report);
 }
+
+/** Botão para guardar o arquivo: o técnico só tem Word; o gestor também tem PDF. */
+const arquivoLabel = () => (podeGerarPdf() ? 'Baixar / Compartilhar PDF' : 'Baixar Word (.docx)');
 
 /** Cópias PDF + Word do relatório finalizado no Storage (uma vez por relatório; ver core/share.js). */
 function publicarDocumentos(module, report) {
@@ -469,7 +474,7 @@ async function shareReport(module, report) {
     console.error('[share]', err);
     aviso = 'Não foi possível gerar o link agora.';
   }
-  const url = waUrl(getSettings().whatsapp_padrao, shareMessage(module, report.data, report.uniqueId, link, wordLink));
+  const url = waUrl(getSettings().whatsapp_padrao, shareMessage(module, report.data, report.uniqueId, link, wordLink, { pdf: podeGerarPdf() }));
   showSharePrompt({ url, link, titulo: 'Enviar pelo WhatsApp', aviso });
   // com número configurado, abre direto (no iPhone a janela pode ser bloqueada: o botão do painel resolve)
   if (whatsappConfigurado()) window.open(url, '_blank', 'noopener');

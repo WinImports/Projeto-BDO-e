@@ -9,6 +9,7 @@ import { fotoParaRelatorio, avisarFotos } from './foto-relatorio.js';
 import { assignPhotoFields, photosOf, temAntes, rotuloFotos, TITULO_EXECUCAO } from '../core/fotos.js';
 import { cabecalhoItens, CAMPOS_CABECALHO } from './cabecalho.js';
 import { empresaDoRelatorio } from '../core/settings.js';
+import { paisagemDe } from './pdf-doc.js';
 
 export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -16,12 +17,17 @@ export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordproc
 const TWIP_CM = 567;
 const EMU_CM = 360000;
 // todos os relatórios em paisagem: A4 deitado (29,7 × 21 cm)
-const PAGE_W = 16838;
-const PAGE_H = 11906;
-const MARGEM = 1134; // 2 cm
-const LARGURA = PAGE_W - 2 * MARGEM; // ≈ 25,7 cm (paisagem)
-const FOTO_W_CM = 7.7; // cada coluna tem ~48% da largura útil (8,2 cm) menos o recuo da célula
-const FOTO_H_CM = FOTO_W_CM * 0.75;
+/**
+ * Página A4 do Word por orientação (twips). BDO-e e Execução deitados; Visita Técnica em pé (paisagemDe).
+ * Fotos em 2 colunas de ~48% da largura útil: deitado 9 × 6,75 cm; em pé (margem 1,5 cm) 8,2 × 6,15 cm.
+ */
+export function layoutDocx(paisagem = true) {
+  const pageW = paisagem ? 16838 : 11906;
+  const pageH = paisagem ? 11906 : 16838;
+  const margem = paisagem ? 1134 : 851; // 2 cm | 1,5 cm
+  const fotoW = paisagem ? 9 : 8.2;
+  return { paisagem, pageW, pageH, margem, largura: pageW - 2 * margem, fotoW, fotoH: fotoW * 0.75 };
+}
 
 const AZUL = '002B49'; // Azul Petróleo (identidade do app e dos PDFs)
 const CINZA = '5B6676';
@@ -145,7 +151,7 @@ const xml = (v) => String(v ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u0
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /** Trecho de texto (quebras de linha viram <w:br/>). */
-function run(text, { b = false, sz = 20, color, caps = false, i = false } = {}) {
+function run(text, { b = false, sz = 22, color, caps = false, i = false } = {}) {
   const rpr = `<w:rPr>${b ? '<w:b/>' : ''}${i ? '<w:i/>' : ''}${caps ? '<w:caps/>' : ''}${color ? `<w:color w:val="${color}"/>` : ''}<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr>`;
   return String(text ?? '').split(/\r?\n/).map((line, k) =>
     `<w:r>${rpr}${k ? '<w:br/>' : ''}<w:t xml:space="preserve">${xml(line)}</w:t></w:r>`).join('');
@@ -190,7 +196,8 @@ const espaco = (after = 120) => para('', { after });
 // ---------- montagem ----------
 
 class DocxBuilder {
-  constructor() {
+  constructor(layout = layoutDocx(true)) {
+    this.L = layout;
     this.body = [];
     this.media = []; // { name, bytes }
     this.rels = []; // relações do document.xml (imagens)
@@ -216,15 +223,15 @@ class DocxBuilder {
 
   add(x) { this.body.push(x); }
 
-  sectionTitle(t) { this.add(para(run(t, { b: true, sz: 22, color: AZUL, caps: true }), { before: 240, after: 100, keepNext: true, border: { sz: 6 } })); }
+  sectionTitle(t) { this.add(para(run(t, { b: true, sz: 24, color: AZUL, caps: true }), { before: 240, after: 100, keepNext: true, border: { sz: 6 } })); }
 
-  subTitle(t) { this.add(para(run(t, { b: true, sz: 17, color: '334155', caps: true }), { before: 120, after: 60, keepNext: true })); }
+  subTitle(t) { this.add(para(run(t, { b: true, sz: 19, color: '334155', caps: true }), { before: 120, after: 60, keepNext: true })); }
 
   /** Campos em grade: rótulo pequeno em cima e valor embaixo; 2 por linha, longos ocupam a linha. */
   fieldsGrid(items) {
-    const half = LARGURA / 2;
+    const half = this.L.largura / 2;
     const c = (it, span) => cell(
-      para(run(it.label, { b: true, sz: 14, color: CINZA, caps: true }), { after: 0 }) + para(run(it.value, { sz: 19 }), { after: 0 }),
+      para(run(it.label, { b: true, sz: 16, color: CINZA, caps: true }), { after: 0 }) + para(run(it.value, { sz: 21 }), { after: 0 }),
       { w: half * span, span, fill: it.highlight ? 'FFF4DC' : undefined }
     );
     const rows = [];
@@ -244,10 +251,10 @@ class DocxBuilder {
   }
 
   dataTable(head, body) {
-    const w = Math.floor(LARGURA / head.length);
+    const w = Math.floor(this.L.largura / head.length);
     const widths = head.map(() => w);
-    const hdr = head.map((h) => cell(para(run(h, { b: true, sz: 14, color: CINZA, caps: true }), { after: 0 }), { w, fill: FUNDO_CAB })).join('');
-    const rows = body.map((r) => r.map((v) => cell(para(run(v || '—', { sz: 17 }), { after: 0 }), { w })).join(''));
+    const hdr = head.map((h) => cell(para(run(h, { b: true, sz: 16, color: CINZA, caps: true }), { after: 0 }), { w, fill: FUNDO_CAB })).join('');
+    const rows = body.map((r) => r.map((v) => cell(para(run(v || '—', { sz: 19 }), { after: 0 }), { w })).join(''));
     this.add(table([hdr, ...rows], widths, { header: true }));
     this.add(espaco(80));
   }
@@ -255,15 +262,15 @@ class DocxBuilder {
   /** Célula de foto: imagem centralizada + "Figura N — legenda". */
   photoCell(foto, n, w) {
     if (!foto) return cell(para(''), { w, noBorders: true });
-    const img = foto.img ? para(this.drawing(foto.img, FOTO_W_CM, FOTO_H_CM), { align: 'center', after: 40 }) : para(run('(imagem indisponível)', { sz: 16, color: CINZA, i: true }), { align: 'center' });
-    const cap = para(run(`Figura ${n}`, { b: true, sz: 16 }) + run(` — ${foto.cap}`, { sz: 16, color: CINZA }), { align: 'center', after: 0 });
+    const img = foto.img ? para(this.drawing(foto.img, this.L.fotoW, this.L.fotoH), { align: 'center', after: 40 }) : para(run('(imagem indisponível)', { sz: 16, color: CINZA, i: true }), { align: 'center' });
+    const cap = para(run(`Figura ${n}`, { b: true, sz: 18 }) + run(` — ${foto.cap}`, { sz: 18, color: CINZA }), { align: 'center', after: 0 });
     return cell(img + cap, { w, vAlign: 'top', noBorders: true });
   }
 
   /** Fotos lado a lado: 2 colunas de ~48% (gap de ~4% no meio). */
   photoGrid(fotos) {
-    const w = Math.floor(LARGURA * 0.48);
-    const gap = LARGURA - 2 * w;
+    const w = Math.floor(this.L.largura * 0.48);
+    const gap = this.L.largura - 2 * w;
     const rows = [];
     for (let i = 0; i < fotos.length; i += 2) {
       const a = fotos[i];
@@ -278,8 +285,8 @@ class DocxBuilder {
 
   /** Antes (esquerda) x Depois (direita); numeração igual à prévia (Antes primeiro). */
   photoCompare(antes, depois, tituloAntes) {
-    const w = Math.floor(LARGURA * 0.48);
-    const gap = LARGURA - 2 * w;
+    const w = Math.floor(this.L.largura * 0.48);
+    const gap = this.L.largura - 2 * w;
     const base = this.fig;
     this.fig += antes.length + depois.length;
     const titulo = (t, color) => cell(para(run(t, { b: true, sz: 16, color }), { after: 40 }), { w, noBorders: true });
@@ -322,7 +329,7 @@ const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/mai
 const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 
 const STYLES = `${XML_DECL}<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Arial" w:cs="Arial"/><w:color w:val="0F172A"/><w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="pt-BR"/></w:rPr></w:rPrDefault>
+<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Arial" w:cs="Arial"/><w:color w:val="0F172A"/><w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="pt-BR"/></w:rPr></w:rPrDefault>
 <w:pPrDefault><w:pPr><w:spacing w:after="60" w:line="259" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
 <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
 <w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:tblPr><w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style>
@@ -334,7 +341,8 @@ export async function buildDocxBlob({ module, uniqueId, data, photos = [], compa
   module = comNomes(module, data); // nomes das válvulas / flanges definidos pelo gestor
   assignPhotoFields(module, photos);
   data = dadosParaRelatorio(module, data, photos); // campos fixos da seção ("—") e nota do torque
-  const doc = new DocxBuilder();
+  const L = layoutDocx(paisagemDe(module)); // Visita Técnica em pé; BDO-e / Execução deitados
+  const doc = new DocxBuilder(L);
 
   // fotos: bytes + dimensões (uma vez por foto)
   const fotoDe = new Map();
@@ -365,7 +373,7 @@ export async function buildDocxBlob({ module, uniqueId, data, photos = [], compa
   ].join('');
   const wLogo = logoXml ? 2500 : 0;
   const wMeta = 2700;
-  const wTxt = LARGURA - wLogo - wMeta;
+  const wTxt = L.largura - wLogo - wMeta;
   const cabCells = [
     logoXml ? cell(logoXml, { w: wLogo, vAlign: 'center', noBorders: true }) : '',
     cell(textoCab, { w: wTxt, vAlign: 'center', noBorders: true }),
@@ -421,7 +429,7 @@ export async function buildDocxBlob({ module, uniqueId, data, photos = [], compa
         let sig = null;
         try { sig = await imagemDe(data[f.id]); } catch { sig = null; }
         if (sig) doc.add(para(doc.drawing(sig, 7, 2.8), { after: 0 }));
-        doc.add(para('', { after: 0, border: { sz: 4, color: '0F172A' }, indRight: LARGURA - Math.round(7.5 * TWIP_CM) }));
+        doc.add(para('', { after: 0, border: { sz: 4, color: '0F172A' }, indRight: L.largura - Math.round(7.5 * TWIP_CM) }));
         const nome = data.gestor_nome || data.tecnico || (Array.isArray(data.equipe) ? data.equipe.find((r) => String(r.nome || '').trim())?.nome : '') || '';
         if (nome) doc.add(para(run(nome, { sz: 17 }), { after: 120 }));
       } else if (f.type === 'photos') {
@@ -441,7 +449,7 @@ export async function buildDocxBlob({ module, uniqueId, data, photos = [], compa
     fecharGrade();
   }
 
-  const sectPr = `<w:sectPr><w:headerReference w:type="default" r:id="rIdHeader"/><w:footerReference w:type="default" r:id="rIdFooter"/><w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}" w:orient="landscape"/><w:pgMar w:top="${Math.round(3.2 * TWIP_CM)}" w:right="${MARGEM}" w:bottom="${MARGEM}" w:left="${MARGEM}" w:header="${Math.round(0.8 * TWIP_CM)}" w:footer="${Math.round(0.6 * TWIP_CM)}" w:gutter="0"/></w:sectPr>`;
+  const sectPr = `<w:sectPr><w:headerReference w:type="default" r:id="rIdHeader"/><w:footerReference w:type="default" r:id="rIdFooter"/><w:pgSz w:w="${L.pageW}" w:h="${L.pageH}" w:orient="${L.paisagem ? 'landscape' : 'portrait'}"/><w:pgMar w:top="${Math.round(3.2 * TWIP_CM)}" w:right="${L.margem}" w:bottom="${L.margem}" w:left="${L.margem}" w:header="${Math.round(0.8 * TWIP_CM)}" w:footer="${Math.round(0.6 * TWIP_CM)}" w:gutter="0"/></w:sectPr>`;
   const document = `${XML_DECL}<w:document ${NS}><w:body>${doc.body.join('')}${para('')}${sectPr}</w:body></w:document>`;
 
   const exts = [...new Set(doc.media.map((m) => m.name.split('.').pop()))];

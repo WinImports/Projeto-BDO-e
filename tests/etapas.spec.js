@@ -1,7 +1,7 @@
 // Relatório em etapas (Visita Técnica / Execução): seções recolhidas só com o título; tocar abre; "Concluir etapa"
 // confere os obrigatórios, marca como concluída, fecha e abre a próxima; tocar numa concluída abre para conferir.
 const { test, expect } = require('@playwright/test');
-const { launchApp, openTab, cell } = require('./helpers');
+const { launchApp, openTab, cell, anexarFoto } = require('./helpers');
 
 let ctx;
 test.beforeEach(async () => { ctx = await launchApp({ etapas: true }); });
@@ -36,7 +36,11 @@ test('Visita em etapas: abre ao tocar, "Concluir etapa" confere obrigatórios, f
   await expect(secao(page, 0).locator('.etapa__body')).toBeHidden();
   await expect(secao(page, 1).locator('.etapa__body')).toBeVisible(); // a próxima abriu sozinha
 
-  // sem obrigatórios: conclui direto; a concluída reabre para conferir
+  // chegada ao poço: a foto é obrigatória — sem ela não conclui; com ela conclui e a concluída reabre para conferir
+  await secao(page, 1).locator('[data-action=concluir-etapa]').click();
+  await expect(page.locator('[data-wrap=fotos_chegada].has-error')).toHaveCount(1);
+  await expect(secao(page, 1)).not.toHaveClass(/etapa--concluida/);
+  await anexarFoto(page, 'fotos_chegada');
   await secao(page, 1).locator('[data-action=concluir-etapa]').click();
   await expect(secao(page, 1)).toHaveClass(/etapa--concluida/);
   await secao(page, 0).locator('[data-etapa-toggle]').click();

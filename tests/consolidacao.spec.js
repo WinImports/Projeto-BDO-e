@@ -118,8 +118,6 @@ test('BDO finalizado pelo app entra na consolidação (inclusive depois de sair 
   await page.locator('[data-table=atividades][data-row="0"][data-col=hora_inicio]').fill('08:00');
   await page.locator('[data-table=atividades][data-row="0"][data-col=atividade]').fill('Hot bolt na VA2-B');
   await page.locator('[data-table=atividades][data-row="0"][data-col=hora_fim]').fill('10:15');
-  await page.locator('[data-field=rpt][value=Sim]').check();
-  await page.locator('[data-field=ocorrencia_sms][value="Não"]').check();
   await expect(page.locator('#ready-status')).toContainText('Pronto para finalizar');
   await page.locator('#btn-finalize').click();
   await page.locator('dialog.modal[open] [data-confirm]').click();

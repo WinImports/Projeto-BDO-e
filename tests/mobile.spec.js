@@ -9,13 +9,10 @@ const NATIVE = {
     '[data-table=atividades][data-col=data_inicio]': 'date',
     '[data-table=atividades][data-col=hora_inicio]': 'time',
     '[data-table=atividades][data-col=data_fim]': 'date',
-    '[data-table=atividades][data-col=hora_fim]': 'time',
-    '[data-table=paradas][data-col=inicio]': 'time',
-    '[data-table=paradas][data-col=fim]': 'time'
+    '[data-table=atividades][data-col=hora_fim]': 'time'
   },
   visita_tecnica: {
-    '[data-field=data]': 'date',
-    '[data-field=hora_leitura]': 'time'
+    '[data-field=data]': 'date'
   },
   handover: {
     '[data-field=data_hora]': 'datetime-local',
@@ -58,7 +55,7 @@ test('datas e horas usam os seletores nativos (date / time / datetime-local) nos
 test('tabelas dinâmicas: Adicionar e Remover com alvo de toque ≥ 44 px e bem espaçados', async () => {
   const { page } = ctx;
   await openTab(page, 'bdo');
-  for (const table of ['atividades', 'paradas', 'materiais']) {
+  for (const table of ['atividades', 'materiais']) {
     const add = page.locator(`[data-action=add-row][data-table=${table}]`);
     await add.scrollIntoViewIfNeeded();
     await add.click();

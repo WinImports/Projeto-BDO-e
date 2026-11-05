@@ -1,7 +1,7 @@
 // Nomes das válvulas e flanges definidos pelo gestor em Ajustes (sem servidor: nas Configurações; com conta: por
 // contrato, migração 011). Formulário, índice, Quadro de Ações e prévia usam os nomes; em branco = nome do app.
 const { test, expect } = require('@playwright/test');
-const { launchApp, fill, openTab, preencherVisita } = require('./helpers');
+const { launchApp, fill, openTab, preencherVisita, anexarFoto } = require('./helpers');
 
 let ctx;
 test.beforeEach(async () => { ctx = await launchApp(); });
@@ -32,6 +32,7 @@ test('gestor renomeia VC e o flange superior: formulário, índice, Quadro de A�
   await page.locator('[data-field=vc_intervencao][value=Sim]').check();
   await expect(page.locator('[data-wrap=correcoes] [data-col=acao]').last()).toHaveValue(/^VC-01: /);
   await fill(page, 'flange_sup_corrosao', 'Leve');
+  await anexarFoto(page, 'fotos_flange_sup'); // componente preenchido: foto obrigatória
   await page.locator('#btn-finalize').click();
   await expect(page.locator('dialog.modal[open]')).toContainText('VC-01 — Válvula da Coluna');
   await expect(page.locator('dialog.modal[open]')).toContainText('Flange do adaptador');

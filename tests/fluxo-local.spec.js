@@ -113,7 +113,7 @@ test.describe('prévia, PDF, finalizar e editar', () => {
     await page.locator('#btn-preview').click();
     const preview = page.locator('dialog.modal[open]');
     await expect(preview.locator('.notice--warn')).toContainText('obrigatório');
-    await expect(preview.locator('.notice--info')).toContainText('Paradas');
+    await expect(preview.locator('.notice--info')).toContainText('Materiais');
 
     await preview.locator('[data-pdf]').click();
     // qualquer aviso da pilha (outro aviso pode chegar depois e ficar por último)

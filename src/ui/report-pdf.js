@@ -3,7 +3,7 @@
 
 import { esc } from './dom.js';
 import { reportBodyHtml } from './preview.js';
-import { buildPdfBlob, temLayoutProprio } from './pdf-doc.js';
+import { buildPdfBlob, temLayoutProprio, paisagemDe } from './pdf-doc.js';
 import { buildDocxBlob } from './docx-doc.js';
 import { showPdfSheet } from './pdf-sheet.js';
 import { empresaDoRelatorio } from '../core/settings.js';
@@ -11,14 +11,14 @@ import { fotosParaRelatorio, avisarFotos } from './foto-relatorio.js';
 
 const fileSafe = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '_').replace(/^_|_$/g, '');
 
-const PDF_CSS = `
-  @page { size: A4 landscape; margin: 12mm 14mm; } /* todos os relatórios em paisagem */
+// BDO-e e Execução em paisagem; Visita Técnica em pé (paisagemDe). Fotos: 3 por linha deitado, 2 em pé.
+const PDF_CSS_BASE = `
   * { box-sizing: border-box; }
-  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; color: #0f172a; margin: 0; }
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 11.5pt; color: #0f172a; margin: 0; }
   header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #002b49; padding-bottom: 8px; margin-bottom: 6px; }
   .brand { display: flex; gap: 10px; align-items: center; }
   .mark { width: 38px; height: 38px; border-radius: 8px; background: #002b49; color: #fff; font-weight: 800; font-size: 9pt; display: flex; align-items: center; justify-content: center; border-bottom: 3px solid #e87722; }
-  h1 { font-size: 15pt; margin: 0; }
+  h1 { font-size: 17pt; margin: 0; }
   .logo { max-height: 52px; max-width: 150px; object-fit: contain; }
   .company { margin: 0 0 1px; font-size: 10pt; font-weight: 700; }
   .company span { font-weight: 400; color: #5b6676; font-size: 8.5pt; }
@@ -34,38 +34,44 @@ const PDF_CSS = `
   a { color: #002b49; }
   .muted { color: #5b6676; } .small { font-size: 8.5pt; }
   .preview__section { padding-top: 10px; break-inside: auto; }
-  .preview__section h4 { font-size: 9pt; text-transform: uppercase; letter-spacing: .05em; color: #002b49; margin: 0 0 5px; break-after: avoid; }
+  .preview__section h4 { font-size: 11pt; text-transform: uppercase; letter-spacing: .05em; color: #002b49; margin: 0 0 5px; break-after: avoid; }
   .preview__grid { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; border: 1px solid #c3ccd7; border-radius: 4px; overflow: hidden; break-inside: avoid; }
   .preview__item { padding: 5px 8px; border-bottom: 1px solid #dde3ea; border-right: 1px solid #dde3ea; margin: -1px -1px 0 0; break-inside: avoid; }
   .preview__item--full { grid-column: 1 / -1; }
   .preview__item--highlight { background: #fff4dc; border-left: 4px solid #e87722; }
-  .preview__item dt { font-size: 7.5pt; color: #5b6676; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+  .preview__item dt { font-size: 8.5pt; color: #5b6676; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
   .preview__item dd { margin: 1px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-  table { width: 100%; border-collapse: collapse; font-size: 9pt; }
-  th { text-align: left; background: #f1f4f8; font-size: 7.5pt; text-transform: uppercase; color: #5b6676; padding: 4px 6px; border-bottom: 1px solid #c3ccd7; }
+  table { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
+  th { text-align: left; background: #f1f4f8; font-size: 8.5pt; text-transform: uppercase; color: #5b6676; padding: 4px 6px; border-bottom: 1px solid #c3ccd7; }
   td { padding: 4px 6px; border-bottom: 1px solid #e6eaf0; vertical-align: top; }
   tr { break-inside: avoid; }
   .preview__signature { max-width: 240px; border: 1px solid #c3ccd7; border-radius: 4px; }
   .preview__ident { padding-top: 4px; }
   .preview__ident .preview__grid { grid-template-columns: repeat(3, 1fr); }
-  /* fotos: 4 por linha na página deitada (no Antes x Depois, 2 de cada lado) */
-  .photo-grid { display: grid; grid-template-columns: repeat(4, 1fr); column-gap: 4mm; row-gap: 6px; }
+  /* fotos: 3 por linha na página deitada, 2 na página em pé (no Antes x Depois, 2 de cada lado) */
+  .photo-grid { display: grid; grid-template-columns: repeat(var(--fotos-linha, 3), 1fr); column-gap: 4mm; row-gap: 8px; }
   .photo { margin: 0; border: 1px solid #c3ccd7; border-radius: 4px; overflow: hidden; break-inside: avoid; }
   .photo img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
   .photo__indisponivel { aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; background: #f8fafc; color: #5b6676; font-size: 8pt; }
-  .photo figcaption { padding: 3px 6px; font-size: 7.5pt; color: #5b6676; }
+  .photo figcaption { padding: 4px 7px; font-size: 9pt; color: #5b6676; }
   .photo figcaption strong { color: #0f172a; }
   .preview__photos { margin-top: 6px; }
-  .preview__photos-title { margin: 0 0 4px; font-size: 8pt; text-transform: uppercase; letter-spacing: .04em; color: #334155; break-after: avoid; }
+  .preview__photos-title { margin: 0 0 4px; font-size: 9.5pt; text-transform: uppercase; letter-spacing: .04em; color: #334155; break-after: avoid; }
   .photo-compare { display: grid; grid-template-columns: 48% 48%; justify-content: space-between; }
   .photo-compare__col { border: 1px solid #c3ccd7; border-radius: 4px; padding: 5px; break-inside: avoid; }
   .photo-compare__col--antes { border-top: 3px solid #94a3b8; }
   .photo-compare__col--depois { border-top: 3px solid #15803d; }
-  .photo-compare__title { font-size: 8pt; font-weight: 700; margin-bottom: 4px; }
+  .photo-compare__title { font-size: 9.5pt; font-weight: 700; margin-bottom: 4px; }
   .photo-compare .photo-grid { grid-template-columns: repeat(2, 1fr); }
   .preview__photos-title { break-after: avoid; }
-  footer { margin-top: 14px; padding-top: 6px; border-top: 1px solid #dde3ea; font-size: 7.5pt; color: #5b6676; }
+  footer { margin-top: 14px; padding-top: 6px; border-top: 1px solid #dde3ea; font-size: 8pt; color: #5b6676; }
 `;
+
+/** CSS do relatório para a orientação do módulo (página e fotos por linha). */
+const pdfCss = (paisagem = true) => `
+  @page { size: A4 ${paisagem ? 'landscape' : 'portrait'}; margin: 12mm 14mm; }
+  .report-doc { --fotos-linha: ${paisagem ? 3 : 2}; }
+  ${PDF_CSS_BASE}`;
 
 /** Documento completo (PDF do desktop e cópia compartilhada por link). */
 export function buildReportHtml(opts) {
@@ -73,7 +79,7 @@ export function buildReportHtml(opts) {
   return `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(module.title)} — ${esc(data.poco || '')}</title>
-<style>${PDF_CSS}</style></head>
+<style>${pdfCss(paisagemDe(module))}</style></head>
 <body>${reportDocHtml(opts)}</body></html>`;
 }
 
@@ -81,7 +87,7 @@ export function buildReportHtml(opts) {
 function reportDocHtml({ module, uniqueId, data, photos, photoSrcs, company, draft }) {
   const generated = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   const brandMark = company?.logo ? `<img class="logo" src="${esc(company.logo)}" alt="">` : '<div class="mark">BDO</div>';
-  return `
+  return `<div class="report-doc">
   <header>
     <div class="brand">
       ${brandMark}
@@ -96,7 +102,7 @@ function reportDocHtml({ module, uniqueId, data, photos, photoSrcs, company, dra
     </div>
   </header>
   ${reportBodyHtml(module, data, photos, photoSrcs)}
-  <footer>Documento gerado pelo BDO-e. O ID acima identifica este relatório de forma única no sistema.</footer>`;
+  <footer>Documento gerado pelo BDO-e. O ID acima identifica este relatório de forma única no sistema.</footer></div>`;
 }
 
 // ---------- Navegador / PWA (inclusive iPhone) ----------
@@ -120,28 +126,36 @@ function scopeCss(css, root) {
 }
 
 const SCREEN_RULE = '@media screen { #print-root { display: none !important; } }';
-const PRINT_RULE = `@media print {
+const printRule = (paisagem) => {
+  const css = pdfCss(paisagem);
+  const page = css.match(/@page \{[^}]*\}/)[0]; // @page fica fora do @media (vale para a impressão)
+  return `${page}\n@media print {
   html, body { background: #fff !important; }
   body > *:not(#print-root) { display: none !important; }
   #print-root { display: block !important; }
-  ${scopeCss(PDF_CSS, '#print-root')}
+  ${scopeCss(css.replace(page, ''), '#print-root')}
 }`;
+};
 
-let printSheetReady = false;
+let printSheet = null; // folha construída (uma só; refeita ao trocar a orientação)
+let printOrient = null;
 // CSP do app proíbe <style>: o CSS entra por CSSOM (folha construída; Safari antigo: regra na styles.css)
-function ensurePrintSheet() {
-  if (printSheetReady) return;
+function ensurePrintSheet(paisagem = true) {
+  if (printOrient === paisagem) return;
+  printOrient = paisagem;
+  const regras = `${SCREEN_RULE}\n${printRule(paisagem)}`;
   try {
-    const sheet = new CSSStyleSheet();
-    sheet.replaceSync(`${SCREEN_RULE}\n${PRINT_RULE}`);
-    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+    if (!printSheet) {
+      printSheet = new CSSStyleSheet();
+      document.adoptedStyleSheets = [...document.adoptedStyleSheets, printSheet];
+    }
+    printSheet.replaceSync(regras);
   } catch {
     const host = [...document.styleSheets].find((x) => /styles\.css/.test(x.href || ''));
-    for (const rule of [SCREEN_RULE, PRINT_RULE]) {
+    for (const rule of regras.split(/\n(?=@)/)) {
       try { host?.insertRule(rule, host.cssRules.length); } catch (err) { console.warn('[pdf] regra de impressão', err); }
     }
   }
-  printSheetReady = true;
 }
 
 const waitImages = (root) => Promise.race([
@@ -151,7 +165,7 @@ const waitImages = (root) => Promise.race([
 
 async function printInPage(opts, title) {
   document.getElementById('print-root')?.remove();
-  ensurePrintSheet();
+  ensurePrintSheet(paisagemDe(opts.module));
   const root = document.createElement('div');
   root.id = 'print-root';
   root.innerHTML = reportDocHtml(opts);

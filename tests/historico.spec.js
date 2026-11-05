@@ -13,12 +13,12 @@ const pad = (n) => String(n).padStart(2, '0');
 const hojeBR = () => { const d = new Date(); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`; };
 const hojeISO = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 
-/** Preenche e finaliza uma Visita Técnica com 1 foto. Devolve o ID curto exibido no cabeçalho. */
+/** Preenche e finaliza uma Visita Técnica com 5 fotos (4 obrigatórias do preencherVisita + 1). Devolve o ID curto exibido no cabeçalho. */
 async function finalizarVisita(page, poco = 'FBM-89') {
   await openTab(page, 'visita_tecnica');
   await preencherVisita(page, poco);
   await page.locator('input[data-kind=photos]').first().setInputFiles({ name: 'cabeca.png', mimeType: 'image/png', buffer: PNG });
-  await expect(page.locator('.photo-grid img')).toHaveCount(1);
+  await expect(page.locator('.photo-grid img')).toHaveCount(5);
   await expect(page.locator('#ready-status')).toContainText('Pronto para finalizar');
   const id = await page.locator('.doc-head__meta code').innerText();
   await page.locator('#btn-finalize').click();
@@ -51,7 +51,7 @@ test('relatório finalizado fica no Histórico mesmo depois de enviado, com tipo
   await expect(item).toContainText('Visita');
   await expect(item).toContainText('FBM-89');
   await expect(item).toContainText(`Relatório de ${hojeBR()}`);
-  await expect(item).toContainText('1 foto');
+  await expect(item).toContainText('5 fotos');
   await expect(item.locator('.status')).toHaveText('Pendente de Envio');
 
   // servidor confirmou: sai da fila, continua no histórico como "Sincronizado"
@@ -87,7 +87,7 @@ test('tocar no relatório salvo abre a prévia completa (com fotos) e gera o PDF
   await expect(preview.locator('.eyebrow')).toHaveText('Relatório salvo neste aparelho');
   await expect(preview.locator('.modal__header')).toContainText('FBM-89');
   await expect(preview.locator('.modal__body')).toContainText('João');
-  await expect(preview.locator('.photo-grid img')).toHaveCount(1);
+  await expect(preview.locator('.photo-grid img')).toHaveCount(5);
   await expect(preview.getByRole('button', { name: 'Voltar ao histórico' })).toBeVisible();
   await expect(preview.getByRole('button', { name: 'Editar este relatório' })).toBeVisible();
 
@@ -112,7 +112,7 @@ test('"Editar" abre o MESMO relatório (mesmo ID, dados e fotos); ao finalizar s
   await expect(page.locator('[data-atualizando]')).toContainText('versão 2');
   await expect(page.locator('[data-field=poco]')).toHaveValue('FBM-89');
   await expect(page.locator('[data-table=equipe][data-row="0"][data-col=nome]')).toHaveValue('João');
-  await expect(page.locator('.photo-grid img')).toHaveCount(1); // as fotos vêm junto
+  await expect(page.locator('.photo-grid img')).toHaveCount(5); // as fotos vêm junto
   await expect(toast(page)).toContainText('substitui a anterior');
 
   // corrige um dado e finaliza de novo: continua UM relatório no Histórico, agora na versão 2

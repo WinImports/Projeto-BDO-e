@@ -31,6 +31,13 @@ test('finalizar sem preencher aponta os campos obrigatórios', async () => {
   const { page } = ctx;
   await openTab(page, 'bdo');
   await page.locator('#btn-finalize').click();
+  // janela com tudo o que falta, agrupado por seção; "Ir para o primeiro" leva ao campo
+  const dlg = page.locator('dialog[data-pendencias][open]');
+  await expect(dlg).toContainText('Relatório incompleto');
+  await expect(dlg.locator('.pendencias__secao').first()).toHaveText('Cabeçalho');
+  await expect(dlg).toContainText('Poço / Locação — Campo obrigatório');
+  await dlg.locator('[data-ok]').click();
+  await expect(dlg).toHaveCount(0);
   await expect(page.locator('.field.has-error').first()).toBeVisible();
   await expect(page.locator('#ready-status')).toContainText('obrigatório');
 });

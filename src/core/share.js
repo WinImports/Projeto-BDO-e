@@ -17,14 +17,17 @@ export function waUrl(numero, texto) {
   return `https://api.whatsapp.com/send?${n ? `phone=${n}&` : ''}text=${encodeURIComponent(texto)}`;
 }
 
-export function shareMessage(module, data, uniqueId, link, wordLink = null) {
+/** pdf: false (técnico) → a mensagem leva só o link do Word (o PDF é do gestor). */
+export function shareMessage(module, data, uniqueId, link, wordLink = null, { pdf = true } = {}) {
+  if (!pdf) { link = wordLink; wordLink = null; }
+  const rotulo = pdf ? 'PDF' : 'Word .docx';
   const linhas = [
     `*${module.title}*`,
     data.poco ? `Poço / Locação: ${data.poco}` : '',
     brData(data.data || data.data_hora) ? `Data: ${brData(data.data || data.data_hora)}` : '',
     `ID: ${uniqueId.slice(0, 8)}`,
     '',
-    link ? `Relatório completo (PDF): ${link}` : 'Relatório salvo no aparelho; o envio ao banco de dados é feito automaticamente quando houver conexão.',
+    link ? `Relatório completo (${rotulo}): ${link}` : 'Relatório salvo no aparelho; o envio ao banco de dados é feito automaticamente quando houver conexão.',
     link && wordLink ? `Versão Word (.docx): ${wordLink}` : ''
   ];
   return linhas.filter((l, i) => l || i === 4).join('\n');

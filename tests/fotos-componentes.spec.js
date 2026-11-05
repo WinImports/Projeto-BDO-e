@@ -2,7 +2,7 @@
 // por componente (legenda e "Figura N" no PDF), comparativo Antes (Visita) x Depois (Execução),
 // relatórios no formato anterior e BDO intacto.
 const { test, expect } = require('@playwright/test');
-const { launchApp, fill, openTab, preencherVisita, cell, definirObjetivo } = require('./helpers');
+const { launchApp, fill, openTab, preencherVisita, cell, definirObjetivo, anexarFoto } = require('./helpers');
 
 const toast = (page) => page.locator('#toasts .toast').last();
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
@@ -100,10 +100,11 @@ test('Relatório de Execução traz as fotos da Visita como "Antes" em cada comp
   const { page } = ctx;
   // Visita Técnica finalizada com fotos da VC e da placa
   await openTab(page, 'visita_tecnica');
-  await preencherVisita(page, 'TST-AD');
+  await preencherVisita(page, 'TST-AD', { fotos: false });
+  for (const f of ['fotos_antepoco', 'fotos_flange_inf']) await anexarFoto(page, f); // obrigatórias (componentes preenchidos)
   await vaga(page, 'fotos_vc', 'Válvula da coluna (VC)').setInputFiles(foto('vc-antes.png'));
   await vaga(page, 'fotos_chegada', 'Placa do poço').setInputFiles(foto('placa.png'));
-  await page.locator('[data-wrap=fotos_vc] .photo__caption').fill('VC com vazamento na haste');
+  await page.locator('[data-wrap=fotos_vc] .photo__caption[aria-label*="vc-antes"]').fill('VC com vazamento na haste');
   await page.locator('#btn-finalize').click();
   await page.locator('dialog.modal[open] [data-confirm]').click();
   await expect(toast(page)).toContainText('Caixa de Saída');
@@ -172,7 +173,7 @@ test('relatório no formato anterior continua completo na prévia (tabelas antig
 test('BDO não foi alterado: mesmas seções e sem fotos', async () => {
   const { page } = ctx;
   await openTab(page, 'bdo');
-  // única seção acrescentada: Resumo das Atividades (gerado da apropriação); os blocos originais seguem iguais
-  await expect(page.locator('#section-nav .section-nav__label')).toHaveText(['Cabeçalho', 'Apropriação', 'Paradas', 'Materiais', 'SMS & Segurança', 'Resumo', 'Observações']);
+  // Resumo acrescentado (gerado da apropriação); Paradas e SMS & Segurança retirados a pedido do gestor (nov/2026)
+  await expect(page.locator('#section-nav .section-nav__label')).toHaveText(['Cabeçalho', 'Apropriação', 'Materiais', 'Resumo', 'Observações']);
   await expect(page.locator('input[data-kind=photos]')).toHaveCount(0);
 });

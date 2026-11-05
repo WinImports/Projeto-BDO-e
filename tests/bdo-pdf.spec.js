@@ -59,11 +59,11 @@ test('resumo executivo: sem horários repetidos, sem atividades duplicadas e sem
     const manual = { ...d, resumo_atividades: 'Texto escrito pelo técnico.' };
     return { auto: resumoParaPdf(d), manual: resumoParaPdf(manual), kpis: indicadoresBdo(d), completo: d.resumo_atividades };
   });
-  expect(r.auto).toBe('Jornada das 07:00 às 10:00 (3h00 apropriadas), no poço / locação FBM-89, em Catu - BA. Principais atividades: deslocamento para o poço FBM-89; teste com Enerpac na VB-1. Sem paradas operacionais.');
+  expect(r.auto).toBe('Jornada das 07:00 às 10:00 (3h00 apropriadas), no poço / locação FBM-89, em Catu - BA. Principais atividades: deslocamento para o poço FBM-89; teste com Enerpac na VB-1.');
   expect(r.auto).not.toMatch(/\d{2}:\d{2} às \d{2}:\d{2},/); // horários de cada linha ficam só no quadro
   expect(r.completo).not.toContain('VB-1 e'); // VB-1 é válvula, não poço
   expect(r.manual).toBe('Texto escrito pelo técnico.'); // texto editado sai como está
-  expect(r.kpis).toEqual([['KM rodado', '86,4 km'], ['Horas apropriadas', '3h00'], ['Horas paradas', '0h00'], ['Jornada', '07:00 – 10:00'], ['Atividades', '3']]);
+  expect(r.kpis).toEqual([['KM rodado', '86,4 km'], ['Horas apropriadas', '3h00'], ['Jornada', '07:00 – 10:00'], ['Atividades', '3']]);
 });
 
 test('cabeçalho: empresa das Configurações; sem cadastro sai "Empresa Prestadora"; desktop salva o PDF de 1 página', async () => {
@@ -116,39 +116,26 @@ test('bloco de assinaturas: técnico (nome e matrícula do relatório) e fiscal 
   expect(await paginas(page, 8, 'Troca de válvula com teste de estanqueidade')).toBe(1);
 });
 
-test('SMS & Segurança: nome e matrícula do técnico de segurança no formulário e no PDF', async () => {
+test('Paradas e SMS & Segurança saíram do formulário do BDO-e; boletim antigo ainda mostra no PDF', async () => {
   const { page } = ctx;
   await openTab(page, 'bdo');
-  await fill(page, 'tst_nome', 'MARIA OLIVEIRA');
-  await fill(page, 'tst_matricula', '41207');
-  const sec = page.locator('.form-section', { hasText: 'SMS & Segurança' });
-  await expect(sec.locator('[data-field=tst_nome]')).toHaveValue('MARIA OLIVEIRA');
+  await expect(page.locator('#section-nav .section-nav__label')).toHaveText(['Cabeçalho', 'Apropriação', 'Materiais', 'Resumo', 'Observações']);
+  for (const f of ['rpt', 'ocorrencia_sms', 'tst_nome', 'reuniao_hora']) await expect(page.locator(`[data-field=${f}]`)).toHaveCount(0);
+  await expect(page.locator('[data-table=paradas]')).toHaveCount(0);
   const r = await page.evaluate(async () => {
-    const { tecnicoSeguranca } = await import('./src/ui/bdo-pdf.js');
-    return [tecnicoSeguranca({ tst_nome: 'MARIA OLIVEIRA', tst_matricula: '41207' }), tecnicoSeguranca({})];
+    const { tecnicoSeguranca, reuniaoPreTarefa, temSms, indicadoresBdo } = await import('./src/ui/bdo-pdf.js');
+    return {
+      tst: tecnicoSeguranca({ tst_nome: 'MARIA OLIVEIRA', tst_matricula: '41207' }),
+      reuniao: reuniaoPreTarefa({ reuniao_pre_tarefa: 'Sim', reuniao_hora: '07:00', reuniao_assuntos: 'Riscos da tarefa e EPI' }),
+      smsNovo: temSms({ tecnico: 'X' }), smsAntigo: temSms({ rpt: 'Sim' }),
+      kpiNovo: indicadoresBdo({ atividades: [] }).map(([k]) => k),
+      kpiAntigo: indicadoresBdo({ atividades: [], paradas: [{ inicio: '10:00', fim: '10:30', motivo: 'x' }] }).map(([k]) => k)
+    };
   });
-  expect(r).toEqual(['MARIA OLIVEIRA · Mat. 41207', '']);
-  // o PDF continua em 1 página com a linha do técnico de segurança
-  expect(await paginas(page, 8, 'Troca de válvula com teste de estanqueidade')).toBe(1);
-});
-
-test('SMS & Segurança: Reunião pré-tarefa (realizada, horário e assuntos) no formulário e no PDF', async () => {
-  const { page } = ctx;
-  await openTab(page, 'bdo');
-  const sec = page.locator('.form-section', { hasText: 'SMS & Segurança' });
-  await expect(sec).toContainText('Reunião pré-tarefa realizada?');
-  await expect(sec.locator('[data-field=reuniao_hora]')).toHaveAttribute('type', 'time');
-  await fill(page, 'reuniao_assuntos', 'Riscos da troca de válvula, uso de EPI e isolamento da área');
-  await expect(sec.locator('[data-field=reuniao_assuntos]')).toHaveValue(/isolamento da área/);
-  const r = await page.evaluate(async () => {
-    const { reuniaoPreTarefa } = await import('./src/ui/bdo-pdf.js');
-    return [
-      reuniaoPreTarefa({ reuniao_pre_tarefa: 'Sim', reuniao_hora: '07:00', reuniao_assuntos: 'Riscos da tarefa e EPI' }),
-      reuniaoPreTarefa({ reuniao_pre_tarefa: 'Sim' }),
-      reuniaoPreTarefa({})
-    ];
-  });
-  expect(r).toEqual(['Sim · 07:00 — Riscos da tarefa e EPI', 'Sim', '']);
-  // o turno comum continua em 1 página com a linha da reunião
+  expect(r.tst).toBe('MARIA OLIVEIRA · Mat. 41207');
+  expect(r.reuniao).toBe('Sim · 07:00 — Riscos da tarefa e EPI');
+  expect([r.smsNovo, r.smsAntigo]).toEqual([false, true]);
+  expect(r.kpiNovo).not.toContain('Horas paradas');
+  expect(r.kpiAntigo).toContain('Horas paradas');
   expect(await paginas(page, 8, 'Troca de válvula com teste de estanqueidade')).toBe(1);
 });

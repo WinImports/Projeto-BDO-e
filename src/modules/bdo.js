@@ -1,7 +1,7 @@
 import { poco, coordenadas, duracao, duracaoEntreDatas, equipe, TURNOS } from './common.js';
 import { resumoBdo } from './resumo-bdo.js';
 
-// BDO = apropriação diária de horas, paradas, materiais e segurança. Sem fotos
+// BDO = apropriação diária de horas e materiais (paradas e SMS saíram do formulário em nov/2026). Sem fotos
 // (anexos fotográficos ficam no Relatório de Visita & Inspeção Técnica).
 
 export default {
@@ -59,21 +59,6 @@ export default {
       }]
     },
     {
-      title: 'Ocorrências e paradas imprevistas',
-      short: 'Paradas',
-      icon: 'alert',
-      fields: [{
-        id: 'paradas', type: 'table', addLabel: 'Registrar parada',
-        columns: [
-          { id: 'inicio', label: 'Hora início', type: 'time', width: 'time' },
-          { id: 'fim', label: 'Hora fim', type: 'time', width: 'time' },
-          { id: 'duracao', label: 'Tempo parado', width: 'narrow', computed: (r) => duracao(r.inicio, r.fim) },
-          { id: 'codigo', label: 'Código', width: 'narrow', placeholder: 'Ex.: 5' },
-          { id: 'motivo', label: 'Motivo / descrição', width: 'wide', placeholder: 'Ex.: Aguardando carro sugador' }
-        ]
-      }]
-    },
-    {
       title: 'Consumo de materiais e insumos',
       short: 'Materiais',
       icon: 'package',
@@ -85,23 +70,6 @@ export default {
           { id: 'descricao', label: 'Descrição do material / peça utilizada', width: 'wide', placeholder: 'Ex.: Junta RX-24; prisioneiro 7/8" x 6"; válvula gaveta 2 1/16"' }
         ]
       }]
-    },
-    {
-      title: 'SMS & Segurança',
-      short: 'SMS & Segurança',
-      icon: 'shield',
-      fields: [
-        { id: 'rpt', label: 'RPT / APR realizada?', type: 'yesno', required: true },
-        { id: 'ocorrencia_sms', label: 'Ocorrência de SMS?', type: 'yesno', required: true },
-        { id: 'descricao_sms', label: 'Descrição de SMS', type: 'textarea', placeholder: 'Obrigatório se houve ocorrência de SMS' },
-        { type: 'divider', label: 'Reunião pré-tarefa', icon: 'users' },
-        { id: 'reuniao_pre_tarefa', label: 'Reunião pré-tarefa realizada?', type: 'yesno', span: 6 },
-        { id: 'reuniao_hora', label: 'Horário da reunião', type: 'time', span: 3 },
-        { id: 'reuniao_assuntos', label: 'Assuntos abordados na reunião pré-tarefa', type: 'textarea', placeholder: 'Ex.: riscos da tarefa, uso de EPI, isolamento da área, permissão de trabalho' },
-        { type: 'divider', label: 'Técnico de segurança', icon: 'user' },
-        { id: 'tst_nome', label: 'Nome do técnico de segurança', type: 'text', span: 6, placeholder: 'Ex.: MARIA OLIVEIRA' },
-        { id: 'tst_matricula', label: 'Matrícula do técnico de segurança', type: 'text', span: 3, placeholder: 'Ex.: 41207' }
-      ]
     },
     {
       title: 'Resumo das Atividades Executadas',
@@ -123,6 +91,42 @@ export default {
       ]
     },
     {
+      // retirada do formulário a pedido do gestor (nov/2026): só boletins antigos com paradas
+      title: 'Ocorrências e paradas imprevistas',
+      legacy: true,
+      short: 'Paradas',
+      icon: 'alert',
+      fields: [{
+        id: 'paradas', type: 'table', addLabel: 'Registrar parada',
+        columns: [
+          { id: 'inicio', label: 'Hora início', type: 'time', width: 'time' },
+          { id: 'fim', label: 'Hora fim', type: 'time', width: 'time' },
+          { id: 'duracao', label: 'Tempo parado', width: 'narrow', computed: (r) => duracao(r.inicio, r.fim) },
+          { id: 'codigo', label: 'Código', width: 'narrow', placeholder: 'Ex.: 5' },
+          { id: 'motivo', label: 'Motivo / descrição', width: 'wide', placeholder: 'Ex.: Aguardando carro sugador' }
+        ]
+      }]
+    },
+    {
+      // retirada do formulário a pedido do gestor (nov/2026): só boletins antigos com esses dados
+      title: 'SMS & Segurança',
+      legacy: true,
+      short: 'SMS & Segurança',
+      icon: 'shield',
+      fields: [
+        { id: 'rpt', label: 'RPT / APR realizada?', type: 'yesno' },
+        { id: 'ocorrencia_sms', label: 'Ocorrência de SMS?', type: 'yesno' },
+        { id: 'descricao_sms', label: 'Descrição de SMS', type: 'textarea', placeholder: 'Obrigatório se houve ocorrência de SMS' },
+        { type: 'divider', label: 'Reunião pré-tarefa', icon: 'users' },
+        { id: 'reuniao_pre_tarefa', label: 'Reunião pré-tarefa realizada?', type: 'yesno', span: 6 },
+        { id: 'reuniao_hora', label: 'Horário da reunião', type: 'time', span: 3 },
+        { id: 'reuniao_assuntos', label: 'Assuntos abordados na reunião pré-tarefa', type: 'textarea', placeholder: 'Ex.: riscos da tarefa, uso de EPI, isolamento da área, permissão de trabalho' },
+        { type: 'divider', label: 'Técnico de segurança', icon: 'user' },
+        { id: 'tst_nome', label: 'Nome do técnico de segurança', type: 'text', span: 6, placeholder: 'Ex.: MARIA OLIVEIRA' },
+        { id: 'tst_matricula', label: 'Matrícula do técnico de segurança', type: 'text', span: 3, placeholder: 'Ex.: 41207' }
+      ]
+    },
+    {
       title: 'Cabeçalho (formato anterior)',
       legacy: true,
       fields: [
@@ -137,9 +141,6 @@ export default {
   ],
   validate(data, { filled }) {
     const errors = [];
-    if (data.ocorrencia_sms === 'Sim' && !data.descricao_sms?.trim()) {
-      errors.push({ field: 'descricao_sms', message: 'Descreva a ocorrência de SMS' });
-    }
     const invertida = filled('atividades').findIndex((r) =>
       r.hora_inicio && r.hora_fim && r.data_inicio && r.data_fim
       && `${r.data_fim}T${r.hora_fim}` < `${r.data_inicio}T${r.hora_inicio}`);
