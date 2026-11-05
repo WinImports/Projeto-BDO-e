@@ -1416,3 +1416,14 @@ input[data-expand] { cursor: text; text-overflow: ellipsis; }
   .nomes-comp__linha { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding-bottom: 10px; border-bottom: 1px solid var(--border, rgba(0,0,0,.08)); }
   .nomes-comp__padrao { grid-column: 1 / -1; }
 }
+
+/* Foto ampliada (ui/foto-ampliada.js): tela cheia, toque fecha */
+figure.photo img { cursor: zoom-in; }
+.foto-ampliada { position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0;
+  background: rgba(3, 10, 18, .94); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: zoom-out; }
+.foto-ampliada::backdrop { background: rgba(3, 10, 18, .94); }
+.foto-ampliada__img { width: 100vw; height: calc(100dvh - 72px); object-fit: contain; display: block; }
+.foto-ampliada__legenda { margin: 10px 16px 0; color: #e6edf3; font-size: .95rem; text-align: center; }
+.foto-ampliada__fechar { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 12px; width: 48px; height: 48px; border-radius: 50%;
+  border: 0; background: rgba(255, 255, 255, .16); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.foto-ampliada__fechar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

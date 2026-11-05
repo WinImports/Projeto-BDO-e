@@ -139,6 +139,9 @@ export default {
       ]
     }
   ],
+  // Paradas e SMS & Segurança saíram do BDO-e (nov/2026): rascunhos e boletins editados a partir de agora
+  // perdem esses dados (FormView e cleanData); boletins antigos já finalizados continuam mostrando (seções legacy)
+  descartar: ['paradas', 'rpt', 'ocorrencia_sms', 'descricao_sms', 'reuniao_pre_tarefa', 'reuniao_hora', 'reuniao_assuntos', 'tst_nome', 'tst_matricula'],
   validate(data, { filled }) {
     const errors = [];
     const invertida = filled('atividades').findIndex((r) =>

@@ -25,6 +25,7 @@ import { confirmDialog, pendenciasDialog } from './ui/confirm.js';
 import { podeGerarPdf } from './core/base-equipe.js';
 import { closeRoutePrompt } from './ui/route-prompt.js';
 import { openPreview } from './ui/preview.js';
+import { ligarFotoAmpliada } from './ui/foto-ampliada.js';
 import { OutboxView } from './ui/outbox-view.js';
 import { SettingsView } from './ui/settings-view.js';
 import { companyInfo, onSettingsChange, getSettings, prepararTecnicoDoUsuario } from './core/settings.js';
@@ -882,6 +883,7 @@ async function init() {
   });
   startSyncScheduler();
   registerServiceWorker();
+  ligarFotoAmpliada(); // tocar na foto abre em tela cheia; tocar de novo fecha
 
   window.addEventListener('beforeunload', flushSave);
   window.desktop?.onBeforeClose?.(async () => {

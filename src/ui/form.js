@@ -255,6 +255,7 @@ export function cleanData(module, data) {
   for (const f of allFields(module)) {
     if (f.type === 'table') out[f.id] = filledRows(data[f.id], f.columns).map(({ _preset, ...row }) => row);
   }
+  for (const k of (module.base || module).descartar || []) delete out[k]; // campos retirados do relatório (ex.: SMS do BDO-e)
   return out;
 }
 
@@ -265,6 +266,8 @@ export class FormView {
     this.onChange = onChange;
     this.photoUrls = new Map();
     assignPhotoFields(module, draft.photos); // fotos antigas (sem bloco) vão para "Outras fotos"
+    // campos retirados do relatório (module.descartar): rascunho começado antes da mudança perde esses dados
+    for (const k of module.descartar || []) delete draft.data[k];
     this.fields = new Map(allFields(module).filter((f) => f.id).map((f) => [f.id, f]));
     this.sig = null;
 

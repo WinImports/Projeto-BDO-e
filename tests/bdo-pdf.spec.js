@@ -137,5 +137,13 @@ test('Paradas e SMS & Segurança saíram do formulário do BDO-e; boletim antigo
   expect([r.smsNovo, r.smsAntigo]).toEqual([false, true]);
   expect(r.kpiNovo).not.toContain('Horas paradas');
   expect(r.kpiAntigo).toContain('Horas paradas');
+  // rascunho começado antes da mudança: ao finalizar / na prévia os dados de SMS e paradas são descartados
+  const limpo = await page.evaluate(async () => {
+    const { getModule } = await import('./src/modules/index.js');
+    const { cleanData } = await import('./src/ui/form.js');
+    return cleanData(getModule('bdo'), { poco: 'X', rpt: 'Sim', ocorrencia_sms: 'Não', tst_nome: 'MARIA', paradas: [{ inicio: '10:00', motivo: 'x' }] });
+  });
+  expect(limpo).toEqual(expect.objectContaining({ poco: 'X' }));
+  for (const k of ['rpt', 'ocorrencia_sms', 'tst_nome', 'paradas']) expect(limpo).not.toHaveProperty(k);
   expect(await paginas(page, 8, 'Troca de válvula com teste de estanqueidade')).toBe(1);
 });
