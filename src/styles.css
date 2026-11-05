@@ -1427,3 +1427,13 @@ figure.photo img { cursor: zoom-in; }
 .foto-ampliada__fechar { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 12px; width: 48px; height: 48px; border-radius: 50%;
   border: 0; background: rgba(255, 255, 255, .16); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .foto-ampliada__fechar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Proteção de abertura (src/boot-guard.js): painel quando o app não termina de abrir */
+.boot-guard { position: fixed; inset: auto 16px 16px 16px; z-index: 100000; max-width: 520px; margin: 0 auto; padding: 18px;
+  background: var(--surface, #fff); color: var(--text, #0f172a); border: 1px solid var(--border, #c3ccd7); border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .25); }
+.boot-guard h2 { margin: 0 0 6px; font-size: 1.1rem; }
+.boot-guard p { margin: 0 0 10px; font-size: .95rem; }
+.boot-guard__erro { margin: 0 0 12px; padding: 8px; max-height: 120px; overflow: auto; white-space: pre-wrap; font-size: .75rem;
+  background: var(--surface-2, #f1f4f8); border-radius: 8px; }
+.boot-guard__acoes { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }

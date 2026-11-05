@@ -893,5 +893,6 @@ async function init() {
 
 init().catch((err) => {
   console.error('[init]', err);
+  window.__bootErro?.(`Erro ao iniciar: ${err.message}`);
   toast(`Erro ao iniciar: ${err.message}`, 'error', 15000);
 });
